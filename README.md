@@ -48,11 +48,14 @@ The app will be available at [http://localhost:3000](http://localhost:3000).
 
 ### Environment Variables
 
-To enable Airtable integration, create a `.env.local` file:
+To enable Airtable integration, the project comes with a `.env.local` file template.
+
+1. Rename the `.env.local` file to `.env`
+2. Update the values with your actual API keys:
 
 ```env
 AIRTABLE_API_KEY=your_airtable_api_key
-AIRTABLE_BASE_ID=appIEyYTdOAODDzE7
+AIRTABLE_BASE_ID=your_airtable_base_id
 ```
 
 Get your Airtable API key from [https://airtable.com/account](https://airtable.com/account).
