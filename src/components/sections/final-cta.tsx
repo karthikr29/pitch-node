@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { motion, useSpring, useTransform, useInView, AnimatePresence } from "framer-motion";
+import { motion, useSpring, useTransform, useInView } from "framer-motion";
 import { Button } from "@/components/ui";
-import { ArrowRight, Sparkles, Users, Rocket, Shield, Clock } from "lucide-react";
+import { ArrowRight, Sparkles, Users, Rocket, Clock } from "lucide-react";
 import { useWaitlistCount } from "@/hooks/use-waitlist-count";
 
 interface FinalCTAProps {
@@ -227,8 +227,6 @@ export function FinalCTA({ onOpenWaitlist }: FinalCTAProps) {
     pollingInterval: 10000,
   });
 
-  const [email, setEmail] = useState("");
-
   return (
     <section className="relative py-24 md:py-32 lg:py-40 overflow-hidden">
       {/* Background with gradient mesh */}
@@ -445,7 +443,6 @@ export function FinalCTA({ onOpenWaitlist }: FinalCTAProps) {
                   {stat.value}
                 </p>
                 <p className="text-text-primary font-medium mt-1">{stat.label}</p>
-                <p className="text-text-muted text-sm">{stat.sublabel}</p>
               </motion.div>
             ))}
           </div>
