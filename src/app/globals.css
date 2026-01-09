@@ -1,26 +1,137 @@
 @import "tailwindcss";
 
+/* AWS INSPIRED - Theme Configuration */
+@theme {
+  /* Fonts */
+  --font-display: "Cabinet Grotesk", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  
+  /* Colors - Light Mode Defaults */
+  --color-primary: #EC7211;
+  --color-primary-hover: #EB5F07;
+  --color-secondary: #232F3E; /* Amazon Dark Blue for secondary elements */
+  --color-accent: #FF9900;
+  
+  --color-background-primary: #F2F3F3;
+  --color-background-secondary: #FFFFFF;
+  --color-surface: #FFFFFF;
+  
+  --color-text-primary: #16191F;
+  --color-text-secondary: #545B64;
+  --color-text-muted: #6B7280;
+  --color-text-on-primary: #FFFFFF;
+  
+  --color-border: #D5DBDB;
+  
+  --color-success: #107E3E;
+  --color-warning: #B56307;
+  --color-error: #B12020;
+}
+
+/* AWS INSPIRED - Light Theme CSS Variables */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Primary Colors */
+  --primary: #EC7211;
+  --primary-hover: #EB5F07;
+  --secondary: #232F3E;
+  --accent: #FF9900;
+  
+  /* Backgrounds */
+  --background-primary: #F2F3F3;
+  --background-secondary: #FFFFFF;
+  --surface: #FFFFFF;
+  
+  /* Text */
+  --text-primary: #16191F;
+  --text-secondary: #545B64;
+  --text-muted: #6B7280;
+  --text-on-primary: #FFFFFF;
+  
+  /* Borders */
+  --border: #D5DBDB;
+  
+  /* States */
+  --success: #107E3E;
+  --warning: #B56307;
+  --error: #B12020;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* AWS INSPIRED - Dark Theme */
+.dark {
+  /* Primary Colors */
+  --primary: #FF9900;
+  --primary-hover: #FFAC31; /* Slightly lighter than primary for hover */
+  --secondary: #D5DBDB;
+  --accent: #EC7211;
+  
+  /* Backgrounds */
+  --background-primary: #0F1B2A;
+  --background-secondary: #161E2D;
+  --surface: #161E2D;
+  
+  /* Text */
+  --text-primary: #D5DBDB;
+  --text-secondary: #879596;
+  --text-muted: #545B64;
+  --text-on-primary: #161E2D;
+  
+  /* Borders */
+  --border: #414750;
+  
+  /* States */
+  --success: #1F9D55;
+  --warning: #C27803;
+  --error: #A12020;
+  
+  /* Override theme colors for dark mode */
+  --color-primary: #FF9900;
+  --color-primary-hover: #FFAC31;
+  --color-secondary: #D5DBDB;
+  --color-accent: #EC7211;
+  --color-background-primary: #0F1B2A;
+  --color-background-secondary: #161E2D;
+  --color-surface: #161E2D;
+  --color-text-primary: #D5DBDB;
+  --color-text-secondary: #879596;
+  --color-text-muted: #545B64;
+  --color-text-on-primary: #161E2D;
+  --color-border: #414750;
+  --color-success: #1F9D55;
+  --color-warning: #C27803;
+  --color-error: #A12020;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Base styles */
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  background-color: var(--background-primary);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  color: var(--text-primary);
+}
+
+/* Custom utility classes */
+@utility text-balance {
+  text-wrap: balance;
+}
+
+/* Shimmer animation for progress bar */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
 }
