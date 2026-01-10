@@ -109,4 +109,4 @@ storybook-static
 # Lock files (keep package-lock.json, ignore others if using npm)
 yarn.lock
 pnpm-lock.yaml
-bun.lockb
+bun.lockb.env.local

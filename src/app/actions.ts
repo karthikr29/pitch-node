@@ -6,6 +6,7 @@ import { validateName, validateEmail } from "@/lib/validators";
 interface WaitlistFormData {
   name: string;
   email: string;
+  experienceRating: number;
 }
 
 interface SubmitResult {
@@ -39,6 +40,7 @@ export async function submitWaitlist(data: WaitlistFormData): Promise<SubmitResu
   const result = await createWaitlistRecord({
     name: data.name.trim(),
     email: data.email.trim().toLowerCase(),
+    experienceRating: data.experienceRating,
   });
 
   if (!result.success) {

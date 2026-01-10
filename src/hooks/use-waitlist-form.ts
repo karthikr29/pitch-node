@@ -2,11 +2,12 @@
 
 import { useState, useCallback } from "react";
 
-export type FormStep = "name" | "email" | "submitting" | "success";
+export type FormStep = "name" | "email" | "experience" | "submitting" | "success";
 
 export interface FormData {
   name: string;
   email: string;
+  experienceRating: number;
 }
 
 export interface UseWaitlistFormReturn {
@@ -24,9 +25,10 @@ export interface UseWaitlistFormReturn {
 const initialFormData: FormData = {
   name: "",
   email: "",
+  experienceRating: 5,
 };
 
-const stepOrder: FormStep[] = ["name", "email"];
+const stepOrder: FormStep[] = ["name", "email", "experience"];
 
 export function useWaitlistForm(): UseWaitlistFormReturn {
   const [step, setStep] = useState<FormStep>("name");
@@ -80,16 +82,18 @@ export function getStepNumber(step: FormStep): number {
   const stepMap: Record<FormStep, number> = {
     name: 1,
     email: 2,
-    submitting: 2,
-    success: 2,
+    experience: 3,
+    submitting: 3,
+    success: 3,
   };
   return stepMap[step];
 }
 
 export function getStepProgress(step: FormStep): number {
   const progressMap: Record<FormStep, number> = {
-    name: 50,
-    email: 100,
+    name: 33,
+    email: 66,
+    experience: 100,
     submitting: 100,
     success: 100,
   };

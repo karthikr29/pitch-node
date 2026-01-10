@@ -1,25 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Users } from "lucide-react";
-import { getWaitlistCountAction } from "@/app/actions";
 import { cn } from "@/lib/utils";
+import { useWaitlistCount } from "@/hooks/use-waitlist-count";
 
 export function WaitlistCounter() {
-  const [count, setCount] = useState<number | null>(null);
+  const { count, isLoading } = useWaitlistCount({
+    initialCount: 27,
+    pollingInterval: 10000,
+  });
 
-  useEffect(() => {
-    async function fetchCount() {
-      const result = await getWaitlistCountAction();
-      if (result.count) {
-        setCount(result.count);
-      }
-    }
-    fetchCount();
-  }, []);
-
-  if (count === null) return null;
+  if (isLoading && count === 27) return null;
 
   return (
     <motion.div

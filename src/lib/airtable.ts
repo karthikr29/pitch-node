@@ -3,9 +3,16 @@ const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || "appIEyYTdOAODDzE7";
 const AIRTABLE_TABLE_NAME = "Waitlist Signups";
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 
+// Check if Airtable is properly configured
+const isAirtableConfigured =
+  AIRTABLE_API_KEY &&
+  AIRTABLE_API_KEY !== "YOUR_AIRTABLE_API_KEY" &&
+  AIRTABLE_BASE_ID !== "YOUR_AIRTABLE_BASE_ID";
+
 interface WaitlistRecord {
   name: string;
   email: string;
+  experienceRating: number;
 }
 
 interface AirtableResponse {
@@ -21,16 +28,22 @@ interface WaitlistCountResponse {
 
 // Simple in-memory cache for count
 let cachedCount: { value: number; timestamp: number } | null = null;
-const CACHE_TTL = 30000; // 30 seconds
+const CACHE_TTL = 5000; // 5 seconds - reduced for faster updates
 
 export async function createWaitlistRecord(
   data: WaitlistRecord
 ): Promise<AirtableResponse> {
-  if (!AIRTABLE_API_KEY) {
-    console.warn("Airtable API key not configured. Simulating success.");
-    // Return success for development without API key
+  if (!isAirtableConfigured) {
+    console.warn(
+      "Airtable not configured. Simulating success.",
+      "API Key exists:", !!AIRTABLE_API_KEY,
+      "Base ID:", AIRTABLE_BASE_ID
+    );
+    // Return success for development without proper Airtable configuration
     return { success: true, recordId: "simulated_" + Date.now() };
   }
+
+  console.log("Creating Airtable record for:", data.email);
 
   try {
     const response = await fetch(
@@ -49,6 +62,7 @@ export async function createWaitlistRecord(
               fields: {
                 Name: data.name,
                 Email: data.email,
+                "Experience Rating": data.experienceRating,
                 Source: "Landing Page",
                 Status: "New",
               },
@@ -61,10 +75,18 @@ export async function createWaitlistRecord(
     if (!response.ok) {
       const errorData = await response.json();
       console.error("Airtable error:", errorData);
+
+      // Check if it's a field-related error
+      if (errorData?.error?.message?.includes("Unknown field name")) {
+        console.error("❌ Missing field in Airtable. Please add 'Experience Rating' (Number type) column to your table.");
+        return { success: false, error: "Failed to save to waitlist. Please check server logs." };
+      }
+
       return { success: false, error: "Failed to save to waitlist" };
     }
 
     const result = await response.json();
+    console.log("✅ Successfully created Airtable record:", result.records?.[0]?.id);
     return { success: true, recordId: result.records?.[0]?.id };
   } catch (error) {
     console.error("Airtable request failed:", error);
@@ -75,7 +97,7 @@ export async function createWaitlistRecord(
 export async function checkDuplicateEmail(
   email: string
 ): Promise<{ exists: boolean; error?: string }> {
-  if (!AIRTABLE_API_KEY) {
+  if (!isAirtableConfigured) {
     return { exists: false };
   }
 
@@ -108,13 +130,17 @@ const BASE_COUNT = 27; // Starting count before Airtable tracking began
 export async function getWaitlistCount(): Promise<WaitlistCountResponse> {
   // Return cached value if still valid
   if (cachedCount && Date.now() - cachedCount.timestamp < CACHE_TTL) {
+    console.log("📊 Returning cached count:", cachedCount.value);
     return { count: cachedCount.value };
   }
 
-  if (!AIRTABLE_API_KEY) {
-    // Return base count in development
+  if (!isAirtableConfigured) {
+    console.warn("⚠️ Airtable not configured, returning base count:", BASE_COUNT);
+    // Return base count when Airtable is not properly configured
     return { count: BASE_COUNT };
   }
+
+  console.log("🔄 Fetching fresh count from Airtable...");
 
   try {
     // Fetch all records with minimal fields to count them
@@ -141,7 +167,8 @@ export async function getWaitlistCount(): Promise<WaitlistCountResponse> {
       });
 
       if (!response.ok) {
-        console.error("Airtable count error:", await response.text());
+        const errorText = await response.text();
+        console.error("Airtable count error:", errorText);
         return {
           count: cachedCount?.value ?? BASE_COUNT,
           error: "Failed to fetch count",
@@ -155,6 +182,8 @@ export async function getWaitlistCount(): Promise<WaitlistCountResponse> {
 
     // Add base count to Airtable count
     const finalCount = BASE_COUNT + totalCount;
+
+    console.log(`✅ Airtable records: ${totalCount}, Base count: ${BASE_COUNT}, Final count: ${finalCount}`);
 
     // Update cache
     cachedCount = { value: finalCount, timestamp: Date.now() };

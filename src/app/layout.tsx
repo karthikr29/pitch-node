@@ -80,6 +80,7 @@ export default function RootLayout({
       </head>
       <body
         className={`${inter.variable} ${cabinetGrotesk.variable} font-sans antialiased`}
+        suppressHydrationWarning
       >
         <Providers>{children}</Providers>
       </body>

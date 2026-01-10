@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Modal } from "@/components/ui";
 import { NameStep } from "./name-step";
 import { EmailStep } from "./email-step";
+import { ExperienceStep } from "./experience-step";
 import { ThankYou } from "./thank-you";
 import {
   useWaitlistForm,
@@ -46,11 +47,11 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
       if (result.success) {
         setStep("success");
       } else {
-        setStep("email");
+        setStep("experience");
         setError(result.error || "Something went wrong. Please try again.");
       }
     } catch {
-      setStep("email");
+      setStep("experience");
       setError("Something went wrong. Please try again.");
     }
   }, [formData, setStep, setError]);
@@ -67,23 +68,38 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
             error={error}
             setError={setError}
             stepNumber={1}
-            totalSteps={2}
+            totalSteps={3}
           />
         );
       case "email":
-      case "submitting":
         return (
           <EmailStep
             key="email"
             value={formData.email}
             onChange={(value) => updateField("email", value)}
+            onSubmit={nextStep}
+            onPrev={prevStep}
+            isSubmitting={false}
+            error={error}
+            setError={setError}
+            stepNumber={2}
+            totalSteps={3}
+          />
+        );
+      case "experience":
+      case "submitting":
+        return (
+          <ExperienceStep
+            key="experience"
+            value={formData.experienceRating}
+            onChange={(value) => updateField("experienceRating", value)}
             onSubmit={handleSubmit}
             onPrev={prevStep}
             isSubmitting={step === "submitting"}
             error={error}
             setError={setError}
-            stepNumber={2}
-            totalSteps={2}
+            stepNumber={3}
+            totalSteps={3}
           />
         );
       case "success":
