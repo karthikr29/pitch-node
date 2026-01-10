@@ -131,23 +131,6 @@ export function Footer() {
               >
                 hello@pitchnode.com
               </a>
-
-              {/* Social icons placeholder */}
-              <div className="flex items-center gap-2 pt-1">
-                {[
-                  { icon: "𝕏", label: "Twitter" },
-                  { icon: "in", label: "LinkedIn" },
-                ].map((social) => (
-                  <a
-                    key={social.label}
-                    href="#"
-                    className="w-8 h-8 rounded-lg bg-surface/50 border border-border/50 flex items-center justify-center text-text-secondary hover:text-primary hover:border-primary/30 transition-all text-xs font-bold"
-                    aria-label={social.label}
-                  >
-                    {social.icon}
-                  </a>
-                ))}
-              </div>
             </div>
           </div>
         </div>
