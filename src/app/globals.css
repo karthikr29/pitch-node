@@ -219,3 +219,104 @@ h6 {
 .animate-neural-pulse {
   animation: neural-pulse 1.5s ease-in-out infinite;
 }
+
+/* Starry Background Animations */
+@keyframes rotate-stars {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes twinkle {
+
+  0%,
+  100% {
+    opacity: var(--star-opacity, 0.3);
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: calc(var(--star-opacity, 0.3) + 0.4);
+    transform: scale(1.2);
+  }
+}
+
+/* Shooting star animation - realistic falling star effect */
+@keyframes shooting-star-move {
+  0% {
+    transform: rotate(var(--star-angle, 35deg)) translateX(0);
+    opacity: 1;
+  }
+
+  100% {
+    transform: rotate(var(--star-angle, 35deg)) translateX(350px);
+    opacity: 0;
+  }
+}
+
+@keyframes shooting-star-trail {
+  0% {
+    width: 0;
+    opacity: 0;
+  }
+
+  5% {
+    opacity: 1;
+  }
+
+  30% {
+    width: var(--trail-length, 100px);
+    opacity: 1;
+  }
+
+  100% {
+    width: var(--trail-length, 100px);
+    opacity: 0;
+  }
+}
+
+@keyframes shooting-star-head {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+
+  5% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  80% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(0);
+  }
+}
+
+.animate-rotate-stars {
+  animation: rotate-stars 200s linear infinite;
+}
+
+.animate-twinkle {
+  animation: twinkle 3s ease-in-out infinite;
+}
+
+.animate-shooting-star {
+  animation: shooting-star-move var(--shooting-duration, 1s) ease-out forwards;
+}
+
+.animate-shooting-trail {
+  animation: shooting-star-trail var(--shooting-duration, 1s) ease-out forwards;
+}
+
+.animate-shooting-head {
+  animation: shooting-star-head var(--shooting-duration, 1s) ease-out forwards;
+}

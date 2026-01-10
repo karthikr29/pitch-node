@@ -11,6 +11,7 @@ import {
   FinalCTA,
 } from "@/components/sections";
 import { WaitlistModal } from "@/components/waitlist";
+import { StarryBackground } from "@/components/ui";
 
 export default function Home() {
   const [isWaitlistOpen, setIsWaitlistOpen] = useState(false);
@@ -20,8 +21,9 @@ export default function Home() {
 
   return (
     <>
+      <StarryBackground />
       <Header onOpenWaitlist={openWaitlist} />
-      
+
       <main>
         <Hero onOpenWaitlist={openWaitlist} />
         <ProblemSolution />

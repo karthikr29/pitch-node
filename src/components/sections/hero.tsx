@@ -19,7 +19,7 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
       {/* Background subtle pattern */}
-      <div className="absolute inset-0 bg-background-primary">
+      <div className="absolute inset-0 bg-background-primary/85">
         <div
           className="absolute inset-0 opacity-[0.02] dark:opacity-[0.03]"
           style={{
