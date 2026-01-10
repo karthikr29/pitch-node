@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { WaitlistModal } from "./waitlist-modal";
 import { WaitlistNudge } from "./waitlist-nudge";
 
-const WAITLIST_POPUP_DELAY = 18000; // 18 seconds
+const WAITLIST_POPUP_DELAY = 6000; // 6 seconds
 const SESSION_STORAGE_KEY = "pitch_node_waitlist_shown";
 
 export function WaitlistTimer() {
