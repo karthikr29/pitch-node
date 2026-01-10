@@ -257,16 +257,7 @@ export function FinalCTA({ onOpenWaitlist }: FinalCTAProps) {
             transition={{ duration: 0.7 }}
             className="text-center lg:text-left"
           >
-            {/* Live indicator */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4 }}
-              className="flex justify-center lg:justify-start mb-6"
-            >
-              <LiveIndicator />
-            </motion.div>
+
 
             {/* Main headline */}
             <motion.h2
@@ -377,6 +368,12 @@ export function FinalCTA({ onOpenWaitlist }: FinalCTAProps) {
 
               {/* Main card */}
               <div className="relative bg-gradient-to-br from-surface/90 via-background-secondary/90 to-surface/90 backdrop-blur-xl rounded-3xl p-8 md:p-12 border border-border/50 shadow-2xl">
+                {/* Live Waitlist Badge */}
+                <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-20">
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface border border-success/20 shadow-lg shadow-success/10">
+                    <LiveIndicator />
+                  </div>
+                </div>
                 {/* Inner glow */}
                 <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-primary/5 via-transparent to-accent/5" />
 
@@ -428,8 +425,8 @@ export function FinalCTA({ onOpenWaitlist }: FinalCTAProps) {
         >
           <div className="grid grid-cols-2 md:grid-cols-2 gap-8 max-w-2xl mx-auto">
             {[
-              { label: "Response Time", value: "< 24hrs"},
-              { label: "AI Personas", value: "10+"},
+              { label: "Response Time", value: "< 24hrs" },
+              { label: "AI Personas", value: "10+" },
             ].map((stat, index) => (
               <motion.div
                 key={stat.label}
