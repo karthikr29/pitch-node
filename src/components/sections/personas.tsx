@@ -47,75 +47,89 @@ function PersonaCard({ persona, index }: { persona: typeof personas[0]; index: n
       viewport={{ once: true, margin: "-50px" }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
       className={cn(
-        "group relative p-8 md:p-10 cursor-pointer h-full flex flex-col",
-        "bg-surface border border-border/60 shadow-lg hover:shadow-xl transition-all duration-500", // Solid background and visible border
+        "h-full", // Ensure wrapper fills height
         isLarge ? "md:col-span-2" : ""
       )}
     >
-      {/* Heavy Corner Markers - Tech/HUD Style - Visible in Light Mode */}
-      <div className="absolute inset-0 pointer-events-none">
-        {/* Top Left */}
-        <motion.div
-          className="absolute -top-[1px] -left-[1px] w-8 h-8 border-t-4 border-l-4 border-primary z-10"
-          whileHover={{ x: -2, y: -2 }}
-        />
-        {/* Top Right */}
-        <motion.div
-          className="absolute -top-[1px] -right-[1px] w-8 h-8 border-t-4 border-r-4 border-primary z-10"
-          whileHover={{ x: 2, y: -2 }}
-        />
-        {/* Bottom Left */}
-        <motion.div
-          className="absolute -bottom-[1px] -left-[1px] w-8 h-8 border-b-4 border-l-4 border-primary z-10"
-          whileHover={{ x: -2, y: 2 }}
-        />
-        {/* Bottom Right */}
-        <motion.div
-          className="absolute -bottom-[1px] -right-[1px] w-8 h-8 border-b-4 border-r-4 border-primary z-10"
-          whileHover={{ x: 2, y: 2 }}
-        />
-      </div>
+      <motion.div
+        animate={{ y: [0, -10, 0] }}
+        transition={{
+          duration: 5,
+          repeat: Infinity,
+          ease: "easeInOut",
+          delay: index * 0.5, // Staggered float start
+        }}
+        whileHover={{ y: -5, transition: { duration: 0.2 } }} // Slight lift on hover, overriding float cleanly
+        className={cn(
+          "group relative p-8 md:p-10 cursor-pointer h-full flex flex-col",
+          "bg-surface border border-border/60 shadow-lg hover:shadow-xl transition-all duration-500" // Solid background and visible border
+        )}
+      >
+        {/* Heavy Corner Markers - Tech/HUD Style - Visible in Light Mode */}
+        <div className="absolute inset-0 pointer-events-none">
+          {/* Top Left */}
+          <motion.div
+            className="absolute -top-[1px] -left-[1px] w-8 h-8 border-t-4 border-l-4 border-primary z-10"
+            whileHover={{ x: -2, y: -2 }}
+          />
+          {/* Top Right */}
+          <motion.div
+            className="absolute -top-[1px] -right-[1px] w-8 h-8 border-t-4 border-r-4 border-primary z-10"
+            whileHover={{ x: 2, y: -2 }}
+          />
+          {/* Bottom Left */}
+          <motion.div
+            className="absolute -bottom-[1px] -left-[1px] w-8 h-8 border-b-4 border-l-4 border-primary z-10"
+            whileHover={{ x: -2, y: 2 }}
+          />
+          {/* Bottom Right */}
+          <motion.div
+            className="absolute -bottom-[1px] -right-[1px] w-8 h-8 border-b-4 border-r-4 border-primary z-10"
+            whileHover={{ x: 2, y: 2 }}
+          />
+        </div>
 
-      {/* Hover overlay - Subtle internal glow */}
-      <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+        {/* Hover overlay - Subtle internal glow */}
+        <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
-      <div className="relative z-10 flex flex-col h-full">
-        {/* Header */}
-        <div className="flex flex-col items-start gap-4 mb-6">
-          <div className="inline-flex items-center justify-center px-3 py-1 rounded bg-primary/10 border border-primary/20 shadow-sm">
-            <span className="text-xs font-bold uppercase tracking-widest text-primary">
-              {persona.subtitle}
-            </span>
+        <div className="relative z-10 flex flex-col h-full">
+          {/* Header */}
+          <div className="flex flex-col items-start gap-4 mb-6">
+            <div className="inline-flex items-center justify-center px-3 py-1 rounded bg-primary/10 border border-primary/20 shadow-sm">
+              <span className="text-xs font-bold uppercase tracking-widest text-primary">
+                {persona.subtitle}
+              </span>
+            </div>
+
+            <h3 className="font-display text-3xl font-bold text-text-primary group-hover:translate-x-1 transition-transform duration-300">
+              {persona.title}
+            </h3>
           </div>
 
-          <h3 className="font-display text-3xl font-bold text-text-primary group-hover:translate-x-1 transition-transform duration-300">
-            {persona.title}
-          </h3>
-        </div>
+          {/* Description */}
+          <div className="mb-8 max-w-xl">
+            <p className="text-text-secondary text-lg leading-relaxed">
+              {persona.description}
+            </p>
+          </div>
 
-        {/* Description */}
-        <div className="mb-8 max-w-xl">
-          <p className="text-text-secondary text-lg leading-relaxed">
-            {persona.description}
-          </p>
-        </div>
-
-        {/* Stats */}
-        <div className="mt-auto pt-6 border-t border-border/50">
-          <div className="flex gap-12">
-            {persona.stats.map((stat, i) => (
-              <div key={i} className="flex flex-col">
-                <span className="font-display text-3xl font-bold text-primary tabular-nums">
-                  {stat.value}
-                </span>
-                <span className="text-xs uppercase tracking-wider text-text-muted font-medium mt-1">
-                  {stat.label}
-                </span>
-              </div>
-            ))}
+          {/* Stats */}
+          <div className="mt-auto pt-6 border-t border-border/50">
+            <div className="flex gap-12">
+              {persona.stats.map((stat, i) => (
+                <div key={i} className="flex flex-col">
+                  <span className="font-display text-3xl font-bold text-primary tabular-nums">
+                    {stat.value}
+                  </span>
+                  <span className="text-xs uppercase tracking-wider text-text-muted font-medium mt-1">
+                    {stat.label}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      </motion.div>
     </motion.div>
   );
 }
