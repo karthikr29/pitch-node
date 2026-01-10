@@ -5,6 +5,7 @@ import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { Suspense, lazy } from "react";
 import { ArrowRight, Sparkles } from "lucide-react";
+import { TypeAnimation } from "react-type-animation";
 
 import { WaitlistCounter } from "./waitlist-counter";
 
@@ -62,17 +63,51 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
               transition={{ duration: 0.5, delay: 0.2 }}
               className="font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-text-primary leading-[1.1] mb-6"
             >
-              Master Every Sales Conversation{" "}
-              <span className="relative inline-block">
-                <span className="text-primary">Before</span>
-                <motion.div
-                  className="absolute -bottom-1 left-0 w-full h-2 -z-10 rounded bg-primary/20"
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: 1 }}
-                  transition={{ duration: 0.6, delay: 0.5 }}
-                />
-              </span>{" "}
-              It Happens
+              <span className="block">Master Every</span>
+              <TypeAnimation
+                sequence={[
+                  "Cold Call",
+                  2000,
+                  "Discovery Call",
+                  2000,
+                  "Demo Presentation",
+                  2000,
+                  "Objection",
+                  2000,
+                  "Negotiation",
+                  2000,
+                  "Closing Call",
+                  2000,
+                ]}
+                wrapper="span"
+                speed={50}
+                className="text-primary block"
+                repeat={Infinity}
+              />
+              <span className="block">
+                <span className="relative inline-block">
+                  <span
+                    className="bg-gradient-to-r from-primary via-primary to-accent bg-clip-text text-transparent"
+                    style={{
+                      WebkitBackgroundClip: "text",
+                      backgroundClip: "text",
+                    }}
+                  >
+                    Before
+                  </span>
+                  <motion.div
+                    className="absolute -bottom-1 left-0 w-full h-2 -z-10 rounded"
+                    style={{
+                      background: "linear-gradient(90deg, var(--primary), var(--accent))",
+                      opacity: 0.25,
+                    }}
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: 1 }}
+                    transition={{ duration: 0.6, delay: 0.5 }}
+                  />
+                </span>{" "}
+                It Happens
+              </span>
             </motion.h1>
 
             {/* Subheadline */}
@@ -102,9 +137,9 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
                 Be first to access when we launch
               </p>
             </motion.div>
-            
+
             <div className="mt-8 flex justify-center lg:justify-start">
-               <WaitlistCounter />
+              <WaitlistCounter />
             </div>
           </div>
 

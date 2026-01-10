@@ -5,24 +5,25 @@
   /* Fonts */
   --font-display: "Cabinet Grotesk", system-ui, sans-serif;
   --font-body: "Inter", system-ui, sans-serif;
-  
+
   /* Colors - Light Mode Defaults */
   --color-primary: #EC7211;
   --color-primary-hover: #EB5F07;
-  --color-secondary: #232F3E; /* Amazon Dark Blue for secondary elements */
+  --color-secondary: #232F3E;
+  /* Amazon Dark Blue for secondary elements */
   --color-accent: #FF9900;
-  
+
   --color-background-primary: #F2F3F3;
   --color-background-secondary: #FFFFFF;
   --color-surface: #FFFFFF;
-  
+
   --color-text-primary: #16191F;
   --color-text-secondary: #545B64;
   --color-text-muted: #6B7280;
   --color-text-on-primary: #FFFFFF;
-  
+
   --color-border: #D5DBDB;
-  
+
   --color-success: #107E3E;
   --color-warning: #B56307;
   --color-error: #B12020;
@@ -35,21 +36,21 @@
   --primary-hover: #EB5F07;
   --secondary: #232F3E;
   --accent: #FF9900;
-  
+
   /* Backgrounds */
   --background-primary: #F2F3F3;
   --background-secondary: #FFFFFF;
   --surface: #FFFFFF;
-  
+
   /* Text */
   --text-primary: #16191F;
   --text-secondary: #545B64;
   --text-muted: #6B7280;
   --text-on-primary: #FFFFFF;
-  
+
   /* Borders */
   --border: #D5DBDB;
-  
+
   /* States */
   --success: #107E3E;
   --warning: #B56307;
@@ -60,29 +61,30 @@
 .dark {
   /* Primary Colors */
   --primary: #FF9900;
-  --primary-hover: #FFAC31; /* Slightly lighter than primary for hover */
+  --primary-hover: #FFAC31;
+  /* Slightly lighter than primary for hover */
   --secondary: #D5DBDB;
   --accent: #EC7211;
-  
+
   /* Backgrounds */
   --background-primary: #0F1B2A;
   --background-secondary: #161E2D;
   --surface: #161E2D;
-  
+
   /* Text */
   --text-primary: #D5DBDB;
   --text-secondary: #879596;
   --text-muted: #545B64;
   --text-on-primary: #161E2D;
-  
+
   /* Borders */
   --border: #414750;
-  
+
   /* States */
   --success: #1F9D55;
   --warning: #C27803;
   --error: #A12020;
-  
+
   /* Override theme colors for dark mode */
   --color-primary: #FF9900;
   --color-primary-hover: #FFAC31;
@@ -112,7 +114,12 @@ body {
   background-color: var(--background-primary);
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-display);
   color: var(--text-primary);
 }
@@ -127,6 +134,7 @@ h1, h2, h3, h4, h5, h6 {
   0% {
     transform: translateX(-100%);
   }
+
   100% {
     transform: translateX(100%);
   }
@@ -134,4 +142,80 @@ h1, h2, h3, h4, h5, h6 {
 
 .animate-shimmer {
   animation: shimmer 2s infinite;
+}
+
+/* Voice waveform animation */
+@keyframes voice-pulse {
+
+  0%,
+  100% {
+    transform: scaleY(0.3);
+    opacity: 0.5;
+  }
+
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+/* Glow animation for active elements */
+@keyframes glow-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 20px var(--primary);
+  }
+
+  50% {
+    box-shadow: 0 0 40px var(--primary), 0 0 60px var(--primary);
+  }
+}
+
+/* Neural node pulse */
+@keyframes neural-pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+}
+
+/* Connection flow animation */
+@keyframes flow-right {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(500%);
+  }
+}
+
+@keyframes flow-left {
+  0% {
+    transform: translateX(500%);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.animate-voice-pulse {
+  animation: voice-pulse 0.8s ease-in-out infinite;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+.animate-neural-pulse {
+  animation: neural-pulse 1.5s ease-in-out infinite;
 }
