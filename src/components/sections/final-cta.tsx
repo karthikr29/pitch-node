@@ -228,9 +228,9 @@ export function FinalCTA({ onOpenWaitlist }: FinalCTAProps) {
   });
 
   return (
-    <section className="relative py-24 md:py-32 lg:py-40 overflow-hidden">
+    <section className="relative py-24 md:py-32 lg:py-40 overflow-hidden bg-background-secondary border-t border-border/40">
       {/* Background with gradient mesh */}
-      <div className="absolute inset-0 bg-gradient-to-b from-background-primary via-background-secondary to-background-primary" />
+      <div className="absolute inset-0 bg-gradient-to-b from-background-secondary via-background-primary/50 to-background-secondary" />
 
       {/* Animated floating orbs */}
       <FloatingOrb delay={0} size="w-96 h-96" position={{ top: "10%", left: "-10%" }} color="var(--primary)" />
@@ -326,7 +326,7 @@ export function FinalCTA({ onOpenWaitlist }: FinalCTAProps) {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: 0.5 }}
-              className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start"
+              className="flex flex-col items-center lg:items-start gap-4"
             >
               <Button
                 size="lg"
@@ -337,7 +337,7 @@ export function FinalCTA({ onOpenWaitlist }: FinalCTAProps) {
                 Claim Your Spot
                 <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
               </Button>
-              <div className="flex items-center gap-2 text-text-muted text-sm">
+              <div className="flex items-center gap-2 text-text-muted text-sm pl-1">
                 <Users className="w-4 h-4" />
                 <span>{count}+ joined this week</span>
               </div>
