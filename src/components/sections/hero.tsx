@@ -57,7 +57,7 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
                 />
               </div>
               <span className="text-sm font-semibold tracking-wide uppercase text-primary">
-                Live Voice Training • Coming Soon
+                Practice Before You Pitch • Coming Soon
               </span>
             </motion.div>
 

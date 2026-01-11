@@ -8,6 +8,15 @@ interface WaveformBackgroundProps {
   animated?: boolean;
 }
 
+// Pre-computed deterministic heights for each bar (0-39)
+// These are fixed values to avoid any SSR/client mismatch
+const BAR_HEIGHTS = [
+  45, 72, 33, 58, 67, 28, 76, 41, 53, 69,
+  35, 62, 48, 79, 25, 55, 71, 38, 64, 50,
+  73, 29, 60, 44, 77, 32, 57, 68, 42, 75,
+  36, 63, 49, 70, 26, 54, 66, 39, 61, 47
+];
+
 export function WaveformBackground({
   className = "",
   variant = "primary",
@@ -78,21 +87,20 @@ export function WaveformBackground({
 
       {/* Frequency Bars (Audio Spectrum Effect) */}
       <div className="absolute bottom-0 left-0 right-0 flex items-end justify-around h-32 px-8 gap-2">
-        {Array.from({ length: 40 }).map((_, i) => (
+        {BAR_HEIGHTS.map((height, i) => (
           <motion.div
             key={i}
             className="flex-1 bg-current rounded-t-sm"
             style={{
               color,
-              animationDelay: `${i * 0.05}s`,
-              height: `${Math.random() * 60 + 20}%`,
+              height: `${height}%`,
             }}
             animate={
               animated
                 ? {
-                    scaleY: [0.3, 0.8, 1, 0.6, 0.3],
-                    opacity: [0.4, 0.7, 1, 0.6, 0.4],
-                  }
+                  scaleY: [0.3, 0.8, 1, 0.6, 0.3],
+                  opacity: [0.4, 0.7, 1, 0.6, 0.4],
+                }
                 : {}
             }
             transition={{

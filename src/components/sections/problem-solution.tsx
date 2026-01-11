@@ -82,8 +82,11 @@ export function ProblemSolution() {
             whileHover={{ y: -8, transition: { duration: 0.3, ease: "easeOut" } }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="relative cursor-pointer"
+            className="relative group cursor-pointer"
           >
+            {/* Glow effect */}
+            <div className="absolute -inset-px rounded-3xl bg-gradient-to-br from-red-500/20 via-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity blur-xl" />
+
             {/* Card */}
             <div className="relative h-full p-8 md:p-10 rounded-3xl bg-gradient-to-br from-red-500/5 to-transparent border border-red-500/20 dark:border-red-500/10 transition-shadow duration-300 hover:shadow-2xl hover:shadow-red-500/10">
               {/* Header */}

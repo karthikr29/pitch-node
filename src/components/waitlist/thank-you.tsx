@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Check, Mail, Sparkles, Trophy, TrendingUp } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 interface ThankYouProps {
   name: string;
@@ -50,6 +50,22 @@ export function ThankYou({ name, email, onClose }: ThankYouProps) {
     const timer = setTimeout(() => setShowConfetti(false), 2000);
     return () => clearTimeout(timer);
   }, []);
+
+  // Handle Enter key to close
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        onClose();
+      }
+    },
+    [onClose]
+  );
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   return (
     <motion.div
@@ -212,18 +228,25 @@ export function ThankYou({ name, email, onClose }: ThankYouProps) {
         </div>
       </motion.div>
 
-      {/* CTA Button */}
-      <motion.button
+      {/* CTA Button with Enter key hint */}
+      <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6, duration: 0.5 }}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={onClose}
-        className="px-8 py-3.5 bg-gradient-to-r from-primary to-accent text-white font-semibold rounded-full shadow-lg shadow-primary/30 transition-all duration-200 hover:shadow-xl hover:shadow-primary/40"
+        className="flex flex-col items-center gap-3"
       >
-        Got it, thanks!
-      </motion.button>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={onClose}
+          className="px-8 py-3.5 bg-gradient-to-r from-primary to-accent text-white font-semibold rounded-full shadow-lg shadow-primary/30 transition-all duration-200 hover:shadow-xl hover:shadow-primary/40"
+        >
+          Got it, thanks!
+        </motion.button>
+        <span className="text-text-muted text-sm">
+          press <kbd className="font-mono text-text-secondary">Enter ↵</kbd>
+        </span>
+      </motion.div>
 
       {/* Footer tagline */}
       <motion.p

@@ -43,6 +43,10 @@ export function ExperienceStep({
 }: ExperienceStepProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Detect if user is on Mac or Windows
+  const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  const modifierKey = isMac ? '⌘' : 'Ctrl';
+
   useEffect(() => {
     const timer = setTimeout(() => containerRef.current?.focus(), 300);
     return () => clearTimeout(timer);
@@ -54,7 +58,8 @@ export function ExperienceStep({
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Enter") {
+    // Submit only with Ctrl+Enter (Windows) or Cmd+Enter (Mac)
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleSubmit();
     } else if (e.key === "ArrowLeft" && value > 1) {
@@ -213,7 +218,7 @@ export function ExperienceStep({
         </button>
         {!isSubmitting && (
           <span className="text-text-muted text-sm">
-            press <kbd className="font-mono text-text-secondary">Enter ↵</kbd>
+            press <kbd className="font-mono text-text-secondary">{modifierKey}+Enter ↵</kbd>
           </span>
         )}
       </motion.div>

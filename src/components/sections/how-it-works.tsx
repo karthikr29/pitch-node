@@ -78,26 +78,48 @@ function StepRow({
         </p>
       </div>
 
-      {/* 3D Scene */}
-      <div
+      {/* 3D Scene - Improved styling for better visibility */}
+      <motion.div
         className={cn(
-          "h-[300px] md:h-[400px] rounded-3xl overflow-hidden bg-gradient-to-br from-white/5 to-transparent border border-white/10 backdrop-blur-sm shadow-2xl relative",
+          "h-[300px] md:h-[400px] relative",
           !isLeft && "md:order-1"
         )}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={isInView ? { opacity: 1, scale: 1 } : {}}
+        transition={{ duration: 0.7, delay: 0.3 }}
       >
-        {/* Ambient Light for the container */}
-        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
+        {/* Frequency rings */}
+        <motion.div
+          className="absolute inset-0 rounded-3xl border-2 border-primary/20"
+          animate={{
+            scale: [1, 1.02, 1],
+            opacity: [0.3, 0.5, 0.3],
+          }}
+          transition={{
+            duration: 3,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
 
-        <Suspense
-          fallback={
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="w-8 h-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-            </div>
-          }
-        >
-          <step.Scene />
-        </Suspense>
-      </div>
+        {/* Scene container with better background */}
+        <div className="relative w-full h-full rounded-2xl overflow-hidden bg-surface dark:bg-surface/50 backdrop-blur-sm border border-border shadow-xl">
+          <Suspense
+            fallback={
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
+                </div>
+              </div>
+            }
+          >
+            <step.Scene />
+          </Suspense>
+        </div>
+
+        {/* Corner accent */}
+        <div className="absolute -top-2 -right-2 w-16 h-16 border-t-2 border-r-2 border-primary rounded-tr-2xl opacity-50" />
+      </motion.div>
     </motion.div>
   );
 }
