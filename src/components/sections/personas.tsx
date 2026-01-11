@@ -5,10 +5,10 @@ import { cn } from "@/lib/utils";
 
 const personas = [
   {
-    id: "sdr",
-    title: "New SDRs",
-    subtitle: "Fast-track your ramp",
-    description: "Compress your first 100 calls into a weekend. Walk into Monday with the confidence of a seasoned pro.",
+    id: "sales",
+    title: "Sales Professionals",
+    subtitle: "Close more deals",
+    description: "Master cold calls, discovery, demos, and objection handling. Walk into every sales conversation ready to win.",
     stats: [
       { label: "Faster Ramp", value: "3x" },
       { label: "More Confident", value: "87%" },
@@ -16,22 +16,22 @@ const personas = [
     size: "large",
   },
   {
-    id: "ae",
-    title: "Account Executives",
-    subtitle: "Sharpen every skill",
-    description: "Perfect your discovery questions and closing techniques. Never walk into a big meeting unprepared.",
+    id: "founder",
+    title: "Founders & Entrepreneurs",
+    subtitle: "Pitch investors with confidence",
+    description: "Perfect your investor pitch, nail tough Q&As, and walk into every meeting ready to close the deal.",
     stats: [
-      { label: "Win Rate", value: "+24%" },
+      { label: "Pitch Ready", value: "3x" },
     ],
     size: "medium",
   },
   {
-    id: "manager",
-    title: "Sales Managers",
-    subtitle: "Scale your best reps",
-    description: "Identify who's ready for larger accounts without listening to hundreds of recordings.",
+    id: "pm",
+    title: "Product & Technical Leads",
+    subtitle: "Sell your vision",
+    description: "Practice stakeholder presentations, executive pitches, and demos. Get buy-in faster.",
     stats: [
-      { label: "Time Saved", value: "10h" },
+      { label: "Clarity Boost", value: "2x" },
     ],
     size: "medium",
   },
@@ -158,7 +158,7 @@ export function Personas() {
           className="text-center mb-16 md:mb-24"
         >
           <div className="inline-block px-4 py-2 rounded-full border text-sm font-medium mb-6 bg-primary/5 border-primary/20 text-primary">
-            Built for Every Sales Role
+            Built for Anyone Who Sells or Pitches
           </div>
 
           <h2 className="font-display text-3xl md:text-5xl lg:text-6xl font-bold text-text-primary mb-6 tracking-tight">
@@ -166,7 +166,7 @@ export function Personas() {
             <span className="text-primary">For</span>
           </h2>
           <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-            Whether you&apos;re starting out or scaling up, PitchNode accelerates your growth.
+            Whether you&apos;re closing deals, pitching investors, or presenting to stakeholders — PitchNode accelerates your growth.
           </p>
         </motion.div>
 

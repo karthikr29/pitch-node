@@ -210,7 +210,7 @@ export function ThankYou({ name, email, onClose }: ThankYouProps) {
           <div>
             <h3 className="font-semibold text-text-primary mb-1">Get Early Access</h3>
             <p className="text-text-muted text-sm">
-              You&apos;ll be among the first to practice with AI sales opponents
+              You&apos;ll be among the first to practice with AI opponents
             </p>
           </div>
         </div>
@@ -222,7 +222,7 @@ export function ThankYou({ name, email, onClose }: ThankYouProps) {
           <div>
             <h3 className="font-semibold text-text-primary mb-1">Level Up Your Skills</h3>
             <p className="text-text-muted text-sm">
-              Master objections, perfect your pitch, and close more deals
+              Master objections, perfect your pitch, and win more opportunities
             </p>
           </div>
         </div>
@@ -255,7 +255,7 @@ export function ThankYou({ name, email, onClose }: ThankYouProps) {
         transition={{ delay: 0.7, duration: 0.5 }}
         className="mt-8 text-text-muted text-sm"
       >
-        We&apos;ll see you soon. Time to dominate those sales calls! 🚀
+        We&apos;ll see you soon. Time to nail every conversation! 🚀
       </motion.p>
     </motion.div>
   );

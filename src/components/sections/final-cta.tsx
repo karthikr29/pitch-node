@@ -271,7 +271,7 @@ export function FinalCTA({ onOpenWaitlist }: FinalCTAProps) {
               <br />
               <span className="relative">
                 <span className="bg-gradient-to-r from-primary via-primary to-accent bg-clip-text text-transparent">
-                  Sales Mastery
+                  Sales & Pitch Mastery
                 </span>
                 <motion.svg
                   className="absolute -bottom-2 left-0 w-full"
@@ -305,7 +305,7 @@ export function FinalCTA({ onOpenWaitlist }: FinalCTAProps) {
               transition={{ duration: 0.5, delay: 0.2 }}
               className="text-text-secondary text-lg md:text-xl max-w-xl mx-auto lg:mx-0 mb-8"
             >
-              Be among the first 100 sales professionals to experience AI-powered practice that actually works.
+              Be among the first 100 professionals to experience AI-powered practice that actually works.
               <span className="text-primary font-semibold"> Limited early access spots remaining.</span>
             </motion.p>
 

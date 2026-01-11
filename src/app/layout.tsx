@@ -35,20 +35,20 @@ const cabinetGrotesk = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "PitchNode | The Science of Sales Performance",
+  title: "PitchNode | Master Every Sales Call & Pitch",
   description:
-    "Practice live sales conversations against AI opponents. Map every response. Master objections. Prove readiness before real deals.",
+    "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
   keywords: [
     "sales training",
+    "pitch practice",
     "AI sales",
-    "sales practice",
     "objection handling",
-    "sales coaching",
+    "pitch coaching",
   ],
   openGraph: {
-    title: "PitchNode | The Science of Sales Performance",
+    title: "PitchNode | Master Every Sales Call & Pitch",
     description:
-      "Practice live sales conversations against AI opponents. Map every response. Master objections. Prove readiness before real deals.",
+      "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
     type: "website",
   },
   icons: {

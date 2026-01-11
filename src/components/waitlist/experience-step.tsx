@@ -27,7 +27,7 @@ const experienceLabels: Record<number, string> = {
   7: "Experienced",
   8: "Very experienced",
   9: "Expert",
-  10: "Sales master",
+  10: "Pitch master",
 };
 
 export function ExperienceStep({
@@ -101,7 +101,7 @@ export function ExperienceStep({
         transition={{ delay: 0.15 }}
         className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-text-primary mb-4"
       >
-        How would you rate your sales experience?
+        How would you rate your sales & pitching experience?
       </motion.h1>
 
       {/* Subtitle */}

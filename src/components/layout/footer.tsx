@@ -45,9 +45,9 @@ export function Footer() {
             </p>
 
             <p className="text-text-secondary text-sm leading-relaxed max-w-sm">
-              Practice live sales conversations against AI opponents.
+              Practice live sales calls and pitches against AI opponents.
               Map every response. Master objections.
-              Prove readiness before real deals are on the line.
+              Prove readiness before the real thing.
             </p>
 
             {/* Social proof or mission */}
@@ -67,7 +67,7 @@ export function Footer() {
                 ))}
               </div>
               <span className="text-xs text-text-muted">
-                Trusted by ambitious sales teams
+                Trusted by ambitious professionals
               </span>
             </div>
           </div>
@@ -149,7 +149,7 @@ export function Footer() {
             >
               ❤️
             </motion.span>
-            <span>for sales teams everywhere</span>
+            <span>for professionals everywhere</span>
           </div>
         </div>
       </div>

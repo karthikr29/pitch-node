@@ -64,18 +64,19 @@ export function WaitlistNudge({ isOpen, onClose, onJoin }: WaitlistNudgeProps) {
                                             {count.toLocaleString()}
                                         </span>
                                         <span className="text-text-secondary text-sm font-medium">
-                                            waiting
+                                            ahead
                                         </span>
-                                    </div>
-                                    <div className="text-xs text-text-tertiary">
-                                        Sales pros in queue
+                                        <span className="text-text-muted text-sm">•</span>
+                                        <span className="text-primary text-sm font-semibold">
+                                            Be next
+                                        </span>
                                     </div>
                                 </div>
                             </div>
 
                             <div className="space-y-3">
                                 <p className="text-sm text-text-secondary leading-normal">
-                                    Don't miss out on securing your spot for the next generation of sales training.
+                                    Don't miss out on securing your spot for the next generation of sales and pitch training.
                                 </p>
 
                                 <Button

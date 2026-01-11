@@ -160,7 +160,7 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
               transition={{ duration: 0.6, delay: 0.6 }}
               className="text-lg md:text-xl text-text-secondary max-w-2xl mb-8 leading-relaxed font-medium"
             >
-              Practice live sales calls against{" "}
+              Practice live sales calls and pitches against{" "}
               <span className="text-text-primary font-bold">AI opponents</span> who
               push back, challenge you, and make you better.{" "}
               <span className="text-primary dark:text-accent font-bold">

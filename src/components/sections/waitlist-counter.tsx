@@ -43,7 +43,7 @@ export function WaitlistCounter() {
           {count.toLocaleString()}
         </span>
         <span className="text-text-secondary font-medium">
-          sales pros in queue
+          ahead of you
         </span>
       </span>
     </motion.div>

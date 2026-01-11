@@ -34,7 +34,7 @@ export function ProblemSolution() {
     <section id="problem-solution" className="relative py-24 md:py-32 overflow-hidden bg-background-secondary">
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-b from-background-secondary/50 to-transparent" />
-      
+
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section header */}
         <motion.div
@@ -69,7 +69,7 @@ export function ProblemSolution() {
             </span>
           </h2>
           <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-            Traditional sales training teaches you what to say. PitchNode teaches you how to think on your feet.
+            Traditional training teaches you what to say. PitchNode teaches you how to think on your feet.
           </p>
         </motion.div>
 
@@ -149,7 +149,7 @@ export function ProblemSolution() {
           >
             {/* Glow effect */}
             <div className="absolute -inset-px rounded-3xl bg-gradient-to-br from-primary/20 via-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity blur-xl" />
-            
+
             {/* Card */}
             <div className="relative h-full p-8 md:p-10 rounded-3xl bg-gradient-to-br from-primary/5 to-transparent border border-primary/20 dark:border-primary/10 transition-shadow duration-300 hover:shadow-2xl hover:shadow-primary/10">
               {/* Header */}
