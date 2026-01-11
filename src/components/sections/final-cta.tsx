@@ -426,7 +426,7 @@ export function FinalCTA({ onOpenWaitlist }: FinalCTAProps) {
           <div className="grid grid-cols-2 md:grid-cols-2 gap-8 max-w-2xl mx-auto">
             {[
               { label: "Response Time", value: "< 24hrs" },
-              { label: "AI Personas", value: "10+" },
+              { label: "AI Personas", value: "5+" },
             ].map((stat, index) => (
               <motion.div
                 key={stat.label}

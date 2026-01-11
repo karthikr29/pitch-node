@@ -4,7 +4,7 @@
 @theme {
   /* Fonts */
   --font-display: "Cabinet Grotesk", system-ui, sans-serif;
-  --font-body: "Inter", system-ui, sans-serif;
+  --font-body: var(--font-dm-sans), system-ui, sans-serif;
 
   /* Colors - Light Mode Defaults */
   --color-primary: #EC7211;
@@ -55,6 +55,12 @@
   --success: #107E3E;
   --warning: #B56307;
   --error: #B12020;
+
+  /* Voice Frequency Waveform Colors (AWS Theme) */
+  --wave-1: rgba(236, 114, 17, 0.15);   /* Primary orange */
+  --wave-2: rgba(255, 153, 0, 0.15);     /* Accent orange */
+  --wave-3: rgba(35, 47, 62, 0.1);       /* Secondary dark blue */
+  --frequency-grid: rgba(236, 114, 17, 0.08);
 }
 
 /* AWS INSPIRED - Dark Theme */
@@ -84,6 +90,12 @@
   --success: #1F9D55;
   --warning: #C27803;
   --error: #A12020;
+
+  /* Voice Frequency Waveform Colors (AWS Theme - Dark) */
+  --wave-1: rgba(255, 153, 0, 0.2);      /* Primary bright orange */
+  --wave-2: rgba(236, 114, 17, 0.2);     /* Accent orange */
+  --wave-3: rgba(213, 219, 219, 0.15);   /* Secondary light */
+  --frequency-grid: rgba(255, 153, 0, 0.1);
 
   /* Override theme colors for dark mode */
   --color-primary: #FF9900;
@@ -121,6 +133,26 @@ body {
   font-family: var(--font-body);
   color: var(--text-primary);
   background-color: var(--background-primary);
+  position: relative;
+}
+
+/* Subtle grain texture overlay for premium feel */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.025;
+  z-index: -1;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='3.5' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' /%3E%3C/svg%3E");
+  pointer-events: none;
+  animation: grain 8s steps(10) infinite;
+}
+
+.dark body::before {
+  opacity: 0.04;
 }
 
 h1,
@@ -328,4 +360,142 @@ h6 {
 
 .animate-shooting-head {
   animation: shooting-star-head var(--shooting-duration, 1s) ease-out forwards;
+}
+
+/* VOICE FREQUENCY SPECTRUM - Animations for Sales Training Theme */
+
+/* Frequency bars animation - simulates audio spectrum analyzer */
+@keyframes frequency-pulse {
+  0%, 100% {
+    transform: scaleY(0.3);
+    opacity: 0.4;
+  }
+  25% {
+    transform: scaleY(0.8);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  75% {
+    transform: scaleY(0.6);
+    opacity: 0.6;
+  }
+}
+
+/* Waveform animation - flowing audio wave */
+@keyframes waveform-flow {
+  0% {
+    transform: translateX(0) scaleY(1);
+  }
+  50% {
+    transform: translateX(-25%) scaleY(1.2);
+  }
+  100% {
+    transform: translateX(-50%) scaleY(1);
+  }
+}
+
+/* AWS Orange glow pulse for interactive elements */
+@keyframes aws-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 10px var(--primary),
+      0 0 20px var(--primary),
+      inset 0 0 10px rgba(236, 114, 17, 0.1);
+    opacity: 0.8;
+  }
+  50% {
+    box-shadow:
+      0 0 20px var(--primary),
+      0 0 40px var(--primary),
+      0 0 60px var(--primary),
+      inset 0 0 20px rgba(236, 114, 17, 0.2);
+    opacity: 1;
+  }
+}
+
+/* Spectrum gradient shift for AWS colors */
+@keyframes spectrum-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Voice amplitude pulse */
+@keyframes amplitude-pulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.05);
+    filter: brightness(1.2);
+  }
+}
+
+/* Grain noise texture */
+@keyframes grain {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  10% {
+    transform: translate(-5%, -10%);
+  }
+  20% {
+    transform: translate(-15%, 5%);
+  }
+  30% {
+    transform: translate(7%, -25%);
+  }
+  40% {
+    transform: translate(-5%, 25%);
+  }
+  50% {
+    transform: translate(-15%, 10%);
+  }
+  60% {
+    transform: translate(15%, 0%);
+  }
+  70% {
+    transform: translate(0%, 15%);
+  }
+  80% {
+    transform: translate(3%, 35%);
+  }
+  90% {
+    transform: translate(-10%, 10%);
+  }
+}
+
+.animate-frequency-pulse {
+  animation: frequency-pulse 1.2s ease-in-out infinite;
+}
+
+.animate-waveform {
+  animation: waveform-flow 8s ease-in-out infinite;
+}
+
+.animate-aws-glow {
+  animation: aws-glow 3s ease-in-out infinite;
+}
+
+.animate-spectrum-shift {
+  animation: spectrum-shift 15s ease infinite;
+  background-size: 200% 200%;
+}
+
+.animate-amplitude {
+  animation: amplitude-pulse 2s ease-in-out infinite;
+}
+
+.animate-grain {
+  animation: grain 8s steps(10) infinite;
 }

@@ -5,3 +5,5 @@ export { Modal } from "./modal";
 export { ProgressBar, ProgressDots } from "./progress-bar";
 export { Slider } from "./slider";
 export { StarryBackground } from "./starry-background";
+export { WaveformBackground } from "./waveform-background";
+export { FrequencyOrb } from "./frequency-orb";

@@ -4,7 +4,8 @@ import { motion } from "framer-motion";
 import { useInView } from "framer-motion";
 import { useRef, Suspense, lazy } from "react";
 import { cn } from "@/lib/utils";
-import { Sparkles } from "lucide-react";
+import { Activity } from "lucide-react";
+import { WaveformBackground } from "@/components/ui";
 
 const PersonasScene = lazy(() => import("@/components/3d/personas-scene"));
 const AnalysisScene = lazy(() => import("@/components/3d/analysis-scene"));
@@ -12,7 +13,7 @@ const ProgressScene = lazy(() => import("@/components/3d/progress-scene"));
 
 const features = [
   {
-    title: "10+ AI Personas That Fight Back",
+    title: "5+ AI Personas That Fight Back",
     description:
       "The Skeptical Tech Director. The Aggressive Procurement Officer. The Friendly Gatekeeper. Each with distinct personalities, objection patterns, and emotional triggers.",
     Scene: PersonasScene,
@@ -49,46 +50,82 @@ function FeatureRow({
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, y: 40 }}
+      initial={{ opacity: 0, y: 60 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.6, delay: 0.1 }}
+      transition={{ duration: 0.8, delay: 0.2 }}
       className={cn(
-        "grid md:grid-cols-2 gap-8 lg:gap-16 items-center",
-        index !== 0 && "mt-24 md:mt-32"
+        "grid md:grid-cols-12 gap-8 lg:gap-12 items-center",
+        index !== 0 && "mt-32 md:mt-40"
       )}
     >
-      {/* Content */}
-      <div
+      {/* Content - Asymmetric layout */}
+      <motion.div
         className={cn(
-          "text-center md:text-left",
-          !isLeft && "md:order-2"
+          "md:col-span-5 text-left",
+          !isLeft && "md:order-2 md:col-start-8"
         )}
+        initial={{ opacity: 0, x: isLeft ? -30 : 30 }}
+        animate={isInView ? { opacity: 1, x: 0 } : {}}
+        transition={{ duration: 0.7, delay: 0.4 }}
       >
-        <h3 className="font-display text-2xl md:text-3xl lg:text-4xl font-bold text-text-primary mb-4">
+        <h3 className="font-display text-3xl md:text-4xl lg:text-5xl font-extrabold text-text-primary mb-6 leading-tight">
           {feature.title}
         </h3>
-        <p className="text-text-secondary text-lg leading-relaxed">
+        <p className="text-text-secondary text-lg md:text-xl leading-relaxed">
           {feature.description}
         </p>
-      </div>
 
-      {/* 3D Scene */}
-      <div
+        {/* Accent line */}
+        <motion.div
+          className="w-20 h-1 bg-gradient-to-r from-primary to-accent rounded-full mt-8"
+          initial={{ scaleX: 0 }}
+          animate={isInView ? { scaleX: 1 } : {}}
+          transition={{ duration: 0.6, delay: 0.6 }}
+        />
+      </motion.div>
+
+      {/* 3D Scene - Card with frequency border */}
+      <motion.div
         className={cn(
-          "h-[300px] md:h-[400px]",
-          !isLeft && "md:order-1"
+          "md:col-span-7 h-[350px] md:h-[450px] relative",
+          !isLeft && "md:order-1 md:col-start-1"
         )}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={isInView ? { opacity: 1, scale: 1 } : {}}
+        transition={{ duration: 0.7, delay: 0.3 }}
       >
-        <Suspense
-          fallback={
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="w-12 h-12 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-            </div>
-          }
-        >
-          <feature.Scene />
-        </Suspense>
-      </div>
+        {/* Frequency rings */}
+        <motion.div
+          className="absolute inset-0 rounded-3xl border-2 border-primary/20"
+          animate={{
+            scale: [1, 1.02, 1],
+            opacity: [0.3, 0.5, 0.3],
+          }}
+          transition={{
+            duration: 3,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+
+        {/* Scene container */}
+        <div className="relative w-full h-full rounded-2xl overflow-hidden bg-surface dark:bg-surface/50 backdrop-blur-sm border border-border shadow-xl">
+          <Suspense
+            fallback={
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
+                </div>
+              </div>
+            }
+          >
+            <feature.Scene />
+          </Suspense>
+        </div>
+
+        {/* Corner accent */}
+        <div className="absolute -top-2 -right-2 w-16 h-16 border-t-2 border-r-2 border-accent rounded-tr-2xl opacity-50" />
+      </motion.div>
     </motion.div>
   );
 }
@@ -99,42 +136,49 @@ export function Features() {
 
   return (
     <section id="features" ref={ref} className="py-24 md:py-32 bg-background-secondary relative overflow-hidden">
-      {/* Background decorations */}
-      <div className="absolute top-1/2 left-0 w-[400px] h-[400px] rounded-full bg-primary/5 blur-3xl -translate-x-1/2" />
-      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full bg-accent/5 blur-3xl translate-x-1/2" />
-      
+      {/* Waveform Background */}
+      <WaveformBackground variant="secondary" className="opacity-20" />
+
+      {/* Diagonal accent line */}
+      <div className="absolute top-0 right-0 w-1 h-full bg-gradient-to-b from-primary/20 via-accent/20 to-primary/20 transform rotate-12 origin-top-right" />
+
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
+        {/* Header - More impactful */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 30 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.5 }}
-          className="text-center mb-16 md:mb-24"
+          transition={{ duration: 0.7 }}
+          className="text-center mb-20 md:mb-32"
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={isInView ? { opacity: 1, scale: 1 } : {}}
-            transition={{ duration: 0.4 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium mb-6 bg-primary/10 border-primary/20 text-primary"
+            initial={{ opacity: 0, y: 20 }}
+            animate={isInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-2 mb-8"
           >
-            <Sparkles className="w-4 h-4" />
-            Powerful Features
+            <Activity className="w-5 h-5 text-primary animate-pulse" />
+            <span className="text-sm font-bold tracking-widest uppercase text-primary">
+              Powerful Features
+            </span>
           </motion.div>
-          
-          <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-text-primary mb-4">
+
+          <h2 className="font-display text-4xl md:text-5xl lg:text-7xl font-extrabold text-text-primary mb-6 leading-tight">
             Built for{" "}
             <span className="relative inline-block">
-              <span className="text-primary">Real Results</span>
+              <span className="bg-gradient-to-r from-primary via-accent to-primary animate-spectrum-shift bg-clip-text text-transparent">
+                Real Results
+              </span>
               <motion.div
-                className="absolute bottom-1 left-0 w-full h-2 -z-10 rounded bg-primary/20"
+                className="absolute -bottom-2 left-0 w-full h-4 -z-10 rounded-lg bg-gradient-to-r from-primary/30 via-accent/30 to-primary/30"
                 initial={{ scaleX: 0 }}
                 animate={isInView ? { scaleX: 1 } : {}}
-                transition={{ duration: 0.6, delay: 0.3 }}
+                transition={{ duration: 0.8, delay: 0.3 }}
               />
             </span>
           </h2>
-          <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-            Every feature designed to make you a better closer
+          <p className="text-text-secondary text-xl md:text-2xl max-w-3xl mx-auto font-medium">
+            Every feature designed to make you a{" "}
+            <span className="text-primary dark:text-accent font-bold">better closer</span>
           </p>
         </motion.div>
 

@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { DM_Sans } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const inter = Inter({
-  variable: "--font-inter",
+// Distinctive body font with personality
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
   subsets: ["latin"],
   display: "swap",
+  weight: ["400", "500", "600", "700"],
 });
 
 const cabinetGrotesk = localFont({
@@ -79,7 +81,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${inter.variable} ${cabinetGrotesk.variable} font-sans antialiased`}
+        className={`${dmSans.variable} ${cabinetGrotesk.variable} font-sans antialiased`}
         suppressHydrationWarning
       >
         <Providers>{children}</Providers>
