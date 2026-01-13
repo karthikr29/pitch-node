@@ -74,7 +74,7 @@ export function RoleStep({
         transition={{ delay: 0.15 }}
         className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-text-primary mb-4"
       >
-        What&apos;s your current role?
+        What&apos;s your job title?
       </motion.h1>
 
       {/* Subtitle */}
