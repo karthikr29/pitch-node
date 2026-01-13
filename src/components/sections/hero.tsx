@@ -101,8 +101,11 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
                   ]}
                   wrapper="span"
                   speed={50}
-                  className="text-primary dark:text-primary block relative z-10"
+                  className="hero-type-animation text-primary dark:text-primary block relative z-10"
                   repeat={Infinity}
+                  cursor={true}
+                  style={{ display: 'inline-block' }}
+                  preRenderFirstString={false}
                 />
                 {/* AWS Orange glow effect in dark mode */}
                 <motion.div
