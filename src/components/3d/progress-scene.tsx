@@ -74,14 +74,14 @@ function ProgressChart() {
       {/* Trend line connecting tops */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
-        style={{ top: 0 }}
+        viewBox="0 0 100 100"
         preserveAspectRatio="none"
       >
         <motion.path
           d={`M ${weeklyData.map((data, i) => {
             const x = (i / (weeklyData.length - 1)) * 100;
             const y = 100 - (data.score / maxScore) * 80;
-            return `${x}%,${y}%`;
+            return `${x},${y}`;
           }).join(" L ")}`}
           fill="none"
           stroke="var(--accent)"
