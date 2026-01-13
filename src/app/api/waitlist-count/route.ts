@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getWaitlistCount } from "@/lib/airtable";
+import { getWaitlistCount } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;

@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { WaitlistModal } from "./waitlist-modal";
 import { WaitlistNudge } from "./waitlist-nudge";
+import { useWaitlist } from "@/contexts/waitlist-context";
 
-const WAITLIST_POPUP_DELAY = 6000; // 6 seconds
+const WAITLIST_POPUP_DELAY = 10000; // 10 seconds
 const SESSION_STORAGE_KEY = "pitch_node_waitlist_shown";
 
 export function WaitlistTimer() {
+    const { isModalOpen, openModal, closeModal } = useWaitlist();
     const [isNudgeOpen, setIsNudgeOpen] = useState(false);
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const [hasShown, setHasShown] = useState(true);
 
     useEffect(() => {
@@ -31,7 +32,7 @@ export function WaitlistTimer() {
 
     const handleJoinClick = () => {
         setIsNudgeOpen(false);
-        setIsModalOpen(true);
+        openModal();
     };
 
     const handleNudgeClose = () => {
@@ -42,14 +43,15 @@ export function WaitlistTimer() {
 
     return (
         <>
+            {/* Only show nudge when modal is NOT open */}
             <WaitlistNudge
-                isOpen={isNudgeOpen}
+                isOpen={isNudgeOpen && !isModalOpen}
                 onClose={handleNudgeClose}
                 onJoin={handleJoinClick}
             />
             <WaitlistModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={closeModal}
             />
         </>
     );

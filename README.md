@@ -8,10 +8,11 @@ A modern "Coming Soon" landing page for PitchNode, an AI-powered sales training 
 
 - **Responsive Design**: Fully responsive layout that works on all devices
 - **Dark/Light Theme**: System-aware theme with smooth transitions and persistence
-- **TypeForm-Style Waitlist**: Multi-step animated form with validation
+- **TypeForm-Style Waitlist**: Multi-step animated form with validation (4 steps: name, email, role, experience)
 - **Animated 3D Elements**: CSS-based 3D animations that can be upgraded to Spline
 - **Framer Motion Animations**: Smooth scroll and entrance animations
-- **Airtable Integration**: Waitlist signups stored in Airtable via REST API
+- **Supabase Integration**: Waitlist signups stored in Supabase PostgreSQL database
+- **Webhook Integration**: n8n webhook triggered on form submission for automated workflows (e.g., welcome emails)
 
 ## Tech Stack
 
@@ -21,7 +22,8 @@ A modern "Coming Soon" landing page for PitchNode, an AI-powered sales training 
 - **3D Elements**: CSS-based (upgradeable to Spline)
 - **Icons**: Lucide React
 - **Fonts**: Inter + Cabinet Grotesk
-- **Database**: Airtable
+- **Database**: Supabase (PostgreSQL)
+- **Automation**: n8n webhooks
 
 ## Getting Started
 
@@ -48,17 +50,59 @@ The app will be available at [http://localhost:3000](http://localhost:3000).
 
 ### Environment Variables
 
-To enable Airtable integration, the project comes with a `.env.local` file template.
-
-1. Rename the `.env.local` file to `.env`
-2. Update the values with your actual API keys:
+Create a `.env.local` file in the project root with the following variables:
 
 ```env
-AIRTABLE_API_KEY=your_airtable_api_key
-AIRTABLE_BASE_ID=your_airtable_base_id
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-Get your Airtable API key from [https://airtable.com/account](https://airtable.com/account).
+#### Getting Supabase Credentials
+
+1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
+2. Select your project (or create a new one)
+3. Navigate to **Settings** → **API**
+4. Copy the **Project URL** and **anon/public** key
+
+#### Vercel Deployment
+
+When deploying to Vercel, add the following environment variables in **Project Settings** → **Environment Variables**:
+
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL (e.g., `https://xxxxx.supabase.co`) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Your Supabase anonymous/public API key |
+
+> **Note**: Both variables are prefixed with `NEXT_PUBLIC_` because they are used on the client side. The anon key is safe to expose as it only allows operations permitted by your Row Level Security (RLS) policies.
+
+#### Supabase Database Setup
+
+The project uses a `waitlist_signups` table with the following schema:
+
+```sql
+CREATE TABLE waitlist_signups (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  experience_rating INTEGER NOT NULL,
+  job_role TEXT,
+  source TEXT DEFAULT 'website',
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable Row Level Security
+ALTER TABLE waitlist_signups ENABLE ROW LEVEL SECURITY;
+
+-- Allow anonymous inserts
+CREATE POLICY "Allow anonymous inserts" ON waitlist_signups
+  FOR INSERT WITH CHECK (true);
+
+-- Allow anonymous reads (for duplicate checking and count)
+CREATE POLICY "Allow anonymous reads" ON waitlist_signups
+  FOR SELECT USING (true);
+```
 
 ## Project Structure
 
@@ -68,20 +112,24 @@ src/
 │   ├── layout.tsx          # Root layout with fonts, theme provider
 │   ├── page.tsx            # Main landing page
 │   ├── globals.css         # Theme variables, base styles
-│   ├── actions.ts          # Server actions for Airtable
-│   └── providers.tsx       # Theme provider wrapper
+│   ├── actions.ts          # Server actions for Supabase + webhook
+│   ├── providers.tsx       # Theme + Waitlist provider wrapper
+│   └── api/
+│       └── waitlist-count/ # API route for waitlist count
 ├── components/
 │   ├── ui/                 # Button, Input, Modal, ProgressBar
 │   ├── layout/             # Header, Footer, ThemeToggle
 │   ├── sections/           # Hero, ProblemSolution, HowItWorks, etc.
-│   ├── waitlist/           # WaitlistModal, form steps, ThankYou
+│   ├── waitlist/           # WaitlistModal, form steps (Name, Email, Role, Experience), ThankYou
 │   └── 3d/                 # Animated 3D scene components
+├── contexts/
+│   └── waitlist-context.tsx # Shared modal state across app
 ├── lib/
-│   ├── airtable.ts         # Airtable API client
+│   ├── supabase.ts         # Supabase client + database operations
 │   ├── validators.ts       # Form validation utilities
 │   └── utils.ts            # cn() helper, misc utilities
 ├── hooks/
-│   └── use-waitlist-form.ts # Form state management
+│   └── use-waitlist-form.ts # Form state management (4-step flow)
 └── fonts/                  # Cabinet Grotesk font files
 ```
 

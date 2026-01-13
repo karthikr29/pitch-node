@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Modal } from "@/components/ui";
 import { NameStep } from "./name-step";
 import { EmailStep } from "./email-step";
+import { RoleStep } from "./role-step";
 import { ExperienceStep } from "./experience-step";
 import { ThankYou } from "./thank-you";
 import {
@@ -68,7 +69,7 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
             error={error}
             setError={setError}
             stepNumber={1}
-            totalSteps={3}
+            totalSteps={4}
           />
         );
       case "email":
@@ -83,7 +84,21 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
             error={error}
             setError={setError}
             stepNumber={2}
-            totalSteps={3}
+            totalSteps={4}
+          />
+        );
+      case "role":
+        return (
+          <RoleStep
+            key="role"
+            value={formData.currentRole}
+            onChange={(value) => updateField("currentRole", value)}
+            onNext={nextStep}
+            onPrev={prevStep}
+            error={error}
+            setError={setError}
+            stepNumber={3}
+            totalSteps={4}
           />
         );
       case "experience":
@@ -98,8 +113,8 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
             isSubmitting={step === "submitting"}
             error={error}
             setError={setError}
-            stepNumber={3}
-            totalSteps={3}
+            stepNumber={4}
+            totalSteps={4}
           />
         );
       case "success":

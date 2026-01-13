@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Header, Footer } from "@/components/layout";
 import {
   Hero,
@@ -10,32 +9,27 @@ import {
   Personas,
   FinalCTA,
 } from "@/components/sections";
-import { WaitlistModal } from "@/components/waitlist";
 import { StarryBackground } from "@/components/ui";
+import { useWaitlist } from "@/contexts/waitlist-context";
 
 export default function Home() {
-  const [isWaitlistOpen, setIsWaitlistOpen] = useState(false);
-
-  const openWaitlist = () => setIsWaitlistOpen(true);
-  const closeWaitlist = () => setIsWaitlistOpen(false);
+  const { openModal } = useWaitlist();
 
   return (
     <>
       <StarryBackground />
-      <Header onOpenWaitlist={openWaitlist} />
+      <Header onOpenWaitlist={openModal} />
 
       <main>
-        <Hero onOpenWaitlist={openWaitlist} />
+        <Hero onOpenWaitlist={openModal} />
         <ProblemSolution />
-        <HowItWorks onOpenWaitlist={openWaitlist} />
+        <HowItWorks onOpenWaitlist={openModal} />
         <Features />
         <Personas />
-        <FinalCTA onOpenWaitlist={openWaitlist} />
+        <FinalCTA onOpenWaitlist={openModal} />
       </main>
 
       <Footer />
-
-      <WaitlistModal isOpen={isWaitlistOpen} onClose={closeWaitlist} />
     </>
   );
 }
