@@ -35,7 +35,7 @@ const cabinetGrotesk = localFont({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://pitchnode.io"),
+  metadataBase: new URL("https://pitchnode.ai"),
   title: "PitchNode | Master Every Sales Call & Pitch",
   description:
     "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
@@ -68,7 +68,7 @@ export const metadata: Metadata = {
     description:
       "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
     type: "website",
-    url: "https://pitchnode.io",
+    url: "https://pitchnode.ai",
     siteName: "PitchNode",
     locale: "en_US",
   },
