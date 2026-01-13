@@ -169,10 +169,10 @@ export function Features() {
                 Real Results
               </span>
               <motion.div
-                className="absolute -bottom-2 left-0 w-full h-4 -z-10 rounded-lg bg-gradient-to-r from-primary/30 via-accent/30 to-primary/30"
-                initial={{ scaleX: 0 }}
-                animate={isInView ? { scaleX: 1 } : {}}
-                transition={{ duration: 0.8, delay: 0.3 }}
+                className="absolute -bottom-2 left-0 w-full h-4 -z-10 rounded-lg bg-gradient-to-r from-primary/30 via-accent/30 to-primary/30 origin-center"
+                initial={{ scaleX: 0, opacity: 0 }}
+                animate={isInView ? { scaleX: 1, opacity: 1 } : { scaleX: 0, opacity: 0 }}
+                transition={{ duration: 1.5, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
               />
             </span>
           </h2>
