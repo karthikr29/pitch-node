@@ -76,6 +76,14 @@ function StepRow({
         <p className="text-text-secondary text-lg leading-relaxed max-w-lg mx-auto md:mx-0">
           {step.description}
         </p>
+
+        {/* Accent line */}
+        <motion.div
+          className="w-20 h-1 bg-gradient-to-r from-primary to-accent rounded-full mt-8 mx-auto md:mx-0"
+          initial={{ scaleX: 0 }}
+          animate={isInView ? { scaleX: 1 } : {}}
+          transition={{ duration: 0.6, delay: 0.6 }}
+        />
       </div>
 
       {/* 3D Scene - Improved styling for better visibility */}
