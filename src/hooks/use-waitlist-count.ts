@@ -15,7 +15,7 @@ interface UseWaitlistCountReturn {
   refetch: () => Promise<void>;
 }
 
-const DEFAULT_COUNT = 27;
+const DEFAULT_COUNT = 18;
 const DEFAULT_POLLING_INTERVAL = 10000; // 10 seconds
 
 export function useWaitlistCount(

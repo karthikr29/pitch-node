@@ -223,7 +223,7 @@ function LiveIndicator() {
 
 export function FinalCTA({ onOpenWaitlist }: FinalCTAProps) {
   const { count } = useWaitlistCount({
-    initialCount: 27,
+    initialCount: 18,
     pollingInterval: 5000,
   });
 

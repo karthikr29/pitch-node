@@ -23,7 +23,7 @@ interface WaitlistCountResponse {
   error?: string;
 }
 
-const BASE_COUNT = 27; // Starting count before tracking began
+const BASE_COUNT = 18; // Starting count before tracking began
 
 // Simple in-memory cache for count
 let cachedCount: { value: number; timestamp: number } | null = null;

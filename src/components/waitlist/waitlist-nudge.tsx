@@ -14,7 +14,7 @@ interface WaitlistNudgeProps {
 
 export function WaitlistNudge({ isOpen, onClose, onJoin }: WaitlistNudgeProps) {
     const { count, isLoading } = useWaitlistCount({
-        initialCount: 27,
+        initialCount: 18,
         pollingInterval: 10000,
     });
 

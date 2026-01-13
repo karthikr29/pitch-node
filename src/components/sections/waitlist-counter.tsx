@@ -7,11 +7,12 @@ import { useWaitlistCount } from "@/hooks/use-waitlist-count";
 
 export function WaitlistCounter() {
   const { count, isLoading } = useWaitlistCount({
-    initialCount: 27,
+    initialCount: 18,
     pollingInterval: 10000,
   });
 
-  if (isLoading && count === 27) return null;
+  // Don't show anything while loading if count is still at initial value
+  if (isLoading && count === 18) return null;
 
   return (
     <motion.div

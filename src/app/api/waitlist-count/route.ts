@@ -18,6 +18,6 @@ export async function GET() {
     );
   } catch (error) {
     console.error("Error fetching waitlist count:", error);
-    return NextResponse.json({ count: 27 }, { status: 200 });
+    return NextResponse.json({ count: 18 }, { status: 200 });
   }
 }
