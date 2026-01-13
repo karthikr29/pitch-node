@@ -35,6 +35,7 @@ const cabinetGrotesk = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://pitchnode.io"),
   title: "PitchNode | Master Every Sales Call & Pitch",
   description:
     "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
@@ -44,12 +45,38 @@ export const metadata: Metadata = {
     "AI sales",
     "objection handling",
     "pitch coaching",
+    "sales roleplay",
+    "AI sales training",
+    "sales skills",
   ],
+  alternates: {
+    canonical: "/",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   openGraph: {
     title: "PitchNode | Master Every Sales Call & Pitch",
     description:
       "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
     type: "website",
+    url: "https://pitchnode.io",
+    siteName: "PitchNode",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "PitchNode | Master Every Sales Call & Pitch",
+    description:
+      "Practice live sales calls and pitches against AI opponents. Map every response. Master objections.",
   },
   icons: {
     icon: "/favicon.ico",

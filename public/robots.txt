@@ -1,0 +1,15 @@
+# Robots.txt for PitchNode
+# https://pitchnode.io
+
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://pitchnode.io/sitemap.xml
+
+# Disallow API routes
+Disallow: /api/
+
+# Allow search engines to crawl all public pages
+Allow: /privacy
+Allow: /terms
