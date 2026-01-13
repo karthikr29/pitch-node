@@ -49,15 +49,49 @@ export default function FaceAiScene() {
 
             {/* Interaction Zone (Clash) */}
             <div className="absolute inset-0 flex items-center justify-center">
+                {/* Outer glow ring */}
                 <motion.div
-                    className="w-20 h-20 rounded-full bg-white/5 blur-xl"
+                    className="absolute w-28 h-28 rounded-full border-2 border-primary/40"
                     animate={{
-                        scale: [1, 1.5, 1],
-                        opacity: [0.1, 0.3, 0.1],
+                        scale: [1, 1.3, 1],
+                        opacity: [0.4, 0.7, 0.4],
                     }}
                     transition={{
                         duration: 2,
                         repeat: Infinity,
+                        ease: "easeInOut",
+                    }}
+                />
+
+                {/* Main blob with gradient */}
+                <motion.div
+                    className="w-20 h-20 rounded-full"
+                    style={{
+                        background: `radial-gradient(circle, var(--accent) 0%, var(--primary) 60%, transparent 100%)`,
+                        boxShadow: `0 0 40px var(--primary), 0 0 60px var(--accent)`,
+                    }}
+                    animate={{
+                        scale: [1, 1.4, 1],
+                        opacity: [0.5, 0.85, 0.5],
+                    }}
+                    transition={{
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: "easeInOut",
+                    }}
+                />
+
+                {/* Inner bright core */}
+                <motion.div
+                    className="absolute w-8 h-8 rounded-full bg-gradient-to-br from-white/70 to-white/30"
+                    animate={{
+                        scale: [1, 1.2, 1],
+                        opacity: [0.7, 1, 0.7],
+                    }}
+                    transition={{
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: "easeInOut",
                     }}
                 />
 
