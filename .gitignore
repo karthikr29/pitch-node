@@ -66,6 +66,9 @@ Thumbs.db
 .gemini/
 .claude/
 
+# Playwright MCP screenshots
+.playwright-mcp/
+
 # Logs
 logs
 *.log
