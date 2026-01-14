@@ -36,7 +36,7 @@ const cabinetGrotesk = localFont({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://pitchnode.ai"),
-  title: "PitchNode | Master Every Sales Call & Pitch",
+  title: "PitchNode — Master Every Sales Conversation",
   description:
     "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
   keywords: [
@@ -64,7 +64,7 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: "PitchNode | Master Every Sales Call & Pitch",
+    title: "PitchNode — Master Every Sales Conversation",
     description:
       "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
     type: "website",
@@ -74,7 +74,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "PitchNode | Master Every Sales Call & Pitch",
+    title: "PitchNode — Master Every Sales Conversation",
     description:
       "Practice live sales calls and pitches against AI opponents. Map every response. Master objections.",
   },
