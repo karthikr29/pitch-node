@@ -108,7 +108,7 @@ export default function AnalysisScene() {
           style={{ transformStyle: "preserve-3d", perspective: 1000 }}
         >
           {/* Card container */}
-          <div className="relative w-64 bg-gradient-to-br from-surface via-surface to-background-secondary rounded-2xl shadow-2xl border border-border/50 overflow-hidden">
+          <div className="relative w-full max-w-[280px] sm:w-64 bg-gradient-to-br from-surface via-surface to-background-secondary rounded-2xl shadow-2xl border border-border/50 overflow-hidden">
             {/* Header with score */}
             <div className="relative px-4 pt-4 pb-3 border-b border-border/50">
               <div className="flex items-center justify-between">

@@ -79,7 +79,7 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
 
               {/* Animated Text with Voice Wave Effect */}
               <motion.div
-                className="relative inline-block mb-2"
+                className="relative inline-block mb-2 min-h-[1.2em]"
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.7, delay: 0.4 }}
@@ -104,7 +104,7 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
                   className="hero-type-animation text-primary dark:text-primary block relative z-10"
                   repeat={Infinity}
                   cursor={true}
-                  style={{ display: 'inline-block' }}
+                  style={{ display: 'inline-block', minWidth: '200px' }}
                   preRenderFirstString={false}
                 />
                 {/* AWS Orange glow effect in dark mode */}
@@ -236,7 +236,7 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
             initial={{ opacity: 0, scale: 0.9, rotate: -5 }}
             animate={{ opacity: 1, scale: 1, rotate: 0 }}
             transition={{ duration: 0.9, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="lg:col-span-5 relative h-[350px] lg:h-[480px]"
+            className="lg:col-span-5 relative h-[400px] lg:h-[480px]"
           >
             {/* Voice frequency rings around 3D scene */}
             <motion.div

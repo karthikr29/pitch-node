@@ -87,7 +87,7 @@ function FeatureRow({
       {/* 3D Scene - Card with frequency border */}
       <motion.div
         className={cn(
-          "md:col-span-7 h-[350px] md:h-[450px] relative",
+          "md:col-span-7 h-[420px] md:h-[450px] relative",
           !isLeft && "md:order-1 md:col-start-1"
         )}
         initial={{ opacity: 0, scale: 0.95 }}

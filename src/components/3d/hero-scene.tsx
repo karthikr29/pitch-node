@@ -266,17 +266,16 @@ function ConnectionBeam({ isActive }: { isActive: boolean }) {
 function ConversationIndicator({ text, side, delay }: { text: string; side: "left" | "right"; delay: number }) {
   return (
     <motion.div
-      className={`absolute ${side === "left" ? "left-0" : "right-0"} px-3 py-1.5 rounded-lg text-xs font-medium`}
+      className="px-3 py-1.5 rounded-lg text-xs font-medium"
       style={{
         background: side === "left" ? "var(--secondary)" : "var(--primary)",
         color: side === "left" ? "var(--text-on-primary)" : "#0C0A09",
         boxShadow: "0 4px 15px rgba(0,0,0,0.2)",
       }}
-      initial={{ opacity: 0, y: 10, x: side === "left" ? -20 : 20 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{
         opacity: [0, 1, 1, 0],
         y: [10, 0, 0, -10],
-        x: side === "left" ? [-20, 0, 0, -10] : [20, 0, 0, 10],
       }}
       transition={{
         duration: 4,
@@ -332,9 +331,9 @@ export default function HeroScene() {
       </div>
 
       {/* Main conversation visualization */}
-      <div className="relative flex flex-col items-center gap-6">
-        {/* Floating text indicators */}
-        <div className="absolute -top-16 w-full">
+      <div className="relative flex flex-col items-center gap-6 pt-12">
+        {/* Floating text indicators - positioned inside visible area */}
+        <div className="absolute top-0 left-0 right-0 flex justify-between px-2">
           <ConversationIndicator
             text="Your pitch..."
             side="left"
