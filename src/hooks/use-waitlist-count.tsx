@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, createContext, useContext, ReactNode } from "react";
 
 interface UseWaitlistCountOptions {
   initialCount?: number;
@@ -16,18 +16,21 @@ interface UseWaitlistCountReturn {
 }
 
 const DEFAULT_COUNT = 18;
-const DEFAULT_POLLING_INTERVAL = 10000; // 10 seconds
+const DEFAULT_POLLING_INTERVAL = 30000; // 30 seconds
 
-export function useWaitlistCount(
-  options: UseWaitlistCountOptions = {}
-): UseWaitlistCountReturn {
-  const {
-    initialCount = DEFAULT_COUNT,
-    pollingInterval = DEFAULT_POLLING_INTERVAL,
-    enabled = true,
-  } = options;
+// Shared context for waitlist count - all components share the same polling instance
+interface WaitlistCountContextValue {
+  count: number;
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+}
 
-  const [count, setCount] = useState(initialCount);
+const WaitlistCountContext = createContext<WaitlistCountContextValue | null>(null);
+
+// Provider component that handles the actual polling
+export function WaitlistCountProvider({ children }: { children: ReactNode }) {
+  const [count, setCount] = useState(DEFAULT_COUNT);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -50,18 +53,15 @@ export function useWaitlistCount(
   }, []);
 
   useEffect(() => {
-    if (!enabled) return;
-
     fetchCount();
-
-    intervalRef.current = setInterval(fetchCount, pollingInterval);
+    intervalRef.current = setInterval(fetchCount, DEFAULT_POLLING_INTERVAL);
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [enabled, pollingInterval, fetchCount]);
+  }, [fetchCount]);
 
   // Pause polling when tab is not visible
   useEffect(() => {
@@ -73,7 +73,7 @@ export function useWaitlistCount(
         }
       } else {
         fetchCount();
-        intervalRef.current = setInterval(fetchCount, pollingInterval);
+        intervalRef.current = setInterval(fetchCount, DEFAULT_POLLING_INTERVAL);
       }
     };
 
@@ -81,12 +81,31 @@ export function useWaitlistCount(
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [fetchCount, pollingInterval]);
+  }, [fetchCount]);
 
-  return {
-    count,
-    isLoading,
-    error,
-    refetch: fetchCount,
-  };
+  return (
+    <WaitlistCountContext.Provider value={{ count, isLoading, error, refetch: fetchCount }}>
+      {children}
+    </WaitlistCountContext.Provider>
+  );
+}
+
+// Hook to consume the shared context
+export function useWaitlistCount(
+  options: UseWaitlistCountOptions = {}
+): UseWaitlistCountReturn {
+  const context = useContext(WaitlistCountContext);
+  const { initialCount = DEFAULT_COUNT } = options;
+
+  // If used outside provider, return default values
+  if (!context) {
+    return {
+      count: initialCount,
+      isLoading: false,
+      error: null,
+      refetch: async () => { },
+    };
+  }
+
+  return context;
 }

@@ -27,7 +27,7 @@ const BASE_COUNT = 18; // Starting count before tracking began
 
 // Simple in-memory cache for count
 let cachedCount: { value: number; timestamp: number } | null = null;
-const CACHE_TTL = 5000; // 5 seconds
+const CACHE_TTL = 15000; // 15 seconds
 
 export async function createWaitlistRecord(
   data: WaitlistRecord
