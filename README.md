@@ -55,6 +55,8 @@ Create a `.env.local` file in the project root with the following variables:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+WAITLIST_WEBHOOK_URL=your_webhook_url
+NEXT_PUBLIC_APP_ENV=development
 ```
 
 #### Getting Supabase Credentials
@@ -68,12 +70,31 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 When deploying to Vercel, add the following environment variables in **Project Settings** → **Environment Variables**:
 
-| Variable | Description |
-|----------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL (e.g., `https://xxxxx.supabase.co`) |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Your Supabase anonymous/public API key |
+| Variable | Production (`main`) | Preview (`staging`) |
+|----------|---------------------|-----------------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Production Supabase URL | Staging Supabase URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Production Supabase anon key | Staging Supabase anon key |
+| `NEXT_PUBLIC_APP_ENV` | `production` | `preview` |
+| `WAITLIST_WEBHOOK_URL` | Production webhook URL | Staging webhook URL (or leave empty to skip webhook in preview) |
 
-> **Note**: Both variables are prefixed with `NEXT_PUBLIC_` because they are used on the client side. The anon key is safe to expose as it only allows operations permitted by your Row Level Security (RLS) policies.
+> **Note**: Variables prefixed with `NEXT_PUBLIC_` are client-visible. The Supabase anon key is safe to expose when your Row Level Security (RLS) policies are configured correctly.
+
+#### Branching + Deployment Workflow (`main` + `staging`)
+
+Use a long-lived `staging` branch for test/preview deployments:
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b staging
+git push -u origin staging
+```
+
+- `main` is the production branch in Vercel.
+- `staging` receives active feature development and auto-deploys to Vercel Preview.
+- Merge `staging` into `main` only when release-ready.
+- Use the branch preview URL (`<project>-git-staging-<scope>.vercel.app`) as the stable QA link.
+- Before merge, complete `.github/pull_request_template.md` checklist.
 
 #### Supabase Database Setup
 
@@ -126,6 +147,7 @@ src/
 │   └── waitlist-context.tsx # Shared modal state across app
 ├── lib/
 │   ├── supabase.ts         # Supabase client + database operations
+│   ├── runtime.ts          # Environment helpers (production/preview/development)
 │   ├── validators.ts       # Form validation utilities
 │   └── utils.ts            # cn() helper, misc utilities
 ├── hooks/

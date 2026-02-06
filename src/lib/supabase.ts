@@ -1,7 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import { getAppEnvironment } from "@/lib/runtime";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const appEnvironment = getAppEnvironment();
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
@@ -40,7 +42,7 @@ export async function createWaitlistRecord(
         email: data.email,
         experience_rating: data.experienceRating,
         job_role: data.currentRole,
-        source: "Landing Page",
+        source: `Landing Page (${appEnvironment})`,
         status: "New",
       })
       .select("id")
