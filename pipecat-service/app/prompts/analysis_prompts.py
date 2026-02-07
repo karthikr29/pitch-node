@@ -2,8 +2,9 @@
 import json
 
 def get_analysis_prompt(transcript: list[dict], scenario: dict, persona: dict) -> str:
+    persona_name = persona.get("name", "Prospect")
     formatted_transcript = "\n".join([
-        f"{'[Sales Rep]' if t['speaker'] == 'user' else f'[{persona.get(\"name\", \"Prospect\")}]'}: {t['content']}"
+        f"{'[Sales Rep]' if t['speaker'] == 'user' else f'[{persona_name}]'}: {t['content']}"
         for t in transcript
     ])
 
