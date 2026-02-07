@@ -6,12 +6,18 @@ class SupabaseService:
         self.client: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
     async def get_scenario(self, scenario_id: str) -> dict | None:
-        result = self.client.table("scenarios").select("*").eq("id", scenario_id).single().execute()
-        return result.data
+        try:
+            result = self.client.table("scenarios").select("*").eq("id", scenario_id).single().execute()
+            return result.data
+        except Exception:
+            return None
 
     async def get_persona(self, persona_id: str) -> dict | None:
-        result = self.client.table("personas").select("*").eq("id", persona_id).single().execute()
-        return result.data
+        try:
+            result = self.client.table("personas").select("*").eq("id", persona_id).single().execute()
+            return result.data
+        except Exception:
+            return None
 
     async def save_transcript(self, session_id: str, entries: list[dict]):
         if entries:

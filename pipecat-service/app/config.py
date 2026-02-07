@@ -13,6 +13,7 @@ class Settings:
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
     SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     CONVERSATION_MODEL: str = os.getenv("CONVERSATION_MODEL", "meta-llama/llama-3.1-70b-instruct")
-    ANALYSIS_MODEL: str = os.getenv("ANALYSIS_MODEL", "anthropic/claude-3.5-sonnet")
+    CONVERSATION_FALLBACK_MODEL: str = os.getenv("CONVERSATION_FALLBACK_MODEL", "")
+    ANALYSIS_MODEL: str = os.getenv("ANALYSIS_MODEL", "anthropic/claude-opus-4.6")
 
 settings = Settings()

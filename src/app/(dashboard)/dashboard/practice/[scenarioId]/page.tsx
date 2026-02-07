@@ -45,6 +45,21 @@ const personaBorderColors = [
   "border-red-500/50 hover:border-red-500",
 ];
 
+const difficultyDisplayNames: Record<string, string> = {
+  Easy: "Warm-Up",
+  easy: "Warm-Up",
+  Medium: "Game On",
+  medium: "Game On",
+  Hard: "Pressure Test",
+  hard: "Pressure Test",
+  Expert: "Boss Fight",
+  expert: "Boss Fight",
+};
+
+function getDifficultyDisplayName(difficulty: string): string {
+  return difficultyDisplayNames[difficulty] ?? difficulty;
+}
+
 // Fallback data
 const fallbackScenario: ScenarioDetail = {
   id: "discovery-1",
@@ -255,7 +270,7 @@ export default function PreCallSetupPage() {
             <Badge variant="outline" className="capitalize">
               {scenario.callType.replace("-", " ")}
             </Badge>
-            <Badge variant="outline">{scenario.difficulty}</Badge>
+            <Badge variant="outline">Difficulty Level: {getDifficultyDisplayName(scenario.difficulty)}</Badge>
           </div>
         </CardContent>
       </Card>

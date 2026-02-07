@@ -70,6 +70,21 @@ const difficultyColors: Record<string, string> = {
   expert: "bg-red-500/10 text-red-600 border-red-500/20",
 };
 
+const difficultyDisplayNames: Record<string, string> = {
+  Easy: "Warm-Up",
+  easy: "Warm-Up",
+  Medium: "Game On",
+  medium: "Game On",
+  Hard: "Pressure Test",
+  hard: "Pressure Test",
+  Expert: "Boss Fight",
+  expert: "Boss Fight",
+};
+
+function getDifficultyDisplayName(difficulty: string): string {
+  return difficultyDisplayNames[difficulty] ?? difficulty;
+}
+
 const filterOptions = [
   { value: "all", label: "All" },
   { value: "discovery", label: "Discovery" },
@@ -270,7 +285,7 @@ export default function PracticeLibraryPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className={diffColor}>
-                          {scenario.difficulty}
+                          Difficulty Level: {getDifficultyDisplayName(scenario.difficulty)}
                         </Badge>
                         <Badge variant="outline" className="capitalize">
                           {(scenario.callType || "").replace(/[-_]/g, " ")}

@@ -68,13 +68,20 @@ function getScoreColor(score: number) {
   return "text-red-500";
 }
 
+function formatTimestamp(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
 function MetricBar({ label, value }: { label: string; value: number }) {
   const color =
     value >= 80
       ? "bg-green-500"
       : value >= 60
-      ? "bg-yellow-500"
-      : "bg-red-500";
+        ? "bg-yellow-500"
+        : "bg-red-500";
 
   return (
     <div className="space-y-1.5">
@@ -181,7 +188,30 @@ export default function SessionReviewPage() {
         const res = await fetch(`/api/sessions/${sessionId}`);
         if (res.ok) {
           const data = await res.json();
-          setSession(data);
+          // Transform API response to SessionDetail format
+          const transformedSession: SessionDetail = {
+            id: data.id || sessionId,
+            scenarioName: data.scenario?.title || "Practice Session",
+            personaName: data.persona?.name || "AI Prospect",
+            date: data.createdAt || data.startedAt || new Date().toISOString(),
+            duration: data.durationSeconds || 0,
+            callType: data.scenario?.callType || "discovery",
+            overallScore: data.analytics?.overallScore ?? 0,
+            metrics: data.analytics?.scores || {
+              discovery: 0,
+              objectionHandling: 0,
+              closing: 0,
+              rapport: 0,
+            },
+            transcript: (data.transcripts || []).map((t: { speaker: string; content: string; timestampMs: number }) => ({
+              speaker: t.speaker as "user" | "ai",
+              text: t.content || "",
+              timestamp: formatTimestamp(t.timestampMs || 0),
+            })),
+            highlights: data.analytics?.highlightMoments || [],
+            suggestions: data.analytics?.improvementSuggestions || [],
+          };
+          setSession(transformedSession);
         } else {
           setSession({ ...fallbackSession, id: sessionId });
         }
@@ -262,8 +292,8 @@ export default function SessionReviewPage() {
                 session.overallScore >= 80
                   ? "bg-green-500/10 text-green-600"
                   : session.overallScore >= 60
-                  ? "bg-yellow-500/10 text-yellow-600"
-                  : "bg-red-500/10 text-red-600"
+                    ? "bg-yellow-500/10 text-yellow-600"
+                    : "bg-red-500/10 text-red-600"
               )}
               variant="outline"
             >

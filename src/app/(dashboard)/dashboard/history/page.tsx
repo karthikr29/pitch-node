@@ -236,7 +236,7 @@ export default function HistoryPage() {
                         </p>
                         <div className="flex items-center gap-1.5 mt-1">
                           <span className="text-xs text-muted-foreground">
-                            {format(new Date(session.date), "MMM d")}
+                            {format(new Date(session.date), "MMM d, h:mm a")}
                           </span>
                           <span className="text-border">·</span>
                           <span className="text-xs text-muted-foreground">
@@ -284,7 +284,7 @@ export default function HistoryPage() {
                       className="group hover:bg-muted/40 transition-colors"
                     >
                       <TableCell className="text-sm text-muted-foreground">
-                        {format(new Date(session.date), "MMM d, yyyy")}
+                        {format(new Date(session.date), "MMM d, yyyy 'at' h:mm a")}
                       </TableCell>
                       <TableCell>
                         <div>

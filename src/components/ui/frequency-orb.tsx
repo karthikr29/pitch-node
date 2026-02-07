@@ -6,6 +6,7 @@ interface FrequencyOrbProps {
   size?: "sm" | "md" | "lg" | "xl";
   variant?: "primary" | "secondary" | "accent";
   className?: string;
+  isSpeaking?: boolean;
 }
 
 const sizeClasses = {
@@ -19,6 +20,7 @@ export function FrequencyOrb({
   size = "md",
   variant = "primary",
   className = "",
+  isSpeaking = false,
 }: FrequencyOrbProps) {
   const colorMap = {
     primary: "var(--primary)",
@@ -37,11 +39,11 @@ export function FrequencyOrb({
           background: `radial-gradient(circle, ${color}20 0%, transparent 70%)`,
         }}
         animate={{
-          scale: [1, 1.2, 1],
-          opacity: [0.3, 0.6, 0.3],
+          scale: isSpeaking ? [1, 1.4, 1] : [1, 1.2, 1],
+          opacity: isSpeaking ? [0.3, 0.8, 0.3] : [0.3, 0.6, 0.3],
         }}
         transition={{
-          duration: 3,
+          duration: isSpeaking ? 1.5 : 3,
           repeat: Infinity,
           ease: "easeInOut",
         }}
@@ -55,11 +57,11 @@ export function FrequencyOrb({
           boxShadow: `0 0 20px ${color}40`,
         }}
         animate={{
-          scale: [1, 1.1, 1],
-          opacity: [0.4, 0.8, 0.4],
+          scale: isSpeaking ? [1, 1.2, 1] : [1, 1.1, 1],
+          opacity: isSpeaking ? [0.4, 1, 0.4] : [0.4, 0.8, 0.4],
         }}
         transition={{
-          duration: 2.5,
+          duration: isSpeaking ? 1 : 2.5,
           repeat: Infinity,
           ease: "easeInOut",
           delay: 0.3,
@@ -74,11 +76,11 @@ export function FrequencyOrb({
           boxShadow: `0 0 40px ${color}, inset 0 0 20px ${color}`,
         }}
         animate={{
-          scale: [1, 1.15, 1],
-          opacity: [0.6, 1, 0.6],
+          scale: isSpeaking ? [1, 1.3, 1] : [1, 1.15, 1],
+          opacity: isSpeaking ? [0.8, 1, 0.8] : [0.6, 1, 0.6],
         }}
         transition={{
-          duration: 2,
+          duration: isSpeaking ? 0.5 : 2,
           repeat: Infinity,
           ease: "easeInOut",
           delay: 0.6,
@@ -95,11 +97,11 @@ export function FrequencyOrb({
             rotate: `${i * 45}deg`,
           }}
           animate={{
-            scale: [1, 1.5, 1],
-            opacity: [0, 0.5, 0],
+            scale: isSpeaking ? [1, 1.8, 1] : [1, 1.5, 1],
+            opacity: isSpeaking ? [0, 0.8, 0] : [0, 0.5, 0],
           }}
           transition={{
-            duration: 2,
+            duration: isSpeaking ? 1 : 2,
             repeat: Infinity,
             delay: i * 0.25,
             ease: "easeOut",

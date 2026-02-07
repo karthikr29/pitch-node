@@ -2,48 +2,66 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { VoiceVisualizer } from "@/components/ui/voice-visualizer";
+import { StarryBackground } from "@/components/ui/starry-background";
 import { cn } from "@/lib/utils";
 import {
   Mic,
   MicOff,
   PhoneOff,
-  Wifi,
-  WifiOff,
   Loader2,
+  Clock,
+  AlertCircle,
 } from "lucide-react";
+import {
+  LiveKitRoom,
+  useLocalParticipant,
+  useRoomContext,
+  RoomAudioRenderer,
+  useConnectionState,
+  useParticipants,
+} from "@livekit/components-react";
+import { ConnectionState } from "livekit-client";
 
-type ConnectionStatus = "connecting" | "connected" | "disconnected";
+type CallState = "requesting-mic" | "initializing" | "connecting" | "connected" | "disconnected" | "error";
+type SpeakingState = "ai" | "user" | "idle";
 
-export default function CallRoomPage() {
-  const params = useParams();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const scenarioId = params.scenarioId as string;
-  const personaId = searchParams.get("persona") || "persona-1";
+interface RoomCredentials {
+  token: string;
+  roomName: string;
+  livekitUrl: string;
+  sessionId: string;
+}
 
-  const [status, setStatus] = useState<ConnectionStatus>("connecting");
-  const [muted, setMuted] = useState(false);
+// Inner component that uses LiveKit hooks (must be inside LiveKitRoom)
+function CallInterface({
+  personaName,
+  personaRole,
+  onEndCall,
+}: {
+  personaName: string;
+  personaRole: string;
+  onEndCall: () => void;
+}) {
+  const { localParticipant } = useLocalParticipant();
+  const room = useRoomContext();
+  const connectionState = useConnectionState();
+  const participants = useParticipants();
+
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [ending, setEnding] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [speakingState, setSpeakingState] = useState<SpeakingState>("idle");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Persona display info
-  const personaEmoji = "🤨";
-  const personaName = "AI Prospect";
-
-  // Simulate connection
-  useEffect(() => {
-    const connectTimeout = setTimeout(() => {
-      setStatus("connected");
-    }, 2000);
-
-    return () => clearTimeout(connectTimeout);
-  }, []);
+  const isConnected = connectionState === ConnectionState.Connected;
+  const aiParticipant = participants.find((p) => p.identity.startsWith("ai-"));
 
   // Timer
   useEffect(() => {
-    if (status === "connected") {
+    if (isConnected) {
       timerRef.current = setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
       }, 1000);
@@ -52,7 +70,31 @@ export default function CallRoomPage() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [status]);
+  }, [isConnected]);
+
+  // Enable microphone when connected
+  useEffect(() => {
+    if (isConnected && localParticipant) {
+      localParticipant.setMicrophoneEnabled(true).catch(console.error);
+    }
+  }, [isConnected, localParticipant]);
+
+  // Detect speaking state based on tracks
+  useEffect(() => {
+    if (!isConnected) {
+      setSpeakingState("idle");
+      return;
+    }
+
+    // Check if AI is speaking (has active audio track)
+    if (aiParticipant?.isSpeaking) {
+      setSpeakingState("ai");
+    } else if (localParticipant?.isSpeaking && !muted) {
+      setSpeakingState("user");
+    } else {
+      setSpeakingState("idle");
+    }
+  }, [isConnected, aiParticipant?.isSpeaking, localParticipant?.isSpeaking, muted]);
 
   const formatTime = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -60,148 +102,392 @@ export default function CallRoomPage() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   }, []);
 
+  async function handleMuteToggle() {
+    if (localParticipant) {
+      const newMuted = !muted;
+      setMuted(newMuted);
+      await localParticipant.setMicrophoneEnabled(!newMuted);
+    }
+  }
+
   async function handleEndCall() {
     setEnding(true);
-    setStatus("disconnected");
     if (timerRef.current) clearInterval(timerRef.current);
+    room.disconnect().catch((error) => {
+      console.error("[CallPage] Error disconnecting LiveKit room:", error);
+    });
+    onEndCall();
+  }
 
+  // Map connection state to display status
+  const getConnectionStatus = (): "connecting" | "connected" | "disconnected" => {
+    switch (connectionState) {
+      case ConnectionState.Connecting:
+      case ConnectionState.Reconnecting:
+        return "connecting";
+      case ConnectionState.Connected:
+        return "connected";
+      default:
+        return "disconnected";
+    }
+  };
+
+  const status = getConnectionStatus();
+
+  return (
+    <div className="fixed inset-0 bg-slate-950 text-white overflow-hidden z-50 font-sans">
+      {/* Render remote audio (AI voice) */}
+      <RoomAudioRenderer />
+
+      {/* Immersive Background */}
+      <div className="absolute inset-0 z-0 opacity-60">
+        <StarryBackground />
+      </div>
+
+      {/* Gradient Overlay */}
+      <div className="absolute inset-0 z-1 bg-gradient-to-b from-slate-950/30 via-slate-900/50 to-slate-950/90 pointer-events-none" />
+
+      {/* Main Content Layer */}
+      <div className="relative z-10 h-full flex flex-col justify-between p-6">
+
+        {/* Header - Minimalist */}
+        <div className="flex justify-center items-center h-16">
+          {status === "connected" && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 backdrop-blur-md border border-white/10"
+            >
+              <Clock className="w-4 h-4 text-primary" />
+              <span className="font-mono text-sm font-medium tracking-wide">
+                {formatTime(elapsedSeconds)}
+              </span>
+              {aiParticipant && (
+                <span className="ml-2 text-xs text-green-400">● AI Connected</span>
+              )}
+            </motion.div>
+          )}
+        </div>
+
+        {/* Center Stage - Waveform & Persona */}
+        <div className="flex-1 flex flex-col items-center justify-center -mt-10">
+          <AnimatePresence mode="wait">
+            {status === "connecting" ? (
+              <motion.div
+                key="connecting"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="flex flex-col items-center"
+              >
+                <div className="relative mb-8">
+                  <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse" />
+                  <Loader2 className="w-12 h-12 text-primary animate-spin relative z-10" />
+                </div>
+                <p className="text-slate-400 font-light tracking-wide animate-pulse">
+                  Connecting to AI assistant...
+                </p>
+              </motion.div>
+            ) : status === "connected" ? (
+              <motion.div
+                key="connected"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 1 }}
+                className="flex flex-col items-center w-full max-w-md"
+              >
+                {/* Dynamic Voice Visualizer */}
+                <div className="h-40 flex items-center justify-center w-full mb-8">
+                  <VoiceVisualizer
+                    mode={speakingState}
+                    barCount={16}
+                    className="gap-2"
+                  />
+                </div>
+
+                {/* Persona Details */}
+                <div className="text-center space-y-3">
+                  <motion.h2
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className="text-4xl md:text-5xl font-display font-bold text-white tracking-tight"
+                  >
+                    {personaName}
+                  </motion.h2>
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.7 }}
+                    className="text-lg text-slate-400 font-medium"
+                  >
+                    {personaRole}
+                  </motion.p>
+
+                  {/* Status Indicator Text */}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 1 }}
+                    className="h-8 flex items-center justify-center mt-6"
+                  >
+                    <span className={cn(
+                      "text-sm uppercase tracking-widest font-semibold transition-colors duration-500",
+                      speakingState === "ai" ? "text-primary" :
+                        speakingState === "user" ? "text-blue-400" :
+                          "text-slate-600"
+                    )}>
+                      {speakingState === "ai" ? "AI Speaking..." :
+                        speakingState === "user" ? "Listening to you..." :
+                          aiParticipant ? "Ready" : "Waiting for AI..."}
+                    </span>
+                  </motion.div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="disconnected"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-center"
+              >
+                <h3 className="text-2xl font-semibold text-white mb-2">Call Ended</h3>
+                <p className="text-slate-400">Saving session data...</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Footer Controls - Floating Dock */}
+        <div className="flex justify-center pb-12">
+          <div className="flex items-center gap-8 px-10 py-5 bg-white/5 backdrop-blur-2xl border border-white/10 rounded-full shadow-2xl ring-1 ring-white/5">
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              className={cn(
+                "rounded-full w-16 h-16 transition-all duration-300 hover:bg-white/10",
+                muted ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "text-white bg-white/5"
+              )}
+              onClick={handleMuteToggle}
+              disabled={status !== "connected"}
+            >
+              {muted ? (
+                <MicOff className="w-7 h-7" />
+              ) : (
+                <Mic className="w-7 h-7" />
+              )}
+            </Button>
+
+            <Button
+              variant="destructive"
+              size="icon-lg"
+              className="rounded-full w-20 h-20 bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg shadow-red-900/50 transition-all hover:scale-105 active:scale-95 border-0"
+              onClick={handleEndCall}
+              disabled={ending || status === "disconnected"}
+            >
+              {ending ? (
+                <Loader2 className="w-8 h-8 animate-spin text-white" />
+              ) : (
+                <PhoneOff className="w-8 h-8 text-white fill-current" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main page component - handles room creation and LiveKit connection
+export default function CallRoomPage() {
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const scenarioId = params.scenarioId as string;
+  const personaId = searchParams.get("persona") || "";
+
+  const [callState, setCallState] = useState<CallState>("requesting-mic");
+  const [credentials, setCredentials] = useState<RoomCredentials | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
+  const hasInitializedRef = useRef(false); // Prevent double initialization from React StrictMode
+
+  // Persona display info (fetched or defaults)
+  const [personaName, setPersonaName] = useState("AI Prospect");
+  const [personaRole, setPersonaRole] = useState("Sales Training");
+
+  // Request microphone permission
+  async function requestMicPermission() {
     try {
-      const res = await fetch("/api/voice/end-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenarioId, personaId }),
-      });
+      console.log("[CallPage] Requesting microphone permission...");
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Stop the tracks immediately - we just needed to get permission
+      stream.getTracks().forEach(track => track.stop());
+      console.log("[CallPage] Microphone permission granted");
+      setHasMicPermission(true);
+      setCallState("initializing");
+    } catch (err) {
+      console.error("[CallPage] Microphone permission denied:", err);
+      setHasMicPermission(false);
+      setError("Microphone access is required for calls. Please allow microphone access and try again.");
+      setCallState("error");
+    }
+  }
 
-      if (res.ok) {
-        const data = await res.json();
-        router.push(`/dashboard/history/${data.sessionId}`);
-        return;
+  // Initialize call after mic permission is granted
+  useEffect(() => {
+    if (callState !== "initializing" || !hasMicPermission) return;
+    if (hasInitializedRef.current) return; // Prevent duplicate calls from StrictMode
+    hasInitializedRef.current = true;
+
+    async function initializeCall() {
+      try {
+        console.log("[CallPage] Initializing call for scenario:", scenarioId, "persona:", personaId);
+
+        const response = await fetch("/api/voice/create-room", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scenarioId, personaId }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("[CallPage] Create room failed:", errorData);
+          throw new Error(errorData.error || "Failed to create room");
+        }
+
+        const data = await response.json();
+        console.log("[CallPage] Room created:", data.roomName, "LiveKit URL:", data.livekitUrl);
+
+        setCredentials({
+          token: data.token,
+          roomName: data.roomName,
+          livekitUrl: data.livekitUrl,
+          sessionId: data.sessionId,
+        });
+        setCallState("connecting");
+      } catch (err) {
+        console.error("[CallPage] Failed to initialize call:", err);
+        setError(err instanceof Error ? err.message : "Failed to start call");
+        setCallState("error");
       }
-    } catch {
-      // API not available
     }
 
-    // Fallback redirect
+    initializeCall();
+  }, [callState, hasMicPermission, scenarioId, personaId]);
+
+  function endSessionInBackground(sessionId: string) {
+    void fetch("/api/voice/end-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.text();
+          console.warn("[CallPage] End session response not ok:", res.status, body);
+        }
+      })
+      .catch((err) => {
+        console.error("[CallPage] End session error:", err);
+      });
+  }
+
+  function handleEndCall() {
+    const sessionId = credentials?.sessionId;
+    if (sessionId) {
+      console.log("[CallPage] Ending session (non-blocking):", sessionId);
+      endSessionInBackground(sessionId);
+      router.push(`/dashboard/history/${sessionId}`);
+      return;
+    }
+
     router.push("/dashboard/history");
   }
 
-  return (
-    <div className="fixed inset-0 bg-background z-50 flex flex-col">
-      {/* Connection Status Bar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
-        <div className="flex items-center gap-2">
-          {status === "connecting" && (
-            <>
-              <Loader2 className="w-4 h-4 text-yellow-500 animate-spin" />
-              <span className="text-sm text-yellow-500 font-medium">
-                Connecting...
-              </span>
-            </>
-          )}
-          {status === "connected" && (
-            <>
-              <Wifi className="w-4 h-4 text-green-500" />
-              <span className="text-sm text-green-500 font-medium">
-                Connected
-              </span>
-            </>
-          )}
-          {status === "disconnected" && (
-            <>
-              <WifiOff className="w-4 h-4 text-red-500" />
-              <span className="text-sm text-red-500 font-medium">
-                Disconnected
-              </span>
-            </>
-          )}
+  // Mic permission request state
+  if (callState === "requesting-mic") {
+    return (
+      <div className="fixed inset-0 bg-slate-950 z-50 flex flex-col items-center justify-center p-4">
+        <div className="absolute inset-0 z-0 opacity-60">
+          <StarryBackground />
         </div>
-        <span className="text-sm font-mono text-muted-foreground">
-          {formatTime(elapsedSeconds)}
-        </span>
-      </div>
-
-      {/* Main Area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4">
-        {/* Persona */}
-        <div className="text-center mb-8">
-          <div className="text-6xl mb-4">{personaEmoji}</div>
-          <h2 className="text-xl font-display font-semibold text-foreground">
-            {personaName}
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            {status === "connecting"
-              ? "Setting up the call..."
-              : status === "connected"
-              ? "Call in progress"
-              : "Call ended"}
+        <div className="relative z-10 flex flex-col items-center max-w-md text-center">
+          <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center mb-6 border border-primary/20">
+            <Mic className="w-12 h-12 text-primary" />
+          </div>
+          <h2 className="text-2xl font-semibold text-white mb-3">Microphone Access Required</h2>
+          <p className="text-slate-400 mb-8">
+            To have a voice conversation with your AI prospect, we need access to your microphone.
+            Your audio is processed in real-time and is not stored beyond the call transcript.
           </p>
+          <div className="flex gap-4">
+            <Button onClick={() => router.back()} variant="outline">
+              Cancel
+            </Button>
+            <Button onClick={requestMicPermission} className="px-8">
+              Allow Microphone
+            </Button>
+          </div>
         </div>
-
-        {/* Voice Visualization */}
-        {status === "connected" && (
-          <div className="flex items-end justify-center gap-1.5 h-24 mb-8">
-            {Array.from({ length: 20 }).map((_, i) => (
-              <div
-                key={i}
-                className="w-1.5 bg-primary rounded-full animate-voice-pulse"
-                style={{
-                  animationDelay: `${i * 0.08}s`,
-                  animationDuration: `${0.6 + Math.random() * 0.6}s`,
-                  height: "100%",
-                }}
-              />
-            ))}
-          </div>
-        )}
-
-        {status === "connecting" && (
-          <div className="flex items-center justify-center h-24 mb-8">
-            <div className="w-20 h-20 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
-          </div>
-        )}
-
-        {status === "disconnected" && (
-          <div className="flex items-center justify-center h-24 mb-8">
-            <p className="text-muted-foreground">
-              {ending ? "Saving session..." : "Call ended"}
-            </p>
-          </div>
-        )}
       </div>
+    );
+  }
 
-      {/* Control Bar */}
-      <div className="flex items-center justify-center gap-6 px-4 py-6 border-t border-border bg-card">
-        <Button
-          variant={muted ? "destructive" : "outline"}
-          size="icon-lg"
-          className={cn(
-            "rounded-full w-14 h-14",
-            !muted && "hover:bg-muted"
-          )}
-          onClick={() => setMuted(!muted)}
-          disabled={status !== "connected"}
-        >
-          {muted ? (
-            <MicOff className="w-6 h-6" />
-          ) : (
-            <Mic className="w-6 h-6" />
-          )}
-        </Button>
-
-        <Button
-          variant="destructive"
-          size="icon-lg"
-          className="rounded-full w-16 h-16"
-          onClick={handleEndCall}
-          disabled={ending || status === "disconnected"}
-        >
-          {ending ? (
-            <Loader2 className="w-6 h-6 animate-spin" />
-          ) : (
-            <PhoneOff className="w-6 h-6" />
-          )}
+  // Error state
+  if (callState === "error") {
+    return (
+      <div className="fixed inset-0 bg-slate-950 z-50 flex flex-col items-center justify-center p-4">
+        <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
+        <h2 className="text-xl font-semibold text-white mb-2">Failed to start call</h2>
+        <p className="text-slate-400 text-center mb-6 max-w-md">
+          {error || "An unexpected error occurred. Please try again."}
+        </p>
+        <Button onClick={() => router.back()} variant="outline">
+          Go Back
         </Button>
       </div>
-    </div>
+    );
+  }
+
+  // Loading state - waiting for credentials
+  if (callState === "initializing" || !credentials) {
+    return (
+      <div className="fixed inset-0 bg-slate-950 z-50 flex flex-col items-center justify-center">
+        <div className="absolute inset-0 z-0 opacity-60">
+          <StarryBackground />
+        </div>
+        <div className="relative z-10 flex flex-col items-center">
+          <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
+          <p className="text-slate-400">Preparing your call...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Connected state - render LiveKitRoom with the call interface
+  return (
+    <LiveKitRoom
+      serverUrl={credentials.livekitUrl}
+      token={credentials.token}
+      connect={true}
+      audio={true}
+      video={false}
+      onDisconnected={() => {
+        console.log("[CallPage] Disconnected from LiveKit");
+        setCallState("disconnected");
+      }}
+      onError={(error) => {
+        console.error("[CallPage] LiveKit error:", error);
+        setError(error.message);
+        setCallState("error");
+      }}
+    >
+      <CallInterface
+        personaName={personaName}
+        personaRole={personaRole}
+        onEndCall={handleEndCall}
+      />
+    </LiveKitRoom>
   );
 }

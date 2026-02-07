@@ -22,15 +22,24 @@ export async function POST(request: NextRequest) {
   // Call Pipecat backend to end session
   try {
     const pipecatUrl = process.env.PIPECAT_SERVICE_URL || "http://localhost:8000";
-    await fetch(`${pipecatUrl}/api/v1/sessions/${sessionId}/end`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.PIPECAT_SERVICE_API_KEY}`,
-      },
-    });
-  } catch {
-    // Pipeline may have already ended
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+    try {
+      await fetch(`${pipecatUrl}/api/v1/sessions/${sessionId}/end`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.PIPECAT_SERVICE_API_KEY}`,
+        },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } catch (error) {
+    // Pipeline may have already ended or timed out during shutdown.
+    console.warn("[voice/end-session] Non-fatal Pipecat shutdown issue:", error);
   }
 
   const endedAt = new Date().toISOString();
