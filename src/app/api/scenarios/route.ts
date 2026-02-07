@@ -15,5 +15,13 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+
+  const scenarios = (data || []).map((row: Record<string, unknown>) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    callType: row.call_type,
+    difficulty: row.difficulty,
+  }));
+  return NextResponse.json(scenarios);
 }

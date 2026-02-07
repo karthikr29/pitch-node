@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Search,
   Presentation,
@@ -12,6 +14,8 @@ import {
   Phone,
   MailCheck,
   BadgeCheck,
+  ArrowRight,
+  Sparkles,
 } from "lucide-react";
 
 interface Scenario {
@@ -27,7 +31,9 @@ const callTypeIcons: Record<string, React.ElementType> = {
   demo: Presentation,
   negotiation: Handshake,
   "cold-call": Phone,
+  "cold_call": Phone,
   "follow-up": MailCheck,
+  "follow_up": MailCheck,
   closing: BadgeCheck,
 };
 
@@ -36,16 +42,43 @@ const callTypeColors: Record<string, string> = {
   demo: "text-purple-500",
   negotiation: "text-green-500",
   "cold-call": "text-orange-500",
+  "cold_call": "text-orange-500",
   "follow-up": "text-teal-500",
+  "follow_up": "text-teal-500",
   closing: "text-red-500",
+};
+
+const callTypeBgColors: Record<string, string> = {
+  discovery: "bg-blue-500/8 dark:bg-blue-500/15",
+  demo: "bg-purple-500/8 dark:bg-purple-500/15",
+  negotiation: "bg-green-500/8 dark:bg-green-500/15",
+  "cold-call": "bg-orange-500/8 dark:bg-orange-500/15",
+  "cold_call": "bg-orange-500/8 dark:bg-orange-500/15",
+  "follow-up": "bg-teal-500/8 dark:bg-teal-500/15",
+  "follow_up": "bg-teal-500/8 dark:bg-teal-500/15",
+  closing: "bg-red-500/8 dark:bg-red-500/15",
 };
 
 const difficultyColors: Record<string, string> = {
   Easy: "bg-green-500/10 text-green-600 border-green-500/20",
+  easy: "bg-green-500/10 text-green-600 border-green-500/20",
   Medium: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
+  medium: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
   Hard: "bg-orange-500/10 text-orange-600 border-orange-500/20",
+  hard: "bg-orange-500/10 text-orange-600 border-orange-500/20",
   Expert: "bg-red-500/10 text-red-600 border-red-500/20",
+  expert: "bg-red-500/10 text-red-600 border-red-500/20",
 };
+
+const filterOptions = [
+  { value: "all", label: "All" },
+  { value: "discovery", label: "Discovery" },
+  { value: "demo", label: "Demo" },
+  { value: "negotiation", label: "Negotiation" },
+  { value: "cold-call", label: "Cold Call" },
+  { value: "follow-up", label: "Follow-Up" },
+  { value: "closing", label: "Closing" },
+];
 
 // Fallback scenarios when API is not available
 const fallbackScenarios: Scenario[] = [
@@ -96,6 +129,7 @@ const fallbackScenarios: Scenario[] = [
 export default function PracticeLibraryPage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
 
   useEffect(() => {
     async function fetchScenarios() {
@@ -116,12 +150,24 @@ export default function PracticeLibraryPage() {
     fetchScenarios();
   }, []);
 
+  const filteredScenarios =
+    filter === "all"
+      ? scenarios
+      : scenarios.filter(
+          (s) => s.callType === filter || s.callType === filter.replace("-", "_")
+        );
+
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="space-y-6">
         <div>
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-4 w-72 mt-2" />
+        </div>
+        <div className="flex gap-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-20 rounded-full" />
+          ))}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -141,9 +187,9 @@ export default function PracticeLibraryPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-display font-bold text-foreground">
+        <h2 className="text-2xl font-display font-bold text-foreground tracking-tight">
           Practice Library
         </h2>
         <p className="text-muted-foreground mt-1">
@@ -151,21 +197,54 @@ export default function PracticeLibraryPage() {
         </p>
       </div>
 
-      {scenarios.length === 0 ? (
+      {/* Filter pills */}
+      <div className="flex flex-wrap gap-2">
+        {filterOptions.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => setFilter(opt.value)}
+            className={cn(
+              "px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer",
+              filter === opt.value
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {filteredScenarios.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <Search className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">No scenarios available</p>
+            <div className="mx-auto w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-3">
+              <Search className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <p className="font-medium text-foreground">No scenarios found</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Check back later for new practice scenarios.
+              {filter !== "all"
+                ? "Try a different filter to find scenarios."
+                : "Check back later for new practice scenarios."}
             </p>
+            {filter !== "all" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-3"
+                onClick={() => setFilter("all")}
+              >
+                Clear filter
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {scenarios.map((scenario) => {
+          {filteredScenarios.map((scenario) => {
             const Icon = callTypeIcons[scenario.callType] || Phone;
             const iconColor = callTypeColors[scenario.callType] || "text-primary";
+            const iconBg = callTypeBgColors[scenario.callType] || "bg-primary/10";
             const diffColor = difficultyColors[scenario.difficulty] || "";
 
             return (
@@ -173,25 +252,31 @@ export default function PracticeLibraryPage() {
                 key={scenario.id}
                 href={`/dashboard/practice/${scenario.id}`}
               >
-                <Card className="hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group h-full">
-                  <CardHeader>
-                    <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center mb-2 group-hover:bg-primary/10 transition-colors">
+                <Card className="hover:shadow-lg hover:translate-y-[-2px] hover:border-primary/40 transition-all duration-200 cursor-pointer group h-full">
+                  <CardHeader className="pb-3">
+                    <div
+                      className={`h-10 w-10 rounded-xl ${iconBg} flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200`}
+                    >
                       <Icon className={`w-5 h-5 ${iconColor}`} />
                     </div>
-                    <CardTitle className="text-base">{scenario.title}</CardTitle>
-                    <CardDescription>{scenario.description}</CardDescription>
+                    <CardTitle className="text-base group-hover:text-primary transition-colors">
+                      {scenario.title}
+                    </CardTitle>
+                    <CardDescription className="text-sm leading-relaxed line-clamp-2">
+                      {scenario.description}
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant="outline"
-                        className={diffColor}
-                      >
-                        {scenario.difficulty}
-                      </Badge>
-                      <Badge variant="outline" className="capitalize">
-                        {scenario.callType.replace("-", " ")}
-                      </Badge>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={diffColor}>
+                          {scenario.difficulty}
+                        </Badge>
+                        <Badge variant="outline" className="capitalize">
+                          {(scenario.callType || "").replace(/[-_]/g, " ")}
+                        </Badge>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
                     </div>
                   </CardContent>
                 </Card>

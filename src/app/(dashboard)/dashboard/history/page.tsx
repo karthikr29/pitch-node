@@ -29,8 +29,9 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { Clock, Eye, Filter } from "lucide-react";
+import { Clock, Eye, Filter, Mic, Zap, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface Session {
   id: string;
@@ -52,6 +53,18 @@ function getScoreColor(score: number) {
   if (score >= 80) return "text-green-500";
   if (score >= 60) return "text-yellow-500";
   return "text-red-500";
+}
+
+function getScoreBg(score: number) {
+  if (score >= 80) return "bg-green-500/10";
+  if (score >= 60) return "bg-yellow-500/10";
+  return "bg-red-500/10";
+}
+
+function getScoreRing(score: number) {
+  if (score >= 80) return "ring-green-500/20";
+  if (score >= 60) return "ring-yellow-500/20";
+  return "ring-red-500/20";
 }
 
 function getLetterGrade(score: number) {
@@ -100,89 +113,165 @@ export default function HistoryPage() {
   }, [fetchSessions]);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div>
-        <h2 className="text-2xl font-display font-bold text-foreground">
-          Session History
-        </h2>
-        <p className="text-muted-foreground mt-1">
-          Review your past practice sessions and track improvement
-        </p>
+    <div className="space-y-6">
+      <div className="flex items-end justify-between">
+        <div>
+          <h2 className="text-2xl font-display font-bold text-foreground tracking-tight">
+            Session History
+          </h2>
+          <p className="text-muted-foreground mt-1">
+            Review your past practice sessions and track improvement
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-muted-foreground" />
+          <Select
+            value={callTypeFilter}
+            onValueChange={(val) => {
+              setCallTypeFilter(val);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[160px] h-9 text-sm">
+              <SelectValue placeholder="Call Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="discovery">Discovery</SelectItem>
+              <SelectItem value="demo">Demo</SelectItem>
+              <SelectItem value="negotiation">Negotiation</SelectItem>
+              <SelectItem value="cold-call">Cold Call</SelectItem>
+              <SelectItem value="follow-up">Follow-Up</SelectItem>
+              <SelectItem value="closing">Closing</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {/* Filter Bar */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground font-medium">
-                Filters
-              </span>
-            </div>
-            <Select
-              value={callTypeFilter}
-              onValueChange={(val) => {
-                setCallTypeFilter(val);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Call Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="discovery">Discovery</SelectItem>
-                <SelectItem value="demo">Demo</SelectItem>
-                <SelectItem value="negotiation">Negotiation</SelectItem>
-                <SelectItem value="cold-call">Cold Call</SelectItem>
-                <SelectItem value="follow-up">Follow-Up</SelectItem>
-                <SelectItem value="closing">Closing</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Table */}
-      <Card>
-        <CardContent className="pt-6">
-          {loading ? (
-            <div className="space-y-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-4">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-4 w-40 flex-1" />
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-4 w-12" />
-                  <Skeleton className="h-4 w-16" />
+      {loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="py-4">
+                <div className="flex items-center gap-4">
+                  <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
                   <Skeleton className="h-8 w-16" />
                 </div>
-              ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : sessions.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <div className="relative mx-auto w-16 h-16 mb-4">
+              <div className="absolute inset-0 rounded-2xl bg-primary/5 animate-pulse" />
+              <div className="absolute inset-2 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Mic className="w-6 h-6 text-primary" />
+              </div>
             </div>
-          ) : sessions.length === 0 ? (
-            <div className="text-center py-12">
-              <Clock className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-              <p className="text-muted-foreground">No sessions found</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Complete a practice session to see it listed here.
-              </p>
-              <Button size="sm" className="mt-4" asChild>
-                <Link href="/dashboard/practice">Start Practicing</Link>
+            <p className="font-medium text-foreground">No sessions found</p>
+            <p className="text-sm text-muted-foreground mt-1 max-w-[280px] mx-auto">
+              {callTypeFilter !== "all"
+                ? "Try a different filter or complete a practice session."
+                : "Complete a practice session to see it listed here."}
+            </p>
+            <div className="flex items-center justify-center gap-2 mt-4">
+              {callTypeFilter !== "all" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setCallTypeFilter("all")}
+                >
+                  Clear filter
+                </Button>
+              )}
+              <Button size="sm" asChild>
+                <Link href="/dashboard/practice">
+                  <Zap className="w-3.5 h-3.5 mr-1.5" />
+                  Start Practicing
+                </Link>
               </Button>
             </div>
-          ) : (
-            <>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Mobile: Card-based layout */}
+          <div className="space-y-2 md:hidden">
+            {sessions.map((session) => (
+              <Link
+                key={session.id}
+                href={`/dashboard/history/${session.id}`}
+              >
+                <Card className="hover:shadow-md hover:border-primary/30 transition-all group">
+                  <CardContent className="py-3.5 px-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={cn(
+                          "shrink-0 h-11 w-11 rounded-xl flex flex-col items-center justify-center ring-1",
+                          getScoreBg(session.score),
+                          getScoreRing(session.score)
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "text-sm font-bold tabular-nums leading-none",
+                            getScoreColor(session.score)
+                          )}
+                        >
+                          {session.score}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground mt-0.5">
+                          {getLetterGrade(session.score)}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm text-foreground truncate group-hover:text-primary transition-colors">
+                          {session.scenarioName}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(session.date), "MMM d")}
+                          </span>
+                          <span className="text-border">·</span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDuration(session.duration)}
+                          </span>
+                          <span className="text-border">·</span>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] px-1.5 py-0 capitalize"
+                          >
+                            {(session.callType || "").replace(/[-_]/g, " ")}
+                          </Badge>
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+
+          {/* Desktop: Table layout */}
+          <Card className="hidden md:block">
+            <CardContent className="pt-6">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Scenario</TableHead>
-                    <TableHead className="hidden sm:table-cell">
+                    <TableHead className="hidden lg:table-cell">
                       Persona
                     </TableHead>
                     <TableHead>Score</TableHead>
-                    <TableHead className="hidden md:table-cell">
+                    <TableHead className="hidden lg:table-cell">
                       Duration
                     </TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -190,7 +279,10 @@ export default function HistoryPage() {
                 </TableHeader>
                 <TableBody>
                   {sessions.map((session) => (
-                    <TableRow key={session.id}>
+                    <TableRow
+                      key={session.id}
+                      className="group hover:bg-muted/40 transition-colors"
+                    >
                       <TableCell className="text-sm text-muted-foreground">
                         {format(new Date(session.date), "MMM d, yyyy")}
                       </TableCell>
@@ -201,37 +293,50 @@ export default function HistoryPage() {
                           </p>
                           <Badge
                             variant="outline"
-                            className="text-xs mt-1 capitalize"
+                            className="text-[10px] mt-1 capitalize"
                           >
-                            {session.callType.replace("-", " ")}
+                            {(session.callType || "").replace(/[-_]/g, " ")}
                           </Badge>
                         </div>
                       </TableCell>
-                      <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                         {session.personaName}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        <div
+                          className={cn(
+                            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg",
+                            getScoreBg(session.score)
+                          )}
+                        >
                           <span
-                            className={`font-bold ${getScoreColor(
-                              session.score
-                            )}`}
+                            className={cn(
+                              "font-bold text-sm tabular-nums",
+                              getScoreColor(session.score)
+                            )}
                           >
                             {session.score}%
                           </span>
-                          <Badge
-                            variant="outline"
-                            className={getScoreColor(session.score)}
+                          <span
+                            className={cn(
+                              "text-xs font-semibold",
+                              getScoreColor(session.score)
+                            )}
                           >
                             {getLetterGrade(session.score)}
-                          </Badge>
+                          </span>
                         </div>
                       </TableCell>
-                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground tabular-nums">
                         {formatDuration(session.duration)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-70 group-hover:opacity-100 transition-opacity"
+                          asChild
+                        >
                           <Link href={`/dashboard/history/${session.id}`}>
                             <Eye className="w-4 h-4 mr-1" />
                             Review
@@ -242,62 +347,60 @@ export default function HistoryPage() {
                   ))}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="mt-4">
-                  <Pagination>
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            if (page > 1) setPage(page - 1);
-                          }}
-                          className={
-                            page <= 1 ? "pointer-events-none opacity-50" : ""
-                          }
-                        />
-                      </PaginationItem>
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                        (p) => (
-                          <PaginationItem key={p}>
-                            <PaginationLink
-                              href="#"
-                              isActive={p === page}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setPage(p);
-                              }}
-                            >
-                              {p}
-                            </PaginationLink>
-                          </PaginationItem>
-                        )
-                      )}
-                      <PaginationItem>
-                        <PaginationNext
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            if (page < totalPages) setPage(page + 1);
-                          }}
-                          className={
-                            page >= totalPages
-                              ? "pointer-events-none opacity-50"
-                              : ""
-                          }
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
-                </div>
-              )}
-            </>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (page > 1) setPage(page - 1);
+                    }}
+                    className={
+                      page <= 1 ? "pointer-events-none opacity-50" : ""
+                    }
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                  (p) => (
+                    <PaginationItem key={p}>
+                      <PaginationLink
+                        href="#"
+                        isActive={p === page}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setPage(p);
+                        }}
+                      >
+                        {p}
+                      </PaginationLink>
+                    </PaginationItem>
+                  )
+                )}
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (page < totalPages) setPage(page + 1);
+                    }}
+                    className={
+                      page >= totalPages
+                        ? "pointer-events-none opacity-50"
+                        : ""
+                    }
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           )}
-        </CardContent>
-      </Card>
+        </>
+      )}
     </div>
   );
 }

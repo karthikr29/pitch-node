@@ -40,15 +40,30 @@ describe("Sessions API Route", () => {
     expect(body.error).toBe("Unauthorized");
   });
 
-  it("returns paginated sessions for authenticated user", async () => {
+  it("returns paginated sessions with camelCase keys", async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: "user-1" } },
     });
-    const mockSessions = [
-      { id: "s1", status: "completed", duration_seconds: 300 },
-      { id: "s2", status: "completed", duration_seconds: 450 },
+    // Mock DB rows with nested joins
+    const mockDbRows = [
+      {
+        id: "s1",
+        created_at: "2025-01-15",
+        duration_seconds: 300,
+        scenarios: { title: "Cold Call", call_type: "cold_call", difficulty: "Easy" },
+        personas: { name: "John", emoji: "👤" },
+        session_analytics: { overall_score: 75, scores: {} },
+      },
+      {
+        id: "s2",
+        created_at: "2025-01-16",
+        duration_seconds: 450,
+        scenarios: { title: "Discovery", call_type: "discovery", difficulty: "Medium" },
+        personas: { name: "Jane", emoji: "👩" },
+        session_analytics: { overall_score: 82, scores: {} },
+      },
     ];
-    mockRange.mockResolvedValue({ data: mockSessions, error: null, count: 2 });
+    mockRange.mockResolvedValue({ data: mockDbRows, error: null, count: 2 });
 
     const { GET } = await import("@/app/api/sessions/route");
     const request = new NextRequest("http://localhost:3000/api/sessions");
@@ -56,8 +71,14 @@ describe("Sessions API Route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.data).toEqual(mockSessions);
-    expect(body.total).toBe(2);
+    // New format: { sessions, totalPages, page, limit }
+    expect(body.sessions).toHaveLength(2);
+    expect(body.sessions[0].id).toBe("s1");
+    expect(body.sessions[0].scenarioName).toBe("Cold Call");
+    expect(body.sessions[0].callType).toBe("cold_call");
+    expect(body.sessions[0].score).toBe(75);
+    expect(body.sessions[0].duration).toBe(300);
+    expect(body.totalPages).toBe(1);
     expect(body.page).toBe(1);
     expect(body.limit).toBe(10);
   });

@@ -39,13 +39,13 @@ describe("Scenarios API Route", () => {
     expect(body.error).toBe("Unauthorized");
   });
 
-  it("returns scenarios for authenticated requests", async () => {
+  it("returns scenarios with camelCase keys for authenticated requests", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-    const mockScenarios = [
-      { id: "1", title: "Cold Call", call_type: "cold_call" },
-      { id: "2", title: "Discovery", call_type: "discovery" },
+    const mockDbRows = [
+      { id: "1", title: "Cold Call", description: "desc1", call_type: "cold_call", difficulty: "Easy" },
+      { id: "2", title: "Discovery", description: "desc2", call_type: "discovery", difficulty: "Medium" },
     ];
-    mockQueryResult = { data: mockScenarios, error: null };
+    mockQueryResult = { data: mockDbRows, error: null };
 
     const { GET } = await import("@/app/api/scenarios/route");
     const request = new NextRequest("http://localhost:3000/api/scenarios");
@@ -53,7 +53,11 @@ describe("Scenarios API Route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual(mockScenarios);
+    // API now transforms call_type → callType
+    expect(body).toEqual([
+      { id: "1", title: "Cold Call", description: "desc1", callType: "cold_call", difficulty: "Easy" },
+      { id: "2", title: "Discovery", description: "desc2", callType: "discovery", difficulty: "Medium" },
+    ]);
   });
 
   it("returns 500 when database query fails", async () => {

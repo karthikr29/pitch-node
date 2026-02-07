@@ -12,11 +12,78 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabase
     .from("sessions")
-    .select("created_at, session_analytics(overall_score, scores)")
+    .select("created_at, scenarios(call_type), session_analytics(overall_score, scores)")
     .eq("user_id", user.id)
     .gte("created_at", since.toISOString())
     .order("created_at", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+
+  // Build trends (score over time)
+  const trends = (data || []).map((row: Record<string, unknown>) => {
+    const analytics = row.session_analytics as Record<string, unknown> | Record<string, unknown>[] | null;
+    const analyticsObj = Array.isArray(analytics) ? analytics[0] : analytics;
+    const date = new Date(row.created_at as string);
+    return {
+      date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      score: (analyticsObj?.overall_score as number) ?? 0,
+    };
+  });
+
+  // Build call type performance
+  const callTypeMap: Record<string, { totalScore: number; count: number }> = {};
+  for (const row of data || []) {
+    const scenario = (row as Record<string, unknown>).scenarios as Record<string, unknown> | null;
+    const analytics = (row as Record<string, unknown>).session_analytics as Record<string, unknown> | Record<string, unknown>[] | null;
+    const analyticsObj = Array.isArray(analytics) ? analytics[0] : analytics;
+    const callType = (scenario?.call_type as string) ?? "unknown";
+    const score = (analyticsObj?.overall_score as number) ?? 0;
+
+    if (!callTypeMap[callType]) callTypeMap[callType] = { totalScore: 0, count: 0 };
+    callTypeMap[callType].totalScore += score;
+    callTypeMap[callType].count += 1;
+  }
+  const callTypePerformance = Object.entries(callTypeMap).map(([callType, v]) => ({
+    callType: callType.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+    avgScore: Math.round(v.totalScore / v.count),
+    sessions: v.count,
+  }));
+
+  // Build skill metrics from scores JSON
+  const metricTotals: Record<string, { total: number; count: number }> = {};
+  for (const row of data || []) {
+    const analytics = (row as Record<string, unknown>).session_analytics as Record<string, unknown> | Record<string, unknown>[] | null;
+    const analyticsObj = Array.isArray(analytics) ? analytics[0] : analytics;
+    const scores = analyticsObj?.scores as Record<string, number> | null;
+    if (scores && typeof scores === "object") {
+      for (const [metric, value] of Object.entries(scores)) {
+        if (typeof value === "number") {
+          if (!metricTotals[metric]) metricTotals[metric] = { total: 0, count: 0 };
+          metricTotals[metric].total += value;
+          metricTotals[metric].count += 1;
+        }
+      }
+    }
+  }
+  const metrics = Object.entries(metricTotals).map(([metric, v]) => ({
+    metric: metric.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+    value: Math.round(v.total / v.count),
+  }));
+
+  // Build activity data (sessions per day)
+  const activityMap: Record<string, number> = {};
+  for (const row of data || []) {
+    const dateStr = new Date((row as Record<string, unknown>).created_at as string).toISOString().split("T")[0];
+    activityMap[dateStr] = (activityMap[dateStr] || 0) + 1;
+  }
+  const now = new Date();
+  const activity = [];
+  for (let i = 83; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split("T")[0];
+    activity.push({ date: dateStr, count: activityMap[dateStr] || 0 });
+  }
+
+  return NextResponse.json({ trends, callTypePerformance, metrics, activity });
 }

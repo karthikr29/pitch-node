@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   LineChart,
@@ -19,6 +19,8 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
+  Area,
+  AreaChart,
 } from "recharts";
 import { TrendingUp, BarChart3, Activity, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -88,6 +90,8 @@ function generateActivityData(): ActivityDay[] {
   return days;
 }
 
+const dayLabels = ["", "Mon", "", "Wed", "", "Fri", ""];
+
 function ActivityCalendar({ data }: { data: ActivityDay[] }) {
   const weeks: ActivityDay[][] = [];
   for (let i = 0; i < data.length; i += 7) {
@@ -95,24 +99,35 @@ function ActivityCalendar({ data }: { data: ActivityDay[] }) {
   }
 
   function getColor(count: number) {
-    if (count === 0) return "bg-muted";
-    if (count === 1) return "bg-primary/30";
-    if (count === 2) return "bg-primary/60";
-    return "bg-primary";
+    if (count === 0) return "bg-muted/60";
+    if (count === 1) return "bg-primary/25";
+    if (count === 2) return "bg-primary/50";
+    return "bg-primary/80";
   }
 
   return (
-    <div className="flex gap-1">
+    <div className="flex gap-[3px]">
+      {/* Day labels */}
+      <div className="flex flex-col gap-[3px] mr-1">
+        {dayLabels.map((label, i) => (
+          <div
+            key={i}
+            className="w-6 h-3.5 flex items-center text-[10px] text-muted-foreground"
+          >
+            {label}
+          </div>
+        ))}
+      </div>
       {weeks.map((week, wi) => (
-        <div key={wi} className="flex flex-col gap-1">
+        <div key={wi} className="flex flex-col gap-[3px]">
           {week.map((day, di) => (
             <div
               key={di}
               className={cn(
-                "w-3 h-3 rounded-sm",
+                "w-3.5 h-3.5 rounded-[3px] transition-colors hover:ring-1 hover:ring-primary/30",
                 getColor(day.count)
               )}
-              title={`${day.date}: ${day.count} sessions`}
+              title={`${day.date}: ${day.count} session${day.count !== 1 ? "s" : ""}`}
             />
           ))}
         </div>
@@ -120,6 +135,15 @@ function ActivityCalendar({ data }: { data: ActivityDay[] }) {
     </div>
   );
 }
+
+const tooltipStyle = {
+  backgroundColor: "var(--card)",
+  border: "1px solid var(--border)",
+  borderRadius: "8px",
+  color: "var(--foreground)",
+  fontSize: "12px",
+  padding: "8px 12px",
+};
 
 export default function AnalyticsPage() {
   const [trends, setTrends] = useState<TrendPoint[]>([]);
@@ -162,22 +186,25 @@ export default function AnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto space-y-6">
-        <Skeleton className="h-8 w-48" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Skeleton className="h-80" />
-          <Skeleton className="h-80" />
-          <Skeleton className="h-80" />
-          <Skeleton className="h-48" />
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-72 mt-2" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <Skeleton className="h-80 lg:col-span-2 rounded-xl" />
+          <Skeleton className="h-80 rounded-xl" />
+          <Skeleton className="h-80 rounded-xl" />
+          <Skeleton className="h-48 lg:col-span-2 rounded-xl" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-display font-bold text-foreground">
+        <h2 className="text-2xl font-display font-bold text-foreground tracking-tight">
           Analytics
         </h2>
         <p className="text-muted-foreground mt-1">
@@ -185,50 +212,63 @@ export default function AnalyticsPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Score Trend */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Score Trend — Area Chart with gradient fill */}
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-primary" />
-              Score Trend
-            </CardTitle>
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Score Trend</CardTitle>
+                <CardDescription className="text-xs">
+                  Your performance trajectory over time
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trends}>
+                <AreaChart data={trends}>
+                  <defs>
+                    <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.25} />
+                      <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid
                     strokeDasharray="3 3"
-                    className="stroke-border"
+                    className="stroke-border/50"
+                    vertical={false}
                   />
                   <XAxis
                     dataKey="date"
                     className="text-xs fill-muted-foreground"
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
                   />
                   <YAxis
                     domain={[0, 100]}
                     className="text-xs fill-muted-foreground"
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={32}
                   />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "var(--card)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "8px",
-                      color: "var(--foreground)",
-                    }}
-                  />
-                  <Line
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Area
                     type="monotone"
                     dataKey="score"
                     stroke="var(--primary)"
                     strokeWidth={2.5}
-                    dot={{ fill: "var(--primary)", r: 4 }}
-                    activeDot={{ r: 6 }}
+                    fill="url(#scoreGradient)"
+                    dot={{ fill: "var(--primary)", r: 3, strokeWidth: 2, stroke: "var(--card)" }}
+                    activeDot={{ r: 5, strokeWidth: 2, stroke: "var(--card)" }}
                   />
-                </LineChart>
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
@@ -236,47 +276,58 @@ export default function AnalyticsPage() {
 
         {/* Call Type Performance */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-primary" />
-              Performance by Call Type
-            </CardTitle>
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <BarChart3 className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-base">By Call Type</CardTitle>
+                <CardDescription className="text-xs">
+                  Average score per scenario category
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={callTypeData}>
+                <BarChart data={callTypeData} barCategoryGap="20%">
+                  <defs>
+                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.9} />
+                      <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.5} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid
                     strokeDasharray="3 3"
-                    className="stroke-border"
+                    className="stroke-border/50"
+                    vertical={false}
                   />
                   <XAxis
                     dataKey="callType"
                     className="text-xs fill-muted-foreground"
-                    tick={{ fontSize: 11 }}
-                    angle={-25}
+                    tick={{ fontSize: 10 }}
+                    angle={-30}
                     textAnchor="end"
-                    height={60}
+                    height={55}
+                    axisLine={false}
+                    tickLine={false}
                   />
                   <YAxis
                     domain={[0, 100]}
                     className="text-xs fill-muted-foreground"
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={32}
                   />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "var(--card)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "8px",
-                      color: "var(--foreground)",
-                    }}
-                  />
-                  <Legend />
+                  <Tooltip contentStyle={tooltipStyle} />
                   <Bar
                     dataKey="avgScore"
                     name="Avg Score"
-                    fill="var(--primary)"
-                    radius={[4, 4, 0, 0]}
+                    fill="url(#barGradient)"
+                    radius={[6, 6, 0, 0]}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -284,45 +335,46 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
 
-        {/* Metric Breakdown Radar */}
+        {/* Skill Breakdown Radar */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-primary" />
-              Skill Breakdown
-            </CardTitle>
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Activity className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Skill Breakdown</CardTitle>
+                <CardDescription className="text-xs">
+                  Strengths and areas for growth
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={metrics}>
-                  <PolarGrid className="stroke-border" />
+                <RadarChart cx="50%" cy="50%" outerRadius="65%" data={metrics}>
+                  <PolarGrid className="stroke-border/40" />
                   <PolarAngleAxis
                     dataKey="metric"
                     className="text-xs fill-muted-foreground"
-                    tick={{ fontSize: 11 }}
+                    tick={{ fontSize: 10 }}
                   />
                   <PolarRadiusAxis
                     domain={[0, 100]}
                     className="text-xs fill-muted-foreground"
-                    tick={{ fontSize: 10 }}
+                    tick={{ fontSize: 9 }}
+                    axisLine={false}
                   />
                   <Radar
                     name="Score"
                     dataKey="value"
                     stroke="var(--primary)"
                     fill="var(--primary)"
-                    fillOpacity={0.2}
+                    fillOpacity={0.15}
                     strokeWidth={2}
                   />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "var(--card)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "8px",
-                      color: "var(--foreground)",
-                    }}
-                  />
+                  <Tooltip contentStyle={tooltipStyle} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
@@ -331,23 +383,32 @@ export default function AnalyticsPage() {
 
         {/* Activity Calendar */}
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-primary" />
-              Activity
-            </CardTitle>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Calendar className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Activity</CardTitle>
+                  <CardDescription className="text-xs">
+                    Practice frequency over the last 12 weeks
+                  </CardDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <span>Less</span>
+                <div className="w-3 h-3 rounded-[3px] bg-muted/60" />
+                <div className="w-3 h-3 rounded-[3px] bg-primary/25" />
+                <div className="w-3 h-3 rounded-[3px] bg-primary/50" />
+                <div className="w-3 h-3 rounded-[3px] bg-primary/80" />
+                <span>More</span>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto pb-1">
               <ActivityCalendar data={activityData} />
-            </div>
-            <div className="flex items-center gap-2 mt-4 text-xs text-muted-foreground">
-              <span>Less</span>
-              <div className="w-3 h-3 rounded-sm bg-muted" />
-              <div className="w-3 h-3 rounded-sm bg-primary/30" />
-              <div className="w-3 h-3 rounded-sm bg-primary/60" />
-              <div className="w-3 h-3 rounded-sm bg-primary" />
-              <span>More</span>
             </div>
           </CardContent>
         </Card>

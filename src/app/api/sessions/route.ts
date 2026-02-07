@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
 
   const page = parseInt(request.nextUrl.searchParams.get("page") || "1");
   const limit = parseInt(request.nextUrl.searchParams.get("limit") || "10");
-  const callType = request.nextUrl.searchParams.get("call_type");
+  const callType = request.nextUrl.searchParams.get("callType") || request.nextUrl.searchParams.get("call_type");
   const offset = (page - 1) * limit;
 
   let query = supabase
@@ -22,5 +22,24 @@ export async function GET(request: NextRequest) {
 
   const { data, error, count } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data, total: count, page, limit });
+
+  const sessions = (data || []).map((row: Record<string, unknown>) => {
+    const scenario = row.scenarios as Record<string, unknown> | null;
+    const persona = row.personas as Record<string, unknown> | null;
+    const analytics = row.session_analytics as Record<string, unknown> | Record<string, unknown>[] | null;
+    const analyticsObj = Array.isArray(analytics) ? analytics[0] : analytics;
+
+    return {
+      id: row.id,
+      date: row.created_at,
+      scenarioName: scenario?.title ?? "Unknown Scenario",
+      personaName: persona?.name ?? "Unknown Persona",
+      score: analyticsObj?.overall_score ?? 0,
+      duration: row.duration_seconds ?? 0,
+      callType: scenario?.call_type ?? "discovery",
+    };
+  });
+
+  const totalPages = Math.ceil((count ?? 0) / limit);
+  return NextResponse.json({ sessions, totalPages, page, limit });
 }

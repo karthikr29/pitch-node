@@ -40,19 +40,24 @@ describe("Analytics Overview API Route", () => {
     expect(body.error).toBe("Unauthorized");
   });
 
-  it("returns progress, recentSessions, and achievements for authenticated user", async () => {
+  it("returns camelCase overview with recentSessions and achievements", async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: "user-1" } },
     });
 
-    const mockProgress = { total_sessions: 10, current_streak: 5 };
-    const mockSessions = [{ id: "s1" }, { id: "s2" }];
+    const mockProgress = { total_sessions: 10, average_score: 75, current_streak: 5, best_score: 92 };
+    const mockSessions = [
+      {
+        id: "s1",
+        created_at: "2025-01-15",
+        scenarios: { title: "Cold Call", call_type: "cold_call" },
+        personas: { name: "John", emoji: "👤" },
+        session_analytics: { overall_score: 80 },
+      },
+    ];
     const mockAchievements = [{ id: "a1", earned_at: "2025-01-15" }];
 
-    // We need to handle three different from() calls
-    let callCount = 0;
     mockFrom.mockImplementation((table: string) => {
-      callCount++;
       if (table === "user_progress") {
         return {
           select: () => ({
@@ -92,8 +97,14 @@ describe("Analytics Overview API Route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.progress).toEqual(mockProgress);
-    expect(body.recentSessions).toEqual(mockSessions);
+    // Now returns camelCase top-level keys
+    expect(body.totalSessions).toBe(10);
+    expect(body.avgScore).toBe(75);
+    expect(body.currentStreak).toBe(5);
+    expect(body.bestScore).toBe(92);
+    // Recent sessions are transformed
+    expect(body.recentSessions).toHaveLength(1);
+    expect(body.recentSessions[0].scenarioName).toBe("Cold Call");
     expect(body.achievements).toEqual(mockAchievements);
   });
 

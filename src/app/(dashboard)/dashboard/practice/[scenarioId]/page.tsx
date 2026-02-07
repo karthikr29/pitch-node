@@ -122,7 +122,18 @@ export default function PreCallSetupPage() {
 
         if (scenarioRes.ok) {
           const data = await scenarioRes.json();
-          setScenario(data);
+          const briefing = data.context_briefing || {};
+          setScenario({
+            id: data.id,
+            title: data.title,
+            description: data.description,
+            callType: data.call_type || data.callType || "",
+            difficulty: data.difficulty,
+            context: briefing.context || briefing.scenario || data.description,
+            company: briefing.company || "N/A",
+            prospect: briefing.prospect || "N/A",
+            objectives: data.objectives || [],
+          });
         } else {
           setScenario({ ...fallbackScenario, id: scenarioId });
         }
