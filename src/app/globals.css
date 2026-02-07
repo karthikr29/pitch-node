@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 /* AWS INSPIRED - Theme Configuration */
 @theme {
@@ -31,16 +35,27 @@
 
 /* AWS INSPIRED - Light Theme CSS Variables */
 :root {
-  /* Primary Colors */
+  /* Primary Colors (AWS Orange) */
   --primary: #EC7211;
   --primary-hover: #EB5F07;
+  --primary-foreground: #FFFFFF;
   --secondary: #232F3E;
+  --secondary-foreground: #FFFFFF;
   --accent: #FF9900;
+  --accent-foreground: #16191F;
 
   /* Backgrounds */
+  --background: #F2F3F3;
   --background-primary: #F2F3F3;
   --background-secondary: #FFFFFF;
+  --foreground: #16191F;
   --surface: #FFFFFF;
+
+  /* Card / Popover */
+  --card: #FFFFFF;
+  --card-foreground: #16191F;
+  --popover: #FFFFFF;
+  --popover-foreground: #16191F;
 
   /* Text */
   --text-primary: #16191F;
@@ -48,37 +63,69 @@
   --text-muted: #6B7280;
   --text-on-primary: #FFFFFF;
 
-  /* Borders */
+  /* Muted */
+  --muted: #E8E8E8;
+  --muted-foreground: #545B64;
+
+  /* Borders / Input */
   --border: #D5DBDB;
+  --input: #D5DBDB;
+  --ring: #EC7211;
 
   /* States */
   --success: #107E3E;
   --warning: #B56307;
   --error: #B12020;
+  --destructive: #B12020;
 
   /* Voice Frequency Waveform Colors (AWS Theme) */
   --wave-1: rgba(236, 114, 17, 0.15);
-  /* Primary orange */
   --wave-2: rgba(255, 153, 0, 0.15);
-  /* Accent orange */
   --wave-3: rgba(35, 47, 62, 0.1);
-  /* Secondary dark blue */
   --frequency-grid: rgba(236, 114, 17, 0.08);
+
+  /* ShadCN */
+  --radius: 0.625rem;
+  --chart-1: #EC7211;
+  --chart-2: #FF9900;
+  --chart-3: #232F3E;
+  --chart-4: #107E3E;
+  --chart-5: #B56307;
+
+  /* Sidebar */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #16191F;
+  --sidebar-primary: #EC7211;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F2F3F3;
+  --sidebar-accent-foreground: #16191F;
+  --sidebar-border: #D5DBDB;
+  --sidebar-ring: #EC7211;
 }
 
 /* AWS INSPIRED - Dark Theme */
 .dark {
-  /* Primary Colors */
+  /* Primary Colors (AWS Bright Orange) */
   --primary: #FF9900;
   --primary-hover: #FFAC31;
-  /* Slightly lighter than primary for hover */
+  --primary-foreground: #161E2D;
   --secondary: #D5DBDB;
+  --secondary-foreground: #161E2D;
   --accent: #EC7211;
+  --accent-foreground: #D5DBDB;
 
   /* Backgrounds */
+  --background: #0F1B2A;
   --background-primary: #0F1B2A;
   --background-secondary: #161E2D;
+  --foreground: #D5DBDB;
   --surface: #161E2D;
+
+  /* Card / Popover */
+  --card: #161E2D;
+  --card-foreground: #D5DBDB;
+  --popover: #161E2D;
+  --popover-foreground: #D5DBDB;
 
   /* Text */
   --text-primary: #D5DBDB;
@@ -86,21 +133,25 @@
   --text-muted: #545B64;
   --text-on-primary: #161E2D;
 
-  /* Borders */
+  /* Muted */
+  --muted: #1A2636;
+  --muted-foreground: #879596;
+
+  /* Borders / Input */
   --border: #414750;
+  --input: #414750;
+  --ring: #FF9900;
 
   /* States */
   --success: #1F9D55;
   --warning: #C27803;
   --error: #A12020;
+  --destructive: #A12020;
 
   /* Voice Frequency Waveform Colors (AWS Theme - Dark) */
   --wave-1: rgba(255, 153, 0, 0.2);
-  /* Primary bright orange */
   --wave-2: rgba(236, 114, 17, 0.2);
-  /* Accent orange */
   --wave-3: rgba(213, 219, 219, 0.15);
-  /* Secondary light */
   --frequency-grid: rgba(255, 153, 0, 0.1);
 
   /* Override theme colors for dark mode */
@@ -119,6 +170,23 @@
   --color-success: #1F9D55;
   --color-warning: #C27803;
   --color-error: #A12020;
+
+  /* ShadCN */
+  --chart-1: #FF9900;
+  --chart-2: #EC7211;
+  --chart-3: #D5DBDB;
+  --chart-4: #1F9D55;
+  --chart-5: #C27803;
+
+  /* Sidebar */
+  --sidebar: #0F1B2A;
+  --sidebar-foreground: #D5DBDB;
+  --sidebar-primary: #FF9900;
+  --sidebar-primary-foreground: #161E2D;
+  --sidebar-accent: #1A2636;
+  --sidebar-accent-foreground: #D5DBDB;
+  --sidebar-border: #414750;
+  --sidebar-ring: #FF9900;
 }
 
 /* Base styles */
@@ -537,4 +605,54 @@ h6 {
   content: '_' !important;
   font-weight: normal;
   vertical-align: baseline;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }

@@ -1,27 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { Button, WaveformBackground, FrequencyOrb } from "@/components/ui";
-import { cn } from "@/lib/utils";
 import { Suspense, lazy } from "react";
 import { ArrowRight, Mic2, Activity } from "lucide-react";
 import { TypeAnimation } from "react-type-animation";
 
-import { WaitlistCounter } from "./waitlist-counter";
-
 const HeroScene = lazy(() => import("@/components/3d/hero-scene"));
 
-interface HeroProps {
-  onOpenWaitlist: () => void;
-}
-
-export function Hero({ onOpenWaitlist }: HeroProps) {
+export function Hero() {
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden bg-background-primary">
-      {/* Waveform Background - Voice Frequency Aesthetic */}
       <WaveformBackground variant="primary" className="opacity-40" />
 
-      {/* Frequency Orbs - AWS Orange Theme */}
       <div className="absolute top-20 -left-20 opacity-50 dark:opacity-70">
         <FrequencyOrb size="xl" variant="primary" />
       </div>
@@ -30,11 +22,9 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
       </div>
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
-        {/* Asymmetric Grid Layout - Bold & Unconventional */}
         <div className="grid lg:grid-cols-12 gap-8 items-center">
-          {/* Content - Spans 7 columns on large screens for asymmetry */}
           <div className="lg:col-span-7 text-left">
-            {/* Coming Soon Badge - Redesigned with voice theme */}
+            {/* Now Live Badge */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -45,23 +35,16 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
                 <Activity className="w-5 h-5 text-primary animate-pulse" />
                 <motion.div
                   className="absolute inset-0 rounded-full bg-primary/30"
-                  animate={{
-                    scale: [1, 1.5, 1],
-                    opacity: [0.5, 0, 0.5],
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
+                  animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                 />
               </div>
               <span className="text-sm font-semibold tracking-wide uppercase text-primary">
-                Practice Before You Pitch • Coming Soon
+                Practice Before You Pitch &bull; Now Live
               </span>
             </motion.div>
 
-            {/* Headline - Bold and Impactful */}
+            {/* Headline */}
             <motion.h1
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
@@ -77,7 +60,6 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
                 Master Every
               </motion.span>
 
-              {/* Animated Text with Voice Wave Effect */}
               <motion.div
                 className="relative inline-block mb-2 min-h-[1.2em]"
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -86,18 +68,12 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
               >
                 <TypeAnimation
                   sequence={[
-                    "Cold Call",
-                    2000,
-                    "Discovery",
-                    2000,
-                    "Demo",
-                    2000,
-                    "Objection",
-                    2000,
-                    "Negotiation",
-                    2000,
-                    "Close",
-                    2000,
+                    "Cold Call", 2000,
+                    "Discovery", 2000,
+                    "Demo", 2000,
+                    "Objection", 2000,
+                    "Negotiation", 2000,
+                    "Close", 2000,
                   ]}
                   wrapper="span"
                   speed={50}
@@ -107,20 +83,11 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
                   style={{ display: 'inline-block', minWidth: '200px' }}
                   preRenderFirstString={false}
                 />
-                {/* AWS Orange glow effect in dark mode */}
                 <motion.div
                   className="absolute inset-0 blur-2xl opacity-0 dark:opacity-50 -z-10"
-                  style={{
-                    background: "var(--primary)",
-                  }}
-                  animate={{
-                    scale: [1, 1.2, 1],
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
+                  style={{ background: "var(--primary)" }}
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                 />
               </motion.div>
 
@@ -133,14 +100,10 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
                 <span className="relative inline-block">
                   <span
                     className="relative z-10 bg-gradient-to-r from-primary via-accent to-primary animate-spectrum-shift bg-clip-text text-transparent"
-                    style={{
-                      WebkitBackgroundClip: "text",
-                      backgroundClip: "text",
-                    }}
+                    style={{ WebkitBackgroundClip: "text", backgroundClip: "text" }}
                   >
                     Before
                   </span>
-                  {/* Underline with AWS orange gradient */}
                   <motion.div
                     className="absolute -bottom-2 left-0 w-full h-3 -z-10 rounded-lg animate-spectrum-shift"
                     style={{
@@ -156,7 +119,7 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
               </motion.span>
             </motion.h1>
 
-            {/* Subheadline - Punchy and Bold */}
+            {/* Subheadline */}
             <motion.p
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -172,37 +135,29 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
               before real deals are on the line.
             </motion.p>
 
-            {/* CTA - Voice-themed button with mic icon */}
+            {/* CTA */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.8 }}
               className="flex flex-col sm:flex-row items-start gap-6 mb-6"
             >
-              <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <Button
                   size="lg"
-                  onClick={onOpenWaitlist}
+                  asChild
                   className="group relative overflow-hidden px-8 py-6 text-lg font-bold shadow-lg dark:shadow-primary/20"
                 >
-                  <Mic2 className="w-5 h-5 mr-2" />
-                  Join the Waitlist
-                  <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
-                  {/* Animated background shine */}
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full"
-                    animate={{
-                      translateX: ["100%", "100%", "-100%"],
-                    }}
-                    transition={{
-                      duration: 3,
-                      repeat: Infinity,
-                      repeatDelay: 2,
-                    }}
-                  />
+                  <Link href="/login">
+                    <Mic2 className="w-5 h-5 mr-2" />
+                    Start Practicing Free
+                    <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full"
+                      animate={{ translateX: ["100%", "100%", "-100%"] }}
+                      transition={{ duration: 3, repeat: Infinity, repeatDelay: 2 }}
+                    />
+                  </Link>
                 </Button>
               </motion.div>
 
@@ -213,59 +168,33 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
                 className="flex flex-col gap-1"
               >
                 <p className="text-text-muted text-sm font-medium">
-                  ✓ Early access priority
+                  &#10003; Free to start
                 </p>
                 <p className="text-text-muted text-sm font-medium">
-                  ✓ Exclusive launch pricing
+                  &#10003; No credit card required
                 </p>
               </motion.div>
             </motion.div>
-
-            {/* Waitlist Counter */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 1.2 }}
-            >
-              <WaitlistCounter />
-            </motion.div>
           </div>
 
-          {/* 3D Scene - Asymmetric placement (5 columns) */}
+          {/* 3D Scene */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9, rotate: -5 }}
             animate={{ opacity: 1, scale: 1, rotate: 0 }}
             transition={{ duration: 0.9, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
             className="lg:col-span-5 relative h-[400px] lg:h-[480px]"
           >
-            {/* Voice frequency rings around 3D scene */}
             <motion.div
               className="absolute inset-0 rounded-3xl border-2 border-primary/20"
-              animate={{
-                scale: [1, 1.05, 1],
-                opacity: [0.2, 0.4, 0.2],
-              }}
-              transition={{
-                duration: 3,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
+              animate={{ scale: [1, 1.05, 1], opacity: [0.2, 0.4, 0.2] }}
+              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
             />
             <motion.div
               className="absolute inset-[-10px] rounded-3xl border border-accent/20"
-              animate={{
-                scale: [1, 1.08, 1],
-                opacity: [0.1, 0.3, 0.1],
-              }}
-              transition={{
-                duration: 3,
-                repeat: Infinity,
-                ease: "easeInOut",
-                delay: 0.5,
-              }}
+              animate={{ scale: [1, 1.08, 1], opacity: [0.1, 0.3, 0.1] }}
+              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
             />
 
-            {/* 3D Scene Container */}
             <div className="relative w-full h-full rounded-2xl overflow-hidden bg-surface/50 dark:bg-surface/10 backdrop-blur-sm border border-border shadow-2xl">
               <Suspense
                 fallback={
@@ -275,11 +204,7 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
                       <motion.div
                         className="absolute inset-0 rounded-full border-4 border-accent/20"
                         animate={{ rotate: 360 }}
-                        transition={{
-                          duration: 3,
-                          repeat: Infinity,
-                          ease: "linear",
-                        }}
+                        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
                       />
                     </div>
                   </div>
@@ -289,7 +214,6 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
               </Suspense>
             </div>
 
-            {/* Floating frequency indicators */}
             <motion.div
               className="absolute -top-4 -right-4 bg-primary/10 dark:bg-primary/20 backdrop-blur-sm border border-primary/30 rounded-full px-4 py-2 flex items-center gap-2"
               initial={{ opacity: 0, y: -20 }}
@@ -301,14 +225,8 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
                   <motion.div
                     key={i}
                     className="w-1 bg-primary rounded-full"
-                    animate={{
-                      height: ["8px", "20px", "8px"],
-                    }}
-                    transition={{
-                      duration: 1,
-                      repeat: Infinity,
-                      delay: i * 0.1,
-                    }}
+                    animate={{ height: ["8px", "20px", "8px"] }}
+                    transition={{ duration: 1, repeat: Infinity, delay: i * 0.1 }}
                   />
                 ))}
               </div>
@@ -318,7 +236,7 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
         </div>
       </div>
 
-      {/* Scroll indicator - Voice wave style */}
+      {/* Scroll indicator */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -333,16 +251,8 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
             <motion.div
               key={i}
               className="w-1 bg-primary/50 rounded-full"
-              animate={{
-                height: ["12px", "24px", "12px"],
-                opacity: [0.5, 1, 0.5],
-              }}
-              transition={{
-                duration: 1.5,
-                repeat: Infinity,
-                ease: "easeInOut",
-                delay: i * 0.1,
-              }}
+              animate={{ height: ["12px", "24px", "12px"], opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut", delay: i * 0.1 }}
             />
           ))}
         </div>

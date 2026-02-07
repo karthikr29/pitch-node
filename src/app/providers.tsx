@@ -2,9 +2,8 @@
 
 import { ThemeProvider } from "next-themes";
 import { ReactNode } from "react";
-import { WaitlistProvider } from "@/contexts/waitlist-context";
-import { WaitlistTimer } from "@/components/waitlist/waitlist-timer";
-import { WaitlistCountProvider } from "@/hooks/use-waitlist-count";
+import { AuthProvider } from "@/contexts/auth-context";
+import { Toaster } from "@/components/ui/sonner";
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -14,12 +13,10 @@ export function Providers({ children }: { children: ReactNode }) {
       enableSystem
       disableTransitionOnChange={false}
     >
-      <WaitlistProvider>
-        <WaitlistCountProvider>
-          {children}
-          <WaitlistTimer />
-        </WaitlistCountProvider>
-      </WaitlistProvider>
+      <AuthProvider>
+        {children}
+        <Toaster />
+      </AuthProvider>
     </ThemeProvider>
   );
 }

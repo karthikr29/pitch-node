@@ -8,11 +8,7 @@ import { ThemeToggle } from "./theme-toggle";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
-interface HeaderProps {
-  onOpenWaitlist?: () => void;
-}
-
-export function Header({ onOpenWaitlist }: HeaderProps) {
+export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const { scrollY } = useScroll();
 
@@ -90,20 +86,27 @@ export function Header({ onOpenWaitlist }: HeaderProps) {
             >
               Features
             </a>
+            <a
+              href="#pricing"
+              className={cn(
+                "font-medium text-text-secondary hover:text-text-primary transition-all duration-300",
+                isScrolled ? "text-[0.8125rem]" : "text-sm"
+              )}
+            >
+              Pricing
+            </a>
           </nav>
 
           {/* Right side */}
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            {onOpenWaitlist && (
-              <Button
-                size="sm"
-                onClick={onOpenWaitlist}
-                className="hidden sm:inline-flex"
-              >
-                Join Waitlist
-              </Button>
-            )}
+            <Button
+              size="sm"
+              asChild
+              className="hidden sm:inline-flex"
+            >
+              <Link href="/login">Login</Link>
+            </Button>
           </div>
         </div>
       </div>

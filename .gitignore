@@ -113,4 +113,21 @@ storybook-static
 # Lock files (keep package-lock.json, ignore others if using npm)
 yarn.lock
 pnpm-lock.yaml
-bun.lockb.env.local
+bun.lockb
+
+# Python (pipecat-service)
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+*.egg
+.venv/
+venv/
+pipecat-service/.env
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/

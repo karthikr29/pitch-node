@@ -81,6 +81,7 @@ export function Footer() {
               {[
                 { label: "How it Works", href: "#how-it-works" },
                 { label: "Features", href: "#features" },
+                { label: "Pricing", href: "#pricing" },
                 { label: "For Teams", href: "#personas" },
               ].map((link) => (
                 <li key={link.label}>

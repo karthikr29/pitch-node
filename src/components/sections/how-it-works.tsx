@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { useInView } from "framer-motion";
 import { useRef, Suspense, lazy } from "react";
@@ -7,14 +8,9 @@ import { cn } from "@/lib/utils";
 import { ArrowRight, Zap, Target, Mic, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui";
 
-// Lazy load the 3D scenes for performance
 const PickBattleScene = lazy(() => import("@/components/3d/how-it-works/pick-battle-scene"));
 const FaceAiScene = lazy(() => import("@/components/3d/how-it-works/face-ai-scene"));
 const LevelUpScene = lazy(() => import("@/components/3d/how-it-works/level-up-scene"));
-
-interface HowItWorksProps {
-  onOpenWaitlist: () => void;
-}
 
 const steps = [
   {
@@ -40,16 +36,9 @@ const steps = [
   },
 ];
 
-function StepRow({
-  step,
-  index,
-}: {
-  step: (typeof steps)[0];
-  index: number;
-}) {
+function StepRow({ step, index }: { step: (typeof steps)[0]; index: number }) {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
-
   const isLeft = step.align === "left";
 
   return (
@@ -63,21 +52,13 @@ function StepRow({
         index !== 0 && "mt-24 md:mt-32"
       )}
     >
-      {/* Content */}
-      <div
-        className={cn(
-          "text-center md:text-left relative",
-          !isLeft && "md:order-2"
-        )}
-      >
+      <div className={cn("text-center md:text-left relative", !isLeft && "md:order-2")}>
         <h3 className="font-display text-2xl md:text-3xl lg:text-4xl font-bold text-text-primary mb-4">
           {step.title}
         </h3>
         <p className="text-text-secondary text-lg leading-relaxed max-w-lg mx-auto md:mx-0">
           {step.description}
         </p>
-
-        {/* Accent line */}
         <motion.div
           className="w-20 h-1 bg-gradient-to-r from-primary to-accent rounded-full mt-8 mx-auto md:mx-0"
           initial={{ scaleX: 0 }}
@@ -86,31 +67,17 @@ function StepRow({
         />
       </div>
 
-      {/* 3D Scene - Improved styling for better visibility */}
       <motion.div
-        className={cn(
-          "h-[300px] md:h-[400px] relative",
-          !isLeft && "md:order-1"
-        )}
+        className={cn("h-[300px] md:h-[400px] relative", !isLeft && "md:order-1")}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={isInView ? { opacity: 1, scale: 1 } : {}}
         transition={{ duration: 0.7, delay: 0.3 }}
       >
-        {/* Frequency rings */}
         <motion.div
           className="absolute inset-0 rounded-3xl border-2 border-primary/20"
-          animate={{
-            scale: [1, 1.02, 1],
-            opacity: [0.3, 0.5, 0.3],
-          }}
-          transition={{
-            duration: 3,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
+          animate={{ scale: [1, 1.02, 1], opacity: [0.3, 0.5, 0.3] }}
+          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
         />
-
-        {/* Scene container with better background */}
         <div className="relative w-full h-full rounded-2xl overflow-hidden bg-surface dark:bg-surface/50 backdrop-blur-sm border border-border shadow-xl">
           <Suspense
             fallback={
@@ -124,25 +91,21 @@ function StepRow({
             <step.Scene />
           </Suspense>
         </div>
-
-        {/* Corner accent */}
         <div className="absolute -top-2 -right-2 w-16 h-16 border-t-2 border-r-2 border-primary rounded-tr-2xl opacity-50" />
       </motion.div>
     </motion.div>
   );
 }
 
-export function HowItWorks({ onOpenWaitlist }: HowItWorksProps) {
+export function HowItWorks() {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
   return (
     <section id="how-it-works" ref={ref} className="relative py-24 md:py-32 overflow-hidden bg-background-primary">
-      {/* Background decorations - Matching the style of Features */}
       <div className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full bg-primary/5 blur-3xl translate-x-1/2 -translate-y-1/2 pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full bg-accent/5 blur-3xl -translate-x-1/2 translate-y-1/2 pointer-events-none" />
 
-      {/* Subtle grid pattern */}
       <div
         className="absolute inset-0 opacity-[0.02] dark:opacity-[0.03] pointer-events-none"
         style={{
@@ -151,14 +114,12 @@ export function HowItWorks({ onOpenWaitlist }: HowItWorksProps) {
       />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.5 }}
           className="text-center mb-16 md:mb-24"
         >
-          {/* Badge */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={isInView ? { opacity: 1, scale: 1 } : {}}
@@ -172,9 +133,7 @@ export function HowItWorks({ onOpenWaitlist }: HowItWorksProps) {
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-text-primary mb-4">
             Train Like You{" "}
             <span className="relative inline-block">
-              <span className="relative z-10 text-primary">
-                Sell
-              </span>
+              <span className="relative z-10 text-primary">Sell</span>
               <motion.div
                 className="absolute bottom-1 left-0 w-full h-2 -z-10 rounded bg-primary/20"
                 initial={{ scaleX: 0 }}
@@ -188,17 +147,12 @@ export function HowItWorks({ onOpenWaitlist }: HowItWorksProps) {
           </p>
         </motion.div>
 
-        {/* Steps Rows */}
         <div className="relative">
-          {/* Vertical Connecting Line (Optional, might be too busy with alternating rows, trying without first for cleaner look or adding a subtle one) */}
-          {/* Let's skip the connecting line for now as the alternating layout makes it tricky to look good without SVG curves */}
-
           {steps.map((step, index) => (
             <StepRow key={step.title} step={step} index={index} />
           ))}
         </div>
 
-        {/* CTA Button */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -206,9 +160,11 @@ export function HowItWorks({ onOpenWaitlist }: HowItWorksProps) {
           transition={{ duration: 0.5, delay: 0.8 }}
           className="text-center mt-20 md:mt-32"
         >
-          <Button size="lg" onClick={onOpenWaitlist} className="group">
-            Join the Waitlist
-            <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
+          <Button size="lg" asChild className="group">
+            <Link href="/login">
+              Get Started
+              <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
+            </Link>
           </Button>
         </motion.div>
       </div>

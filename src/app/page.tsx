@@ -7,26 +7,25 @@ import {
   HowItWorks,
   Features,
   Personas,
+  Pricing,
   FinalCTA,
 } from "@/components/sections";
 import { StarryBackground } from "@/components/ui";
-import { useWaitlist } from "@/contexts/waitlist-context";
 
 export default function Home() {
-  const { openModal } = useWaitlist();
-
   return (
     <>
       <StarryBackground />
-      <Header onOpenWaitlist={openModal} />
+      <Header />
 
       <main>
-        <Hero onOpenWaitlist={openModal} />
+        <Hero />
         <ProblemSolution />
-        <HowItWorks onOpenWaitlist={openModal} />
+        <HowItWorks />
         <Features />
         <Personas />
-        <FinalCTA onOpenWaitlist={openModal} />
+        <Pricing />
+        <FinalCTA />
       </main>
 
       <Footer />
