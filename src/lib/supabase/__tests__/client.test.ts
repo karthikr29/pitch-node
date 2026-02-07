@@ -53,4 +53,24 @@ describe("Supabase Browser Client", () => {
 
     expect(typeof client.from).toBe("function");
   });
+
+  it("throws when NEXT_PUBLIC_SUPABASE_URL is missing", async () => {
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    vi.resetModules();
+
+    const { createClient } = await import("@/lib/supabase/client");
+    expect(() => createClient()).toThrow(
+      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY env vars"
+    );
+  });
+
+  it("throws when NEXT_PUBLIC_SUPABASE_ANON_KEY is missing", async () => {
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    vi.resetModules();
+
+    const { createClient } = await import("@/lib/supabase/client");
+    expect(() => createClient()).toThrow(
+      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY env vars"
+    );
+  });
 });
