@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
+  type LucideIcon,
   Search,
   Presentation,
   Handshake,
@@ -26,7 +27,7 @@ interface Scenario {
   difficulty: "Easy" | "Medium" | "Hard" | "Expert";
 }
 
-const callTypeIcons: Record<string, React.ElementType> = {
+const callTypeIcons: Record<string, LucideIcon> = {
   discovery: Search,
   demo: Presentation,
   negotiation: Handshake,

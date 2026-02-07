@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui";
-import { ArrowRight, Sparkles, Mic2, Target, TrendingUp } from "lucide-react";
+import { type LucideIcon, ArrowRight, Sparkles, Mic2, Target, TrendingUp } from "lucide-react";
 
 function FloatingOrb({ delay, size, position, color }: {
   delay: number;
@@ -22,7 +22,7 @@ function FloatingOrb({ delay, size, position, color }: {
 }
 
 function FeaturePill({ icon: Icon, text, delay }: {
-  icon: React.ElementType;
+  icon: LucideIcon;
   text: string;
   delay: number;
 }) {

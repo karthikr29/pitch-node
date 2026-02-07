@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 const mockGetUser = vi.fn();
-let mockQueryResult = { data: [] as unknown[], error: null as unknown };
+type MockQueryResult = { data: unknown[] | null; error: unknown };
+let mockQueryResult: MockQueryResult = { data: [], error: null };
 
 // Create a chainable mock that always resolves to mockQueryResult
 function createChainableMock() {
