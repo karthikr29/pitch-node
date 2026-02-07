@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { VoiceVisualizer } from "@/components/ui/voice-visualizer";
+import { SentientPrismVisualizer } from "@/components/ui/sentient-prism-visualizer";
 import { StarryBackground } from "@/components/ui/starry-background";
 import { cn } from "@/lib/utils";
 import {
@@ -39,10 +39,12 @@ interface RoomCredentials {
 function CallInterface({
   personaName,
   personaRole,
+  onBeforeDisconnect,
   onEndCall,
 }: {
   personaName: string;
   personaRole: string;
+  onBeforeDisconnect: () => void;
   onEndCall: () => void;
 }) {
   const { localParticipant } = useLocalParticipant();
@@ -113,6 +115,7 @@ function CallInterface({
   async function handleEndCall() {
     setEnding(true);
     if (timerRef.current) clearInterval(timerRef.current);
+    onBeforeDisconnect();
     room.disconnect().catch((error) => {
       console.error("[CallPage] Error disconnecting LiveKit room:", error);
     });
@@ -197,11 +200,10 @@ function CallInterface({
                 className="flex flex-col items-center w-full max-w-md"
               >
                 {/* Dynamic Voice Visualizer */}
-                <div className="h-40 flex items-center justify-center w-full mb-8">
-                  <VoiceVisualizer
+                <div className="h-64 flex items-center justify-center w-full mb-8 relative">
+                  <SentientPrismVisualizer
                     mode={speakingState}
-                    barCount={16}
-                    className="gap-2"
+                    className="w-full h-full"
                   />
                 </div>
 
@@ -311,6 +313,8 @@ export default function CallRoomPage() {
   const [error, setError] = useState<string | null>(null);
   const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
   const hasInitializedRef = useRef(false); // Prevent double initialization from React StrictMode
+  const sessionEndHandledRef = useRef(false);
+  const intentionalDisconnectRef = useRef(false);
 
   // Persona display info (fetched or defaults)
   const [personaName, setPersonaName] = useState("AI Prospect");
@@ -393,16 +397,23 @@ export default function CallRoomPage() {
       });
   }
 
-  function handleEndCall() {
+  const completeSessionAndNavigate = useCallback((source: "manual" | "remote-disconnect") => {
+    if (sessionEndHandledRef.current) return;
+    sessionEndHandledRef.current = true;
+
     const sessionId = credentials?.sessionId;
     if (sessionId) {
-      console.log("[CallPage] Ending session (non-blocking):", sessionId);
+      console.log(`[CallPage] Finalizing session (${source}) (non-blocking):`, sessionId);
       endSessionInBackground(sessionId);
       router.push(`/dashboard/history/${sessionId}`);
       return;
     }
 
     router.push("/dashboard/history");
+  }, [credentials?.sessionId, router]);
+
+  function handleEndCall() {
+    completeSessionAndNavigate("manual");
   }
 
   // Mic permission request state
@@ -476,8 +487,16 @@ export default function CallRoomPage() {
       onDisconnected={() => {
         console.log("[CallPage] Disconnected from LiveKit");
         setCallState("disconnected");
+        completeSessionAndNavigate("remote-disconnect");
       }}
       onError={(error) => {
+        const message = (error?.message || "").toLowerCase();
+        const expectedDisconnect =
+          message.includes("client initiated disconnect") || intentionalDisconnectRef.current;
+        if (expectedDisconnect) {
+          console.debug("[CallPage] Ignoring expected disconnect error:", error.message);
+          return;
+        }
         console.error("[CallPage] LiveKit error:", error);
         setError(error.message);
         setCallState("error");
@@ -486,6 +505,9 @@ export default function CallRoomPage() {
       <CallInterface
         personaName={personaName}
         personaRole={personaRole}
+        onBeforeDisconnect={() => {
+          intentionalDisconnectRef.current = true;
+        }}
         onEndCall={handleEndCall}
       />
     </LiveKitRoom>

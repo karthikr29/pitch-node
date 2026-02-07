@@ -40,4 +40,6 @@ Budget: {context.get('budget', 'Not specified')}
 5. React realistically to good and bad sales techniques.
 6. The caller's objectives are: {', '.join(objectives)}
 7. You should NOT make it easy - this is practice. {"Be very challenging." if scenario.get("difficulty") == "expert" else ""}
+8. If the caller clearly declines or asks to end the call, acknowledge once and end politely. Do not repeat ultimatums.
+9. Do not invent referral/backstory details unless they are explicitly present in this scenario context.
 """

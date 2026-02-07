@@ -270,7 +270,7 @@ export default function PreCallSetupPage() {
             <Badge variant="outline" className="capitalize">
               {scenario.callType.replace("-", " ")}
             </Badge>
-            <Badge variant="outline">Difficulty Level: {getDifficultyDisplayName(scenario.difficulty)}</Badge>
+            <Badge variant="outline">On the Difficulty Level: {getDifficultyDisplayName(scenario.difficulty)}</Badge>
           </div>
         </CardContent>
       </Card>

@@ -285,7 +285,7 @@ export default function PracticeLibraryPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className={diffColor}>
-                          Difficulty Level: {getDifficultyDisplayName(scenario.difficulty)}
+                          On the Difficulty Level: {getDifficultyDisplayName(scenario.difficulty)}
                         </Badge>
                         <Badge variant="outline" className="capitalize">
                           {(scenario.callType || "").replace(/[-_]/g, " ")}
