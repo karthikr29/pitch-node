@@ -166,7 +166,7 @@ export function Personas() {
             <span className="text-primary">For</span>
           </h2>
           <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-            Whether you&apos;re closing deals, pitching investors, or presenting to stakeholders - PitchNode accelerates your growth.
+            Whether you&apos;re closing deals, pitching investors, or presenting to stakeholders - <span className="italic">pitch<span className="text-primary">node</span></span> accelerates your growth.
           </p>
         </motion.div>
 

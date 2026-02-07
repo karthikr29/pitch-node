@@ -2,8 +2,8 @@ import Link from "next/link";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Privacy Policy | PitchNode",
-    description: "Privacy Policy for PitchNode - Learn how we collect, use, and protect your personal information.",
+    title: "Privacy Policy | pitchnode",
+    description: "Privacy Policy for pitchnode - Learn how we collect, use, and protect your personal information.",
 };
 
 export default function PrivacyPolicy() {
@@ -34,7 +34,7 @@ export default function PrivacyPolicy() {
                             1. Introduction
                         </h2>
                         <p>
-                            Welcome to PitchNode (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;). We are committed to protecting your
+                            Welcome to <span className="italic">pitch<span className="text-primary">node</span></span> (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;). We are committed to protecting your
                             privacy and personal information. This Privacy Policy explains how we collect, use,
                             disclose, and safeguard your information when you visit our website and use our
                             AI-powered sales training platform.

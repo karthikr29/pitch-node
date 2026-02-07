@@ -69,13 +69,13 @@ export function ProblemSolution() {
             </span>
           </h2>
           <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-            Traditional training teaches you what to say. PitchNode teaches you how to think on your feet.
+            Traditional training teaches you what to say. <span className="italic">pitch<span className="text-primary">node</span></span> teaches you how to think on your feet.
           </p>
         </motion.div>
 
         {/* Main comparison grid */}
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 mb-16">
-          {/* Without PitchNode */}
+          {/* Without pitchnode */}
           <motion.div
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -95,7 +95,7 @@ export function ProblemSolution() {
                   <X className="w-5 h-5 text-red-500" strokeWidth={2.5} />
                 </div>
                 <span className="text-sm font-semibold text-red-500 uppercase tracking-wider">
-                  Without PitchNode
+                  Without <span className="italic">pitch<span className="text-primary">node</span></span>
                 </span>
               </div>
 
@@ -138,7 +138,7 @@ export function ProblemSolution() {
             </div>
           </motion.div>
 
-          {/* With PitchNode */}
+          {/* With pitchnode */}
           <motion.div
             initial={{ opacity: 0, x: 30 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -158,7 +158,7 @@ export function ProblemSolution() {
                   <Check className="w-5 h-5 text-primary" strokeWidth={2.5} />
                 </div>
                 <span className="text-sm font-semibold text-primary uppercase tracking-wider">
-                  With PitchNode
+                  With <span className="italic">pitch<span className="text-primary">node</span></span>
                 </span>
               </div>
 

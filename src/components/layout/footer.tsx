@@ -30,13 +30,13 @@ export function Footer() {
               <div className="relative w-9 h-9 transition-transform group-hover:scale-105">
                 <Image
                   src="/branding/logo.svg"
-                  alt="PitchNode Logo"
+                  alt="pitchnode Logo"
                   fill
                   className="object-contain"
                 />
               </div>
-              <span className="font-display text-xl font-bold text-text-primary">
-                PitchNode
+              <span className="font-display text-2xl font-bold text-text-primary tracking-[0.15em] italic">
+                pitch<span className="text-primary">node</span>
               </span>
             </Link>
 
@@ -139,7 +139,7 @@ export function Footer() {
         {/* Bottom bar */}
         <div className="mt-12 pt-6 border-t border-border/30 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-text-muted text-xs">
-            © {currentYear} PitchNode. All rights reserved.
+            © {currentYear} pitchnode. All rights reserved.
           </p>
 
           <div className="flex items-center gap-2 text-xs text-text-muted">

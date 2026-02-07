@@ -65,13 +65,13 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             <div className="relative w-8 h-8 transition-transform group-hover:scale-105">
               <Image
                 src="/branding/logo.svg"
-                alt="PitchNode Logo"
+                alt="pitchnode Logo"
                 fill
                 className="object-contain"
               />
             </div>
-            <span className="font-display text-lg font-bold text-foreground">
-              PitchNode
+            <span className="font-display text-xl font-bold text-foreground tracking-[0.15em] italic">
+              pitch<span className="text-primary">node</span>
             </span>
           </Link>
           <button

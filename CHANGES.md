@@ -1,4 +1,4 @@
-# PitchNode - Full Application Build Changelog
+# pitchnode - Full Application Build Changelog
 
 ## Phase 0: Project Setup
 
@@ -42,7 +42,7 @@
 - Public routes: `/`, `/privacy`, `/terms`, API routes
 
 ### 1C. Auth Pages
-- Created `src/app/(auth)/layout.tsx` — Centered card layout with PitchNode branding
+- Created `src/app/(auth)/layout.tsx` — Centered card layout with pitchnode branding
 - Created `src/app/(auth)/login/page.tsx` — Email/password + Google OAuth login
 - Created `src/app/(auth)/signup/page.tsx` — Registration with name, email, password
 - Created `src/app/(auth)/actions.ts` — Server actions: signIn, signUp, signInWithGoogle, signOut

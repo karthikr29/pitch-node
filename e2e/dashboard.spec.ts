@@ -14,7 +14,7 @@ test.describe("Dashboard Navigation", () => {
 test.describe("Public Pages", () => {
   test("home page loads correctly", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveTitle(/PitchNode/);
+    await expect(page).toHaveTitle(/pitchnode/);
   });
 
   test("home page renders hero section", async ({ page }) => {

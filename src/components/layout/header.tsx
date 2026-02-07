@@ -50,7 +50,7 @@ export function Header() {
             >
               <Image
                 src="/branding/logo.svg"
-                alt="PitchNode Logo"
+                alt="pitchnode Logo"
                 fill
                 className="object-contain"
                 priority
@@ -58,11 +58,11 @@ export function Header() {
             </div>
             <span
               className={cn(
-                "font-display font-bold text-text-primary transition-all duration-300",
-                isScrolled ? "text-base" : "text-lg"
+                "font-display font-bold text-text-primary transition-all duration-300 tracking-[0.15em] italic",
+                isScrolled ? "text-lg" : "text-xl"
               )}
             >
-              PitchNode
+              pitch<span className="text-primary">node</span>
             </span>
           </Link>
 

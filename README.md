@@ -1,8 +1,8 @@
-# PitchNode - Landing Page
+# pitchnode - Landing Page
 
 **The Science of Sales Performance**
 
-A modern "Coming Soon" landing page for PitchNode, an AI-powered sales training platform where sales professionals practice live voice conversations against intelligent AI buyer personas.
+A modern "Coming Soon" landing page for pitchnode, an AI-powered sales training platform where sales professionals practice live voice conversations against intelligent AI buyer personas.
 
 ## Features
 

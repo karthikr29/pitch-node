@@ -2,8 +2,8 @@ import Link from "next/link";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Terms of Service | PitchNode",
-    description: "Terms of Service for PitchNode - Read our terms and conditions for using our AI-powered sales training platform.",
+    title: "Terms of Service | pitchnode",
+    description: "Terms of Service for pitchnode - Read our terms and conditions for using our AI-powered sales training platform.",
 };
 
 export default function TermsOfService() {
@@ -34,7 +34,7 @@ export default function TermsOfService() {
                             1. Acceptance of Terms
                         </h2>
                         <p>
-                            By accessing or using PitchNode (&quot;the Service&quot;), you agree to be bound by these
+                            By accessing or using <span className="italic">pitch<span className="text-primary">node</span></span> (&quot;the Service&quot;), you agree to be bound by these
                             Terms of Service. If you do not agree to these terms, please do not use our Service.
                         </p>
                     </section>
@@ -44,7 +44,7 @@ export default function TermsOfService() {
                             2. Description of Service
                         </h2>
                         <p>
-                            PitchNode is an AI-powered sales training platform that enables users to practice
+                            <span className="italic">pitch<span className="text-primary">node</span></span> is an AI-powered sales training platform that enables users to practice
                             sales calls, pitches, and negotiations through realistic AI simulations. Our Service
                             provides:
                         </p>
@@ -105,8 +105,8 @@ export default function TermsOfService() {
                             6. Intellectual Property
                         </h2>
                         <p>
-                            The Service, including all content, features, and functionality, is owned by
-                            PitchNode and protected by intellectual property laws. You may not copy, modify,
+                            The Service, including all content, features, and functionality, is owned by{" "}
+                            <span className="italic">pitch<span className="text-primary">node</span></span> and protected by intellectual property laws. You may not copy, modify,
                             distribute, or create derivative works without our written permission.
                         </p>
                         <p className="mt-4">
@@ -157,7 +157,7 @@ export default function TermsOfService() {
                             10. Limitation of Liability
                         </h2>
                         <p>
-                            To the maximum extent permitted by law, PitchNode shall not be liable for any
+                            To the maximum extent permitted by law, <span className="italic">pitch<span className="text-primary">node</span></span> shall not be liable for any
                             indirect, incidental, special, consequential, or punitive damages arising from
                             your use of the Service.
                         </p>
@@ -168,7 +168,7 @@ export default function TermsOfService() {
                             11. Indemnification
                         </h2>
                         <p>
-                            You agree to indemnify and hold harmless PitchNode and its officers, directors,
+                            You agree to indemnify and hold harmless <span className="italic">pitch<span className="text-primary">node</span></span> and its officers, directors,
                             employees, and agents from any claims, damages, or expenses arising from your
                             use of the Service or violation of these Terms.
                         </p>
