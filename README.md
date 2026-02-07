@@ -16,13 +16,15 @@ A modern "Coming Soon" landing page for pitchnode, an AI-powered sales training 
 
 ## Tech Stack
 
-- **Framework**: Next.js 14+ with App Router
-- **Styling**: Tailwind CSS with CSS custom properties
+- **Framework**: Next.js 16 with App Router + React 19
+- **Styling**: Tailwind CSS v4 + ShadCN/UI
 - **Animations**: Framer Motion
 - **3D Elements**: CSS-based (upgradeable to Spline)
 - **Icons**: Lucide React
 - **Fonts**: Inter + Cabinet Grotesk
-- **Database**: Supabase (PostgreSQL)
+- **Database**: Supabase (PostgreSQL + Auth)
+- **Voice Pipeline**: Pipecat (Python/FastAPI) + LiveKit (WebRTC) + Deepgram (STT) + Cartesia (TTS)
+- **LLM**: OpenRouter (Llama 3.1 70B for conversation, Claude for analysis)
 - **Automation**: n8n webhooks
 
 ## Getting Started
@@ -50,13 +52,36 @@ The app will be available at [http://localhost:3000](http://localhost:3000).
 
 ### Environment Variables
 
-Create a `.env.local` file in the project root with the following variables:
+Create a `.env.local` file in the project root (see `.env.example` for reference):
 
 ```env
+# Supabase
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-WAITLIST_WEBHOOK_URL=your_webhook_url
+
+# LiveKit
+NEXT_PUBLIC_LIVEKIT_URL=wss://your-project.livekit.cloud
+
+# Voice Pipeline (Pipecat backend)
+PIPECAT_SERVICE_URL=http://localhost:8000
+PIPECAT_SERVICE_API_KEY=your_shared_secret
+
+# App
 NEXT_PUBLIC_APP_ENV=development
+```
+
+### Pipecat Voice Backend
+
+The voice pipeline runs as a separate Python/FastAPI service. See [docs/BACKEND_SETUP_GUIDE.md](docs/BACKEND_SETUP_GUIDE.md) for the full setup guide including how to get API keys for LiveKit, Deepgram, Cartesia, and OpenRouter.
+
+Quick start:
+```bash
+cd pipecat-service
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env    # fill in API keys
+uvicorn app.main:app --reload --port 8000
 ```
 
 #### Getting Supabase Credentials
@@ -203,6 +228,38 @@ npm run dev      # Start development server
 npm run build    # Build for production
 npm run start    # Start production server
 npm run lint     # Run ESLint
+```
+
+## Testing
+
+### Frontend Tests (Vitest)
+
+```bash
+npm test              # Run all frontend unit tests
+npm test -- --watch   # Run in watch mode
+```
+
+71 unit tests covering auth, middleware, API routes, analytics, and progress tracking.
+
+### Pipecat Backend Tests (pytest)
+
+```bash
+cd pipecat-service
+./venv/bin/python -m pytest tests/ -v
+```
+
+14 tests covering:
+- **Health check** — server startup and `/health` endpoint
+- **Authentication** — valid key accepted, invalid/missing key rejected
+- **Session start** — room creation, token generation, scenario/persona validation, pipeline startup
+- **Session end** — graceful shutdown, pipeline cancellation
+
+All backend tests use mocked LiveKit and Supabase — no real API keys needed to run them.
+
+### E2E Tests (Playwright)
+
+```bash
+npx playwright test   # Run E2E tests
 ```
 
 ## License

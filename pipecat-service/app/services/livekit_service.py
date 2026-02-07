@@ -1,6 +1,7 @@
 import asyncio
 from typing import Optional
 from livekit.api import LiveKitAPI, AccessToken, VideoGrants
+from livekit.protocol.room import CreateRoomRequest
 
 from app.config import settings
 from app.pipelines.sales_pipeline import create_sales_pipeline
@@ -15,18 +16,23 @@ class LiveKitService:
             api_key=settings.LIVEKIT_API_KEY,
             api_secret=settings.LIVEKIT_API_SECRET,
         )
-        await api.room.create_room(name=room_name)
+        try:
+            await api.room.create_room(CreateRoomRequest(name=room_name))
+        finally:
+            await api.aclose()
 
-        token = AccessToken(
-            api_key=settings.LIVEKIT_API_KEY,
-            api_secret=settings.LIVEKIT_API_SECRET,
+        token = (
+            AccessToken(
+                api_key=settings.LIVEKIT_API_KEY,
+                api_secret=settings.LIVEKIT_API_SECRET,
+            )
+            .with_identity(participant_name)
+            .with_name(participant_name)
+            .with_grants(VideoGrants(
+                room_join=True,
+                room=room_name,
+            ))
         )
-        token.identity = participant_name
-        token.name = participant_name
-        token.add_grant(VideoGrants(
-            room_join=True,
-            room=room_name,
-        ))
 
         return token.to_jwt()
 

@@ -132,7 +132,7 @@ All 11 tables have RLS enabled. Indexes on user_id, session_id, created_at.
 ### 3A. Pipecat Backend Service (`pipecat-service/`)
 - FastAPI entry point with CORS middleware
 - API key-protected endpoints: `POST /sessions/start`, `POST /sessions/{id}/end`, `GET /health`
-- LiveKit service: room creation, token generation, pipeline lifecycle management
+- LiveKit service: room creation via `CreateRoomRequest`, token generation via builder pattern (`with_identity`, `with_name`, `with_grants`), pipeline lifecycle management
 - Supabase service: scenario/persona fetching, transcript saving, analytics storage
 - Analysis service: post-call scoring via OpenRouter (Claude 3.5 Sonnet)
 - Pipeline architecture: Deepgram STT -> OpenRouter LLM -> Cartesia TTS (placeholder)
@@ -170,7 +170,7 @@ All 11 tables have RLS enabled. Indexes on user_id, session_id, created_at.
 
 ## Testing
 
-### Unit Tests (71 tests, 10 files)
+### Frontend Unit Tests (71 tests, 10 files)
 - `src/lib/supabase/__tests__/client.test.ts` — Client factory creation
 - `src/middleware.test.ts` — Route protection logic (7 tests)
 - `src/app/(auth)/__tests__/auth-actions.test.ts` — Server actions (7 tests)
@@ -181,6 +181,13 @@ All 11 tables have RLS enabled. Indexes on user_id, session_id, created_at.
 - `src/app/api/__tests__/voice.test.ts` — Voice API (10 tests)
 - `src/app/api/__tests__/analytics.test.ts` — Analytics API (3 tests)
 - `src/lib/__tests__/progress.test.ts` — Progress tracking + achievements (20 tests)
+
+### Pipecat Backend Tests (14 tests, 1 file)
+- `pipecat-service/tests/test_api.py` — FastAPI endpoint tests with mocked LiveKit + Supabase
+  - Health check: `/health` and `/api/v1/health` (2 tests)
+  - Authentication: valid key accepted, invalid key rejected, missing key rejected (3 tests)
+  - Session start: returns token + room, fetches scenario/persona, 404 on missing data, validates body, starts pipeline (6 tests)
+  - Session end: returns success, calls stop_pipeline, requires auth (3 tests)
 
 ### E2E Tests (2 files)
 - `e2e/auth.spec.ts` — Auth flow (redirect, login page render, navigation)
