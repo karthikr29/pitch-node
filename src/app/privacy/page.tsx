@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Privacy Policy | pitchnode",
+    title: "Privacy Policy",
     description: "Privacy Policy for pitchnode - Learn how we collect, use, and protect your personal information.",
 };
 

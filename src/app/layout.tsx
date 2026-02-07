@@ -36,7 +36,10 @@ const cabinetGrotesk = localFont({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://pitchnode.io"),
-  title: "pitchnode - Master Every Sales Conversation",
+  title: {
+    default: "pitchnode - Master Every Sales Conversation",
+    template: "%s | pitchnode",
+  },
   description:
     "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
   keywords: [
@@ -71,15 +74,25 @@ export const metadata: Metadata = {
     url: "https://pitchnode.io",
     siteName: "pitchnode",
     locale: "en_US",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "pitchnode - Master Every Sales Conversation",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "pitchnode - Master Every Sales Conversation",
     description:
       "Practice live sales calls and pitches against AI opponents. Map every response. Master objections.",
+    images: ["/opengraph-image"],
   },
   icons: {
     icon: "/favicon.ico",
+    apple: "/favicon.ico",
   },
 };
 
@@ -91,6 +104,39 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* JSON-LD Structured Data */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@graph": [
+                {
+                  "@type": "Organization",
+                  name: "pitchnode",
+                  url: "https://pitchnode.io",
+                  logo: "https://pitchnode.io/branding/logo.svg",
+                  description:
+                    "AI-powered sales training platform. Practice live sales calls and master every conversation.",
+                },
+                {
+                  "@type": "WebApplication",
+                  name: "pitchnode",
+                  url: "https://pitchnode.io",
+                  applicationCategory: "BusinessApplication",
+                  operatingSystem: "Web",
+                  description:
+                    "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
+                  offers: {
+                    "@type": "Offer",
+                    price: "0",
+                    priceCurrency: "USD",
+                  },
+                },
+              ],
+            }),
+          }}
+        />
         {/* Prevent flash of wrong theme */}
         <script
           dangerouslySetInnerHTML={{

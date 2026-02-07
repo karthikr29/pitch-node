@@ -10,6 +10,11 @@ Sitemap: https://pitchnode.io/sitemap.xml
 # Disallow API routes
 Disallow: /api/
 
+# Disallow auth and dashboard routes
+Disallow: /login
+Disallow: /signup
+Disallow: /dashboard
+
 # Allow search engines to crawl all public pages
 Allow: /privacy
 Allow: /terms
