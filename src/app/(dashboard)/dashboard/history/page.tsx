@@ -29,7 +29,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { Clock, Eye, Filter, Mic, Zap, ArrowRight } from "lucide-react";
+import { Clock, Eye, Filter, Loader2, Mic, Zap, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -38,9 +38,12 @@ interface Session {
   date: string;
   scenarioName: string;
   personaName: string;
-  score: number;
+  score: number | null; // null = analysis pending
+  analysisReady: boolean;
   duration: number; // seconds
   callType: string;
+  whatYouSell: string | null;
+  targetAudience: string | null;
 }
 
 function formatDuration(seconds: number) {
@@ -82,7 +85,7 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [callTypeFilter, setCallTypeFilter] = useState("all");
+  const [callTypeFilter, setCallTypeFilter] = useState("pitch");
 
   const fetchSessions = useCallback(async () => {
     setLoading(true);
@@ -112,6 +115,14 @@ export default function HistoryPage() {
     fetchSessions();
   }, [fetchSessions]);
 
+  // Poll every 5s while any session is still being analyzed
+  useEffect(() => {
+    const hasPending = sessions.some((s) => !s.analysisReady);
+    if (!hasPending) return;
+    const timer = setInterval(() => { fetchSessions(); }, 5000);
+    return () => clearInterval(timer);
+  }, [sessions, fetchSessions]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between">
@@ -137,12 +148,13 @@ export default function HistoryPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="discovery">Discovery</SelectItem>
-              <SelectItem value="demo">Demo</SelectItem>
-              <SelectItem value="negotiation">Negotiation</SelectItem>
-              <SelectItem value="cold-call">Cold Call</SelectItem>
-              <SelectItem value="follow-up">Follow-Up</SelectItem>
-              <SelectItem value="closing">Closing</SelectItem>
+              <SelectItem value="pitch">Pitch</SelectItem>
+              <SelectItem value="cold-call" disabled>Cold Call — Soon</SelectItem>
+              <SelectItem value="discovery" disabled>Discovery — Soon</SelectItem>
+              <SelectItem value="demo" disabled>Demo — Soon</SelectItem>
+              <SelectItem value="negotiation" disabled>Negotiation — Soon</SelectItem>
+              <SelectItem value="follow-up" disabled>Follow-Up — Soon</SelectItem>
+              <SelectItem value="closing" disabled>Closing — Soon</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -211,29 +223,40 @@ export default function HistoryPage() {
                 <Card className="hover:shadow-md hover:border-primary/30 transition-all group">
                   <CardContent className="py-3.5 px-4">
                     <div className="flex items-center gap-3">
-                      <div
-                        className={cn(
-                          "shrink-0 h-11 w-11 rounded-xl flex flex-col items-center justify-center ring-1",
-                          getScoreBg(session.score),
-                          getScoreRing(session.score)
-                        )}
-                      >
-                        <span
+                      {!session.analysisReady ? (
+                        <div className="shrink-0 h-11 w-11 rounded-xl flex flex-col items-center justify-center bg-muted/60 ring-1 ring-border">
+                          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : (
+                        <div
                           className={cn(
-                            "text-sm font-bold tabular-nums leading-none",
-                            getScoreColor(session.score)
+                            "shrink-0 h-11 w-11 rounded-xl flex flex-col items-center justify-center ring-1",
+                            getScoreBg(session.score ?? 0),
+                            getScoreRing(session.score ?? 0)
                           )}
                         >
-                          {session.score}
-                        </span>
-                        <span className="text-[9px] text-muted-foreground mt-0.5">
-                          {getLetterGrade(session.score)}
-                        </span>
-                      </div>
+                          <span
+                            className={cn(
+                              "text-sm font-bold tabular-nums leading-none",
+                              getScoreColor(session.score ?? 0)
+                            )}
+                          >
+                            {session.score}
+                          </span>
+                          <span className="text-[9px] text-muted-foreground mt-0.5">
+                            {getLetterGrade(session.score ?? 0)}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm text-foreground truncate group-hover:text-primary transition-colors">
                           {session.scenarioName}
                         </p>
+                        {session.whatYouSell && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {session.whatYouSell}{session.targetAudience ? ` → ${session.targetAudience}` : ""}
+                          </p>
+                        )}
                         <div className="flex items-center gap-1.5 mt-1">
                           <span className="text-xs text-muted-foreground">
                             {format(new Date(session.date), "MMM d, h:mm a")}
@@ -297,35 +320,48 @@ export default function HistoryPage() {
                           >
                             {(session.callType || "").replace(/[-_]/g, " ")}
                           </Badge>
+                          {session.whatYouSell && (
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2 max-w-[240px]">
+                              Selling: {session.whatYouSell}
+                              {session.targetAudience ? ` → ${session.targetAudience}` : ""}
+                            </p>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                         {session.personaName}
                       </TableCell>
                       <TableCell>
-                        <div
-                          className={cn(
-                            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg",
-                            getScoreBg(session.score)
-                          )}
-                        >
-                          <span
+                        {!session.analysisReady ? (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted/60">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">Analyzing...</span>
+                          </div>
+                        ) : (
+                          <div
                             className={cn(
-                              "font-bold text-sm tabular-nums",
-                              getScoreColor(session.score)
+                              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg",
+                              getScoreBg(session.score ?? 0)
                             )}
                           >
-                            {session.score}%
-                          </span>
-                          <span
-                            className={cn(
-                              "text-xs font-semibold",
-                              getScoreColor(session.score)
-                            )}
-                          >
-                            {getLetterGrade(session.score)}
-                          </span>
-                        </div>
+                            <span
+                              className={cn(
+                                "font-bold text-sm tabular-nums",
+                                getScoreColor(session.score ?? 0)
+                              )}
+                            >
+                              {session.score}%
+                            </span>
+                            <span
+                              className={cn(
+                                "text-xs font-semibold",
+                                getScoreColor(session.score ?? 0)
+                              )}
+                            >
+                              {getLetterGrade(session.score ?? 0)}
+                            </span>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground tabular-nums">
                         {formatDuration(session.duration)}

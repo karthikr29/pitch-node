@@ -14,6 +14,6 @@ class Settings:
     SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     CONVERSATION_MODEL: str = os.getenv("CONVERSATION_MODEL", "meta-llama/llama-3.1-70b-instruct")
     CONVERSATION_FALLBACK_MODEL: str = os.getenv("CONVERSATION_FALLBACK_MODEL", "")
-    ANALYSIS_MODEL: str = os.getenv("ANALYSIS_MODEL", "anthropic/claude-opus-4.6")
+    ANALYSIS_MODEL: str = os.getenv("ANALYSIS_MODEL", "moonshotai/kimi-k2.5")
 
 settings = Settings()

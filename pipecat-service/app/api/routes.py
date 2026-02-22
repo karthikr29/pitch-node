@@ -2,7 +2,10 @@ from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel
 from typing import Optional
 import os
+import httpx
+import json as _json
 
+from app.config import settings
 from app.services.livekit_service import LiveKitService
 from app.services.supabase_service import SupabaseService
 
@@ -15,16 +18,71 @@ def verify_api_key(authorization: str = Header(...)):
     if authorization != expected:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
+class InferRoleRequest(BaseModel):
+    what_you_sell: str = ""
+    target_audience: str = ""
+    pitch_context: str = ""
+
+
 class StartSessionRequest(BaseModel):
     session_id: str
     room_name: str
     scenario_id: str
     persona_id: str
     user_id: str
+    pitch_context: str = ""
+    pitch_briefing: Optional[dict] = None
+    inferred_role: Optional[str] = None
 
 class StartSessionResponse(BaseModel):
     token: str
     room_name: str
+
+@router.post("/infer-role")
+async def infer_role(req: InferRoleRequest, _=Depends(verify_api_key)):
+    if req.what_you_sell and req.target_audience:
+        prompt = (
+            f"Someone is selling: {req.what_you_sell}\n"
+            f"Their target market: {req.target_audience}\n\n"
+            "List 3 realistic job titles of decision-makers they would typically pitch to.\n"
+            'Reply with ONLY a JSON array of 3 strings. Example: ["VP of Sales", "Director of Revenue", "Chief Revenue Officer"]'
+        )
+    elif req.pitch_context:
+        prompt = (
+            f"Someone is selling the following: {req.pitch_context}\n\n"
+            "List 3 realistic job titles of decision-makers they would typically pitch to.\n"
+            'Reply with ONLY a JSON array of 3 strings. Example: ["VP of Sales", "Director of Revenue", "Chief Revenue Officer"]'
+        )
+    else:
+        return {"roles": []}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": settings.CONVERSATION_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.3,
+                "max_tokens": 80,
+            },
+        )
+        result = response.json()
+
+    raw = result["choices"][0]["message"]["content"].strip()
+    try:
+        roles = _json.loads(raw)
+        if not isinstance(roles, list) or len(roles) == 0:
+            raise ValueError
+        roles = [str(r).strip() for r in roles[:3]]
+    except Exception:
+        roles = [raw] if raw else ["Decision Maker"]
+
+    return {"roles": roles}
+
 
 @router.post("/sessions/start", response_model=StartSessionResponse)
 async def start_session(req: StartSessionRequest, _=Depends(verify_api_key)):
@@ -48,6 +106,9 @@ async def start_session(req: StartSessionRequest, _=Depends(verify_api_key)):
         session_id=req.session_id,
         scenario=scenario,
         persona=persona,
+        pitch_context=req.pitch_context,
+        pitch_briefing=req.pitch_briefing,
+        inferred_role=req.inferred_role,
     )
 
     return StartSessionResponse(token=token, room_name=req.room_name)

@@ -1,3 +1,5 @@
+import random
+
 from supabase import create_client, Client
 from datetime import datetime, timezone
 from loguru import logger
@@ -17,7 +19,14 @@ class SupabaseService:
     async def get_persona(self, persona_id: str) -> dict | None:
         try:
             result = self.client.table("personas").select("*").eq("id", persona_id).single().execute()
-            return result.data
+            persona = result.data
+            if persona:
+                variants = persona.get("voice_variants") or []
+                if variants and persona.get("cartesia_voice_id"):
+                    all_voices = [persona["cartesia_voice_id"]] + list(variants)
+                    persona["cartesia_voice_id"] = random.choice(all_voices)
+                    logger.info(f"Selected voice variant: {persona['cartesia_voice_id']} for persona {persona['name']}")
+            return persona
         except Exception:
             return None
 

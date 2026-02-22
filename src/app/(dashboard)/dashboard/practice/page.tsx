@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   type LucideIcon,
@@ -15,8 +14,9 @@ import {
   Phone,
   MailCheck,
   BadgeCheck,
+  Megaphone,
   ArrowRight,
-  Sparkles,
+  ShieldAlert,
 } from "lucide-react";
 
 interface Scenario {
@@ -36,6 +36,8 @@ const callTypeIcons: Record<string, LucideIcon> = {
   "follow-up": MailCheck,
   "follow_up": MailCheck,
   closing: BadgeCheck,
+  objection: ShieldAlert,
+  pitch: Megaphone,
 };
 
 const callTypeColors: Record<string, string> = {
@@ -47,6 +49,8 @@ const callTypeColors: Record<string, string> = {
   "follow-up": "text-teal-500",
   "follow_up": "text-teal-500",
   closing: "text-red-500",
+  objection: "text-amber-500",
+  pitch: "text-cyan-500",
 };
 
 const callTypeBgColors: Record<string, string> = {
@@ -58,6 +62,8 @@ const callTypeBgColors: Record<string, string> = {
   "follow-up": "bg-teal-500/8 dark:bg-teal-500/15",
   "follow_up": "bg-teal-500/8 dark:bg-teal-500/15",
   closing: "bg-red-500/8 dark:bg-red-500/15",
+  objection: "bg-amber-500/8 dark:bg-amber-500/15",
+  pitch: "bg-cyan-500/8 dark:bg-cyan-500/15",
 };
 
 const difficultyColors: Record<string, string> = {
@@ -87,13 +93,14 @@ function getDifficultyDisplayName(difficulty: string): string {
 }
 
 const filterOptions = [
-  { value: "all", label: "All" },
-  { value: "discovery", label: "Discovery" },
-  { value: "demo", label: "Demo" },
-  { value: "negotiation", label: "Negotiation" },
-  { value: "cold-call", label: "Cold Call" },
-  { value: "follow-up", label: "Follow-Up" },
-  { value: "closing", label: "Closing" },
+  { value: "pitch", label: "Pitch", enabled: true },
+  { value: "cold-call", label: "Cold Call", enabled: false },
+  { value: "discovery", label: "Discovery", enabled: false },
+  { value: "demo", label: "Demo", enabled: false },
+  { value: "negotiation", label: "Negotiation", enabled: false },
+  { value: "follow-up", label: "Follow-Up", enabled: false },
+  { value: "closing", label: "Closing", enabled: false },
+  { value: "objection", label: "Objection Handling", enabled: false },
 ];
 
 // Fallback scenarios when API is not available
@@ -140,12 +147,40 @@ const fallbackScenarios: Scenario[] = [
     callType: "closing",
     difficulty: "Expert",
   },
+  {
+    id: "pitch-easy-1",
+    title: "Product Pitch - Easy",
+    description: "Deliver a clear product pitch to a curious stakeholder who asks light clarifying questions.",
+    callType: "pitch",
+    difficulty: "Easy",
+  },
+  {
+    id: "pitch-medium-1",
+    title: "Product Pitch - Medium",
+    description: "Pitch your product to a practical buyer who asks moderate, business-focused follow-up questions.",
+    callType: "pitch",
+    difficulty: "Medium",
+  },
+  {
+    id: "pitch-hard-1",
+    title: "Product Pitch - Hard",
+    description: "Defend your pitch against a skeptical decision-maker who probes assumptions and edge cases.",
+    callType: "pitch",
+    difficulty: "Hard",
+  },
+  {
+    id: "pitch-expert-1",
+    title: "Product Pitch - Expert",
+    description: "Handle an intense pitch review where every claim is tested with deep, high-pressure questioning.",
+    callType: "pitch",
+    difficulty: "Expert",
+  },
 ];
 
 export default function PracticeLibraryPage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("pitch");
 
   useEffect(() => {
     async function fetchScenarios() {
@@ -166,12 +201,9 @@ export default function PracticeLibraryPage() {
     fetchScenarios();
   }, []);
 
-  const filteredScenarios =
-    filter === "all"
-      ? scenarios
-      : scenarios.filter(
-          (s) => s.callType === filter || s.callType === filter.replace("-", "_")
-        );
+  const filteredScenarios = scenarios.filter(
+    (s) => s.callType === filter || s.callType === filter.replace("-", "_")
+  );
 
   if (loading) {
     return (
@@ -185,8 +217,8 @@ export default function PracticeLibraryPage() {
             <Skeleton key={i} className="h-8 w-20 rounded-full" />
           ))}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}>
               <CardContent className="pt-6 space-y-4">
                 <Skeleton className="h-10 w-10 rounded-lg" />
@@ -214,19 +246,27 @@ export default function PracticeLibraryPage() {
       </div>
 
       {/* Filter pills */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {filterOptions.map((opt) => (
           <button
             key={opt.value}
-            onClick={() => setFilter(opt.value)}
+            onClick={() => opt.enabled && setFilter(opt.value)}
+            disabled={!opt.enabled}
             className={cn(
-              "px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer",
-              filter === opt.value
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
+              "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all",
+              !opt.enabled
+                ? "bg-muted/50 text-muted-foreground/40 cursor-not-allowed"
+                : filter === opt.value
+                  ? "bg-primary text-primary-foreground shadow-sm cursor-pointer"
+                  : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 cursor-pointer"
             )}
           >
             {opt.label}
+            {!opt.enabled && (
+              <span className="text-[9px] font-semibold uppercase tracking-wider opacity-70">
+                Soon
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -239,24 +279,12 @@ export default function PracticeLibraryPage() {
             </div>
             <p className="font-medium text-foreground">No scenarios found</p>
             <p className="text-sm text-muted-foreground mt-1">
-              {filter !== "all"
-                ? "Try a different filter to find scenarios."
-                : "Check back later for new practice scenarios."}
+              Check back later for new practice scenarios.
             </p>
-            {filter !== "all" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-3"
-                onClick={() => setFilter("all")}
-              >
-                Clear filter
-              </Button>
-            )}
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {filteredScenarios.map((scenario) => {
             const Icon = callTypeIcons[scenario.callType] || Phone;
             const iconColor = callTypeColors[scenario.callType] || "text-primary";

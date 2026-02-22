@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 const mockGetUser = vi.fn();
 const mockInsert = vi.fn();
 const mockSelectSingle = vi.fn();
+const mockScenarioSingle = vi.fn();
 const mockUpdate = vi.fn();
 const mockEq = vi.fn();
 const mockFrom = vi.fn();
@@ -33,15 +34,31 @@ describe("Voice API - create-room", () => {
       data: { id: "session-1", livekit_room_name: "room-1" },
       error: null,
     });
+    mockScenarioSingle.mockResolvedValue({
+      data: { id: "s1", call_type: "discovery" },
+      error: null,
+    });
     mockInsert.mockReturnValue({ select: () => ({ single: () => mockSelectSingle() }) });
     mockUpdate.mockReturnValue({ eq: mockEq });
     mockEq.mockResolvedValue({ data: null, error: null });
-    mockFrom.mockReturnValue({
-      insert: mockInsert,
-      update: (...args: unknown[]) => {
-        mockUpdate(...args);
-        return { eq: mockEq };
-      },
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "scenarios") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: () => mockScenarioSingle(),
+            }),
+          }),
+        };
+      }
+
+      return {
+        insert: mockInsert,
+        update: (...args: unknown[]) => {
+          mockUpdate(...args);
+          return { eq: mockEq };
+        },
+      };
     });
   });
 
@@ -139,6 +156,71 @@ describe("Voice API - create-room", () => {
     const response = await POST(request);
 
     expect(response.status).toBe(502);
+  });
+
+  it("returns 400 for pitch scenario when pitchBriefing is missing", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+    mockScenarioSingle.mockResolvedValue({
+      data: { id: "pitch-scenario-1", call_type: "pitch" },
+      error: null,
+    });
+
+    const { POST } = await import("@/app/api/voice/create-room/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/create-room", {
+      method: "POST",
+      body: JSON.stringify({ scenarioId: "pitch-scenario-1", personaId: "p1" }),
+    });
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toContain("pitchBriefing");
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it("accepts valid pitchBriefing and forwards pitch_briefing to pipecat", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+    mockScenarioSingle.mockResolvedValue({
+      data: { id: "pitch-scenario-1", call_type: "pitch" },
+      error: null,
+    });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ token: "lk-token-123" }),
+    });
+
+    const { POST } = await import("@/app/api/voice/create-room/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/create-room", {
+      method: "POST",
+      body: JSON.stringify({
+        scenarioId: "pitch-scenario-1",
+        personaId: "p1",
+        pitchBriefing: {
+          whatYouSell: "AI outbound assistant",
+          targetAudience: "B2B SaaS sales leaders",
+          problemSolved: "Low conversion from outbound sequences",
+          valueProposition: "More qualified meetings with less manual effort",
+          callGoal: "Secure agreement for a pilot",
+          additionalNotes: "Competing against in-house workflow",
+        },
+      }),
+    });
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    const forwardedPayload = JSON.parse(
+      (mockFetch.mock.calls[0][1] as { body: string }).body
+    ) as Record<string, unknown>;
+    expect(forwardedPayload.pitch_briefing).toMatchObject({
+      whatYouSell: "AI outbound assistant",
+      callGoal: "Secure agreement for a pilot",
+    });
+    expect(typeof forwardedPayload.pitch_context).toBe("string");
+    expect((forwardedPayload.pitch_context as string).length).toBeGreaterThan(0);
   });
 
   it("returns 503 when pipecat service is unavailable", async () => {

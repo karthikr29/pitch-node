@@ -33,3 +33,75 @@ export function validatePhone(phone: string): { valid: boolean; error?: string }
   }
   return { valid: true };
 }
+
+export interface PitchBriefing {
+  whatYouSell: string;
+  targetAudience: string;
+  problemSolved: string;
+  valueProposition: string;
+  callGoal: string;
+  additionalNotes?: string;
+}
+
+export interface PitchBriefingValidationResult {
+  valid: boolean;
+  errors: string[];
+  value?: PitchBriefing;
+}
+
+const pitchRequiredFields: Array<keyof PitchBriefing> = [
+  "whatYouSell",
+  "targetAudience",
+  "problemSolved",
+  "valueProposition",
+  "callGoal",
+];
+
+export function validatePitchBriefing(input: unknown): PitchBriefingValidationResult {
+  if (!input || typeof input !== "object") {
+    return { valid: false, errors: ["pitchBriefing is required for pitch calls"] };
+  }
+
+  const raw = input as Record<string, unknown>;
+  const errors: string[] = [];
+
+  const normalize = (value: unknown): string =>
+    typeof value === "string" ? value.trim() : "";
+
+  const briefing: PitchBriefing = {
+    whatYouSell: normalize(raw.whatYouSell),
+    targetAudience: normalize(raw.targetAudience),
+    problemSolved: normalize(raw.problemSolved),
+    valueProposition: normalize(raw.valueProposition),
+    callGoal: normalize(raw.callGoal),
+    additionalNotes: normalize(raw.additionalNotes) || undefined,
+  };
+
+  for (const field of pitchRequiredFields) {
+    if (!briefing[field]) {
+      errors.push(`${field} is required for pitch calls`);
+    }
+  }
+
+  if (errors.length > 0) {
+    return { valid: false, errors };
+  }
+
+  return { valid: true, errors: [], value: briefing };
+}
+
+export function buildPitchContextFromBriefing(briefing: PitchBriefing): string {
+  const lines = [
+    `What we sell: ${briefing.whatYouSell}`,
+    `Target audience: ${briefing.targetAudience}`,
+    `Problem solved: ${briefing.problemSolved}`,
+    `Key value proposition: ${briefing.valueProposition}`,
+    `Call goal: ${briefing.callGoal}`,
+  ];
+
+  if (briefing.additionalNotes) {
+    lines.push(`Additional notes: ${briefing.additionalNotes}`);
+  }
+
+  return lines.join("\n");
+}

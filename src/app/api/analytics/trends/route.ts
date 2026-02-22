@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const days = parseInt(request.nextUrl.searchParams.get("days") || "30");
+  const days = parseInt(request.nextUrl.searchParams.get("days") || "365");
   const since = new Date();
   since.setDate(since.getDate() - days);
 
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
   }
   const now = new Date();
   const activity = [];
-  for (let i = 83; i >= 0; i--) {
+  for (let i = 364; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().split("T")[0];
