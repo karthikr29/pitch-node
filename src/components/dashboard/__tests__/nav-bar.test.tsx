@@ -57,9 +57,9 @@ describe("NavBar", () => {
     const links = screen.getAllByRole("link");
     const hrefs = links.map((l) => l.getAttribute("href"));
     expect(hrefs).toContain("/dashboard");
-    expect(hrefs).toContain("/dashboard/practice");
-    expect(hrefs).toContain("/dashboard/history");
-    expect(hrefs).toContain("/dashboard/analytics");
+    expect(hrefs).toContain("/practice");
+    expect(hrefs).toContain("/history");
+    expect(hrefs).toContain("/analytics");
   });
 
   it("renders theme toggle", () => {
@@ -91,7 +91,7 @@ describe("NavBar", () => {
   });
 
   it("highlights the active nav link based on pathname", () => {
-    mockPathname.mockReturnValue("/dashboard/practice");
+    mockPathname.mockReturnValue("/practice");
     render(<NavBar />);
 
     // The Practice link in the desktop nav should have the active class

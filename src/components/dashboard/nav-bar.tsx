@@ -33,9 +33,9 @@ import {
 
 const navItems = [
   { label: "Home", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Practice", href: "/dashboard/practice", icon: Mic },
-  { label: "History", href: "/dashboard/history", icon: Clock },
-  { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+  { label: "Practice", href: "/practice", icon: Mic },
+  { label: "History", href: "/history", icon: Clock },
+  { label: "Analytics", href: "/analytics", icon: BarChart3 },
 ];
 
 function getInitials(name: string | undefined): string {
@@ -138,7 +138,7 @@ export function NavBar() {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/settings" className="cursor-pointer">
+                <Link href="/settings" className="cursor-pointer">
                   <Settings className="w-4 h-4 mr-2" />
                   Settings
                 </Link>

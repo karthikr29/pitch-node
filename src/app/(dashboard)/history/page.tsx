@@ -87,8 +87,8 @@ export default function HistoryPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [callTypeFilter, setCallTypeFilter] = useState("pitch");
 
-  const fetchSessions = useCallback(async () => {
-    setLoading(true);
+  const fetchSessions = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -119,7 +119,7 @@ export default function HistoryPage() {
   useEffect(() => {
     const hasPending = sessions.some((s) => !s.analysisReady);
     if (!hasPending) return;
-    const timer = setInterval(() => { fetchSessions(); }, 5000);
+    const timer = setInterval(() => { fetchSessions(true); }, 5000);
     return () => clearInterval(timer);
   }, [sessions, fetchSessions]);
 
@@ -203,7 +203,7 @@ export default function HistoryPage() {
                 </Button>
               )}
               <Button size="sm" asChild>
-                <Link href="/dashboard/practice">
+                <Link href="/practice">
                   <Zap className="w-3.5 h-3.5 mr-1.5" />
                   Start Practicing
                 </Link>
@@ -218,7 +218,7 @@ export default function HistoryPage() {
             {sessions.map((session) => (
               <Link
                 key={session.id}
-                href={`/dashboard/history/${session.id}`}
+                href={`/history/${session.id}`}
               >
                 <Card className="hover:shadow-md hover:border-primary/30 transition-all group">
                   <CardContent className="py-3.5 px-4">
@@ -373,7 +373,7 @@ export default function HistoryPage() {
                           className="opacity-70 group-hover:opacity-100 transition-opacity"
                           asChild
                         >
-                          <Link href={`/dashboard/history/${session.id}`}>
+                          <Link href={`/history/${session.id}`}>
                             <Eye className="w-4 h-4 mr-1" />
                             Review
                           </Link>

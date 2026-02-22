@@ -450,11 +450,11 @@ export default function CallRoomPage() {
     if (sessionId) {
       console.log(`[CallPage] Finalizing session (${source}) (non-blocking):`, sessionId);
       endSessionInBackground(sessionId);
-      router.push(`/dashboard/history/${sessionId}`);
+      router.push(`/history/${sessionId}`);
       return;
     }
 
-    router.push("/dashboard/history");
+    router.push("/history");
   }, [credentials?.sessionId, router]);
 
   function handleEndCall() {

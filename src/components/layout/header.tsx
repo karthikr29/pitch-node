@@ -7,9 +7,11 @@ import { useState } from "react";
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/auth-context";
 
 export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
+  const { user, loading } = useAuth();
   const { scrollY } = useScroll();
 
   useMotionValueEvent(scrollY, "change", (latest) => {
@@ -100,13 +102,17 @@ export function Header() {
           {/* Right side */}
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <Button
-              size="sm"
-              asChild
-              className="hidden sm:inline-flex"
-            >
-              <Link href="/login">Login</Link>
-            </Button>
+            {!loading && (
+              user ? (
+                <Button size="sm" asChild className="hidden sm:inline-flex">
+                  <Link href="/dashboard">Dashboard</Link>
+                </Button>
+              ) : (
+                <Button size="sm" asChild className="hidden sm:inline-flex">
+                  <Link href="/login">Login</Link>
+                </Button>
+              )
+            )}
           </div>
         </div>
       </div>

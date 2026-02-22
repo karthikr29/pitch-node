@@ -19,9 +19,14 @@ export async function updateSession(request: NextRequest) {
   );
   const { data: { user } } = await supabase.auth.getUser();
   const isAuthPage = request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/signup");
-  const isDashboard = request.nextUrl.pathname.startsWith("/dashboard");
+  const isProtected =
+    request.nextUrl.pathname.startsWith("/dashboard") ||
+    request.nextUrl.pathname.startsWith("/practice") ||
+    request.nextUrl.pathname.startsWith("/history") ||
+    request.nextUrl.pathname.startsWith("/analytics") ||
+    request.nextUrl.pathname.startsWith("/settings");
 
-  if (!user && isDashboard) {
+  if (!user && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

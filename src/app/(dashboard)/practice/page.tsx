@@ -294,7 +294,7 @@ export default function PracticeLibraryPage() {
             return (
               <Link
                 key={scenario.id}
-                href={`/dashboard/practice/${scenario.id}`}
+                href={`/practice/${scenario.id}`}
               >
                 <Card className="hover:shadow-lg hover:translate-y-[-2px] hover:border-primary/40 transition-all duration-200 cursor-pointer group h-full">
                   <CardHeader className="pb-3">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
+  Loader2,
   MessageSquare,
   Star,
   TrendingUp,
@@ -34,7 +35,7 @@ interface Highlight {
 }
 
 interface Metrics {
-  discovery: number;
+  activeListening: number;
   objectionHandling: number;
   closing: number;
   rapport: number;
@@ -109,7 +110,7 @@ const fallbackSession: SessionDetail = {
   callType: "discovery",
   overallScore: 72,
   metrics: {
-    discovery: 78,
+    activeListening: 78,
     objectionHandling: 65,
     closing: 70,
     rapport: 75,
@@ -176,11 +177,37 @@ const fallbackSession: SessionDetail = {
   ],
 };
 
+function transformApiData(data: Record<string, unknown>, sessionId: string): SessionDetail {
+  return {
+    id: (data.id as string) || sessionId,
+    scenarioName: ((data.scenario as Record<string, unknown>)?.title as string) || "Practice Session",
+    personaName: ((data.persona as Record<string, unknown>)?.name as string) || "AI Prospect",
+    date: (data.createdAt as string) || (data.startedAt as string) || new Date().toISOString(),
+    duration: (data.durationSeconds as number) || 0,
+    callType: ((data.scenario as Record<string, unknown>)?.callType as string) || "discovery",
+    overallScore: ((data.analytics as Record<string, unknown>)?.overallScore as number) ?? 0,
+    metrics: ((data.analytics as Record<string, unknown>)?.metrics as Metrics) || {
+      activeListening: 0,
+      objectionHandling: 0,
+      closing: 0,
+      rapport: 0,
+    },
+    transcript: ((data.transcripts as Record<string, unknown>[]) || []).map((t) => ({
+      speaker: t.speaker as "user" | "ai",
+      text: (t.content as string) || "",
+      timestamp: formatTimestamp((t.timestampMs as number) || 0),
+    })),
+    highlights: ((data.analytics as Record<string, unknown>)?.highlightMoments as Highlight[]) || [],
+    suggestions: ((data.analytics as Record<string, unknown>)?.improvementSuggestions as string[]) || [],
+  };
+}
+
 export default function SessionReviewPage() {
   const params = useParams();
   const sessionId = params.sessionId as string;
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [analysisReady, setAnalysisReady] = useState(false);
 
   useEffect(() => {
     async function fetchSession() {
@@ -188,41 +215,42 @@ export default function SessionReviewPage() {
         const res = await fetch(`/api/sessions/${sessionId}`);
         if (res.ok) {
           const data = await res.json();
-          // Transform API response to SessionDetail format
-          const transformedSession: SessionDetail = {
-            id: data.id || sessionId,
-            scenarioName: data.scenario?.title || "Practice Session",
-            personaName: data.persona?.name || "AI Prospect",
-            date: data.createdAt || data.startedAt || new Date().toISOString(),
-            duration: data.durationSeconds || 0,
-            callType: data.scenario?.callType || "discovery",
-            overallScore: data.analytics?.overallScore ?? 0,
-            metrics: data.analytics?.scores || {
-              discovery: 0,
-              objectionHandling: 0,
-              closing: 0,
-              rapport: 0,
-            },
-            transcript: (data.transcripts || []).map((t: { speaker: string; content: string; timestampMs: number }) => ({
-              speaker: t.speaker as "user" | "ai",
-              text: t.content || "",
-              timestamp: formatTimestamp(t.timestampMs || 0),
-            })),
-            highlights: data.analytics?.highlightMoments || [],
-            suggestions: data.analytics?.improvementSuggestions || [],
-          };
-          setSession(transformedSession);
+          setSession(transformApiData(data, sessionId));
+          setAnalysisReady(!!data.analytics);
         } else {
           setSession({ ...fallbackSession, id: sessionId });
+          setAnalysisReady(true);
         }
       } catch {
         setSession({ ...fallbackSession, id: sessionId });
+        setAnalysisReady(true);
       } finally {
         setLoading(false);
       }
     }
     fetchSession();
   }, [sessionId]);
+
+  // Poll every 3 s until analysis is ready
+  const pollAnalysis = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.analytics) {
+        setSession(transformApiData(data, sessionId));
+        setAnalysisReady(true);
+      }
+    } catch {
+      // silently ignore poll errors
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (analysisReady || loading) return;
+    const timer = setInterval(pollAnalysis, 3000);
+    return () => clearInterval(timer);
+  }, [analysisReady, loading, pollAnalysis]);
 
   if (loading) {
     return (
@@ -242,7 +270,7 @@ export default function SessionReviewPage() {
       <div className="max-w-4xl mx-auto text-center py-12">
         <p className="text-muted-foreground">Session not found.</p>
         <Button className="mt-4" asChild>
-          <Link href="/dashboard/history">Back to History</Link>
+          <Link href="/history">Back to History</Link>
         </Button>
       </div>
     );
@@ -252,7 +280,7 @@ export default function SessionReviewPage() {
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Back Button */}
       <Button variant="ghost" size="sm" asChild>
-        <Link href="/dashboard/history">
+        <Link href="/history">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to History
         </Link>
@@ -273,48 +301,62 @@ export default function SessionReviewPage() {
       </div>
 
       {/* Score Card */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Overall Score */}
+      {!analysisReady ? (
         <Card>
-          <CardContent className="pt-6 flex flex-col items-center justify-center text-center">
-            <p className="text-sm text-muted-foreground mb-2">Overall Score</p>
-            <div
-              className={cn(
-                "text-5xl font-bold",
-                getScoreColor(session.overallScore)
-              )}
-            >
-              {session.overallScore}
+          <CardContent className="py-12 flex flex-col items-center justify-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            <div className="text-center">
+              <p className="font-medium text-foreground">Analyzing your session...</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                AI is reviewing your transcript. This usually takes 2–3 minutes.
+              </p>
             </div>
-            <Badge
-              className={cn(
-                "mt-2 text-lg px-3 py-1",
-                session.overallScore >= 80
-                  ? "bg-green-500/10 text-green-600"
-                  : session.overallScore >= 60
-                    ? "bg-yellow-500/10 text-yellow-600"
-                    : "bg-red-500/10 text-red-600"
-              )}
-              variant="outline"
-            >
-              {getLetterGrade(session.overallScore)}
-            </Badge>
           </CardContent>
         </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Overall Score */}
+          <Card>
+            <CardContent className="pt-6 flex flex-col items-center justify-center text-center">
+              <p className="text-sm text-muted-foreground mb-2">Overall Score</p>
+              <div
+                className={cn(
+                  "text-5xl font-bold",
+                  getScoreColor(session.overallScore)
+                )}
+              >
+                {session.overallScore}
+              </div>
+              <Badge
+                className={cn(
+                  "mt-2 text-lg px-3 py-1",
+                  session.overallScore >= 80
+                    ? "bg-green-500/10 text-green-600"
+                    : session.overallScore >= 60
+                      ? "bg-yellow-500/10 text-yellow-600"
+                      : "bg-red-500/10 text-red-600"
+                )}
+                variant="outline"
+              >
+                {getLetterGrade(session.overallScore)}
+              </Badge>
+            </CardContent>
+          </Card>
 
-        {/* Metric Bars */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Performance Breakdown</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <MetricBar label="Discovery & Questioning" value={session.metrics.discovery} />
-            <MetricBar label="Objection Handling" value={session.metrics.objectionHandling} />
-            <MetricBar label="Closing Technique" value={session.metrics.closing} />
-            <MetricBar label="Rapport Building" value={session.metrics.rapport} />
-          </CardContent>
-        </Card>
-      </div>
+          {/* Metric Bars */}
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-base">Performance Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <MetricBar label="Active Listening"   value={session.metrics.activeListening} />
+              <MetricBar label="Objection Handling" value={session.metrics.objectionHandling} />
+              <MetricBar label="Closing Technique"  value={session.metrics.closing} />
+              <MetricBar label="Rapport Building"   value={session.metrics.rapport} />
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Transcript */}
       <Card>
@@ -430,7 +472,7 @@ export default function SessionReviewPage() {
 
       <div className="flex justify-center pb-8">
         <Button asChild>
-          <Link href="/dashboard/practice">Practice Again</Link>
+          <Link href="/practice">Practice Again</Link>
         </Button>
       </div>
     </div>

@@ -1,16 +1,51 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+function computeStreak(dates: string[]): number {
+  if (!dates.length) return 0;
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  if (dates[0] !== today && dates[0] !== yesterday) return 0;
+  let streak = 1;
+  for (let i = 1; i < dates.length; i++) {
+    const prev = new Date(dates[i - 1]);
+    const curr = new Date(dates[i]);
+    const diff = Math.round((prev.getTime() - curr.getTime()) / 86400000);
+    if (diff === 1) streak++;
+    else break;
+  }
+  return streak;
+}
+
 export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: progress } = await supabase
-    .from("user_progress")
-    .select("*")
+  const { data: sessionData } = await supabase
+    .from("sessions")
+    .select("id, created_at, session_analytics(overall_score)")
     .eq("user_id", user.id)
-    .single();
+    .eq("status", "completed")
+    .order("created_at", { ascending: false });
+
+  const scores: number[] = [];
+  for (const s of sessionData ?? []) {
+    const arr = Array.isArray(s.session_analytics) ? s.session_analytics : [s.session_analytics];
+    const score = (arr[0] as { overall_score?: number } | null)?.overall_score;
+    if (typeof score === "number" && score > 0) scores.push(score);
+  }
+
+  const totalSessions = (sessionData ?? []).length;
+  const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+  const bestScore = scores.length ? Math.max(...scores) : 0;
+
+  const uniqueDates = [...new Set(
+    (sessionData ?? []).map(s => s.created_at.slice(0, 10))
+  )];
+  const currentStreak = computeStreak(uniqueDates);
+
+  const overview = { totalSessions, avgScore, currentStreak, bestScore };
 
   const { data: recentSessions } = await supabase
     .from("sessions")
@@ -26,16 +61,8 @@ export async function GET() {
     .order("earned_at", { ascending: false })
     .limit(5);
 
-  const overview = {
-    totalSessions: progress?.total_sessions ?? 0,
-    avgScore: progress?.average_score ?? 0,
-    currentStreak: progress?.current_streak ?? 0,
-    bestScore: progress?.best_score ?? 0,
-  };
-
   const sessions = (recentSessions || []).map((row: Record<string, unknown>) => {
     const scenario = row.scenarios as Record<string, unknown> | null;
-    const persona = row.personas as Record<string, unknown> | null;
     const analytics = row.session_analytics as Record<string, unknown> | Record<string, unknown>[] | null;
     const analyticsObj = Array.isArray(analytics) ? analytics[0] : analytics;
 

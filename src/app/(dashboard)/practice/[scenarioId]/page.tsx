@@ -352,7 +352,7 @@ export default function PreCallSetupPage() {
     } else if (pitchContext.trim()) {
       query += `&pitch=${encodeURIComponent(pitchContext.trim())}`;
     }
-    router.push(`/dashboard/practice/${scenarioId}/call${query}`);
+    router.push(`/practice/${scenarioId}/call${query}`);
   }
 
   const isPitchCall = scenario?.callType === "pitch";
@@ -385,7 +385,7 @@ export default function PreCallSetupPage() {
       <div className="max-w-4xl mx-auto text-center py-12">
         <p className="text-muted-foreground">Scenario not found.</p>
         <Button className="mt-4" asChild>
-          <Link href="/dashboard/practice">Back to Library</Link>
+          <Link href="/practice">Back to Library</Link>
         </Button>
       </div>
     );
@@ -395,7 +395,7 @@ export default function PreCallSetupPage() {
     <div className="max-w-4xl mx-auto space-y-8 pb-20">
       {/* Back navigation */}
       <Link
-        href="/dashboard/practice"
+        href="/practice"
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ChevronLeft className="w-4 h-4" />

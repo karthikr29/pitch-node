@@ -51,14 +51,22 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       description: persona.description,
       personaType: persona.persona_type,
     } : null,
-    analytics: analyticsObj ? {
-      overallScore: analyticsObj.overall_score,
-      scores: analyticsObj.scores,
-      letterGrade: analyticsObj.letter_grade,
-      aiSummary: analyticsObj.ai_summary,
-      highlightMoments: analyticsObj.highlight_moments,
-      improvementSuggestions: analyticsObj.improvement_suggestions,
-    } : null,
+    analytics: analyticsObj ? (() => {
+      const scoresObj = analyticsObj.scores as Record<string, number> | null;
+      return {
+        overallScore: analyticsObj.overall_score,
+        letterGrade: analyticsObj.letter_grade,
+        aiSummary: analyticsObj.ai_summary,
+        highlightMoments: analyticsObj.highlight_moments,
+        improvementSuggestions: analyticsObj.improvement_suggestions,
+        metrics: {
+          activeListening:   scoresObj?.active_listening   ?? 0,
+          objectionHandling: scoresObj?.objection_handling ?? 0,
+          closing:           scoresObj?.closing_technique  ?? 0,
+          rapport:           scoresObj?.rapport_building   ?? 0,
+        },
+      };
+    })() : null,
     transcripts: transcripts.map((t: Record<string, unknown>) => ({
       id: t.id,
       speaker: t.speaker,
