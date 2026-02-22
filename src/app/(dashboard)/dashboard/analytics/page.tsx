@@ -76,62 +76,119 @@ const fallbackMetrics: MetricBreakdown[] = [
   { metric: "Value Prop", value: 72 },
 ];
 
-function generateActivityData(): ActivityDay[] {
-  const days: ActivityDay[] = [];
-  const now = new Date();
-  for (let i = 0; i < 84; i++) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - (83 - i));
-    days.push({
-      date: date.toISOString().split("T")[0],
-      count: Math.random() > 0.5 ? Math.floor(Math.random() * 4) : 0,
-    });
-  }
-  return days;
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const DOW_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+function getColor(count: number) {
+  if (count === 0) return "bg-muted/60";
+  if (count === 1) return "bg-primary/20";
+  if (count <= 3) return "bg-primary/40";
+  if (count <= 5) return "bg-primary/65";
+  return "bg-primary/90";
 }
 
-const dayLabels = ["", "Mon", "", "Wed", "", "Fri", ""];
-
 function ActivityCalendar({ data }: { data: ActivityDay[] }) {
-  const weeks: ActivityDay[][] = [];
-  for (let i = 0; i < data.length; i += 7) {
-    weeks.push(data.slice(i, i + 7));
+  const [tooltip, setTooltip] = useState<{ date: string; count: number; x: number; y: number } | null>(null);
+
+  if (data.length === 0) {
+    return <div className="text-xs text-muted-foreground">No activity data available.</div>;
   }
 
-  function getColor(count: number) {
-    if (count === 0) return "bg-muted/60";
-    if (count === 1) return "bg-primary/25";
-    if (count === 2) return "bg-primary/50";
-    return "bg-primary/80";
+  const firstDow = new Date(data[0].date).getDay();
+  const padded: (ActivityDay | null)[] = [...Array(firstDow).fill(null), ...data];
+  const weeks: (ActivityDay | null)[][] = [];
+  for (let i = 0; i < padded.length; i += 7) {
+    weeks.push(padded.slice(i, i + 7));
   }
+
+  // Month labels: show abbreviated month name when the first real day of a week starts a new month
+  const monthLabels: string[] = weeks.map((week, wi) => {
+    const firstReal = week.find((d) => d !== null) as ActivityDay | undefined;
+    if (!firstReal) return "";
+    const curMonth = new Date(firstReal.date).getMonth();
+    if (wi === 0) return MONTH_ABBR[curMonth];
+    const prevWeek = weeks[wi - 1];
+    const prevReal = prevWeek?.find((d) => d !== null) as ActivityDay | undefined;
+    if (!prevReal) return "";
+    const prevMonth = new Date(prevReal.date).getMonth();
+    return curMonth !== prevMonth ? MONTH_ABBR[curMonth] : "";
+  });
+
+  const totalSessions = data.reduce((s, d) => s + d.count, 0);
 
   return (
-    <div className="flex gap-[3px]">
-      {/* Day labels */}
-      <div className="flex flex-col gap-[3px] mr-1">
-        {dayLabels.map((label, i) => (
-          <div
-            key={i}
-            className="w-6 h-3.5 flex items-center text-[10px] text-muted-foreground"
-          >
-            {label}
-          </div>
-        ))}
-      </div>
-      {weeks.map((week, wi) => (
-        <div key={wi} className="flex flex-col gap-[3px]">
-          {week.map((day, di) => (
+    <div className="relative w-fit mx-auto">
+      {/* Total sessions badge */}
+      <p className="text-xs text-muted-foreground mb-2">
+        {totalSessions} session{totalSessions !== 1 ? "s" : ""} in the last year
+      </p>
+
+      <div className="flex gap-[3px]">
+        {/* Day-of-week labels */}
+        <div className="flex flex-col gap-[3px] pt-[17px] mr-1">
+          {DOW_LABELS.map((label, i) => (
             <div
-              key={di}
-              className={cn(
-                "w-3.5 h-3.5 rounded-[3px] transition-colors hover:ring-1 hover:ring-primary/30",
-                getColor(day.count)
-              )}
-              title={`${day.date}: ${day.count} session${day.count !== 1 ? "s" : ""}`}
-            />
+              key={i}
+              className="h-3 flex items-center text-[9px] text-muted-foreground leading-none"
+              style={{ width: 22 }}
+            >
+                {label}
+            </div>
           ))}
         </div>
-      ))}
+
+        {/* Grid */}
+        <div className="flex flex-col">
+          {/* Month labels row */}
+          <div className="flex gap-[3px] mb-[3px] h-[14px]">
+            {weeks.map((_, wi) => (
+              <div
+                key={wi}
+                className="text-[9px] text-muted-foreground leading-none"
+                style={{ width: 12, minWidth: 12 }}
+              >
+                {monthLabels[wi]}
+              </div>
+            ))}
+          </div>
+
+          {/* Week columns */}
+          <div className="flex gap-[3px]">
+            {weeks.map((week, wi) => (
+              <div key={wi} className="flex flex-col gap-[3px]">
+                {Array.from({ length: 7 }).map((_, di) => {
+                  const day = week[di] ?? null;
+                  return (
+                    <div
+                      key={di}
+                      className={cn(
+                        "w-3 h-3 rounded-[2px] transition-colors",
+                        day ? getColor(day.count) : "bg-transparent",
+                        day ? "hover:ring-1 hover:ring-primary/40 cursor-default" : ""
+                      )}
+                      onMouseEnter={day ? (e) => {
+                        const rect = (e.target as HTMLElement).getBoundingClientRect();
+                        setTooltip({ date: day.date, count: day.count, x: rect.left + rect.width / 2, y: rect.top });
+                      } : undefined}
+                      onMouseLeave={day ? () => setTooltip(null) : undefined}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Fixed tooltip */}
+      {tooltip && (
+        <div
+          className="fixed z-50 pointer-events-none px-2 py-1 rounded bg-popover border border-border text-[11px] text-popover-foreground shadow-md -translate-x-1/2 -translate-y-full -mt-1"
+          style={{ top: tooltip.y - 6, left: tooltip.x }}
+        >
+          {tooltip.date} · {tooltip.count} session{tooltip.count !== 1 ? "s" : ""}
+        </div>
+      )}
     </div>
   );
 }
@@ -165,18 +222,18 @@ export default function AnalyticsPage() {
           setTrends(data.trends || fallbackTrends);
           setCallTypeData(data.callTypePerformance || fallbackCallTypeData);
           setMetrics(data.metrics || fallbackMetrics);
-          setActivityData(data.activity || generateActivityData());
+          setActivityData(data.activity || []);
         } else {
           setTrends(fallbackTrends);
           setCallTypeData(fallbackCallTypeData);
           setMetrics(fallbackMetrics);
-          setActivityData(generateActivityData());
+          setActivityData([]);
         }
       } catch {
         setTrends(fallbackTrends);
         setCallTypeData(fallbackCallTypeData);
         setMetrics(fallbackMetrics);
-        setActivityData(generateActivityData());
+        setActivityData([]);
       } finally {
         setLoading(false);
       }
@@ -392,16 +449,17 @@ export default function AnalyticsPage() {
                 <div>
                   <CardTitle className="text-base">Activity</CardTitle>
                   <CardDescription className="text-xs">
-                    Practice frequency over the last 12 weeks
+                    Practice frequency over the last year
                   </CardDescription>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <span>Less</span>
-                <div className="w-3 h-3 rounded-[3px] bg-muted/60" />
-                <div className="w-3 h-3 rounded-[3px] bg-primary/25" />
-                <div className="w-3 h-3 rounded-[3px] bg-primary/50" />
-                <div className="w-3 h-3 rounded-[3px] bg-primary/80" />
+                <div className="w-3 h-3 rounded-[2px] bg-muted/60" />
+                <div className="w-3 h-3 rounded-[2px] bg-primary/20" />
+                <div className="w-3 h-3 rounded-[2px] bg-primary/40" />
+                <div className="w-3 h-3 rounded-[2px] bg-primary/65" />
+                <div className="w-3 h-3 rounded-[2px] bg-primary/90" />
                 <span>More</span>
               </div>
             </div>

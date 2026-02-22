@@ -1,14 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import {
+  buildPitchContextFromBriefing,
+  validatePitchBriefing,
+} from "@/lib/validators";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { scenarioId, personaId } = await request.json();
+  const { scenarioId, personaId, pitchContext, pitchBriefing, inferredRole } = await request.json();
   if (!scenarioId || !personaId) {
     return NextResponse.json({ error: "scenarioId and personaId are required" }, { status: 400 });
+  }
+
+  const { data: scenario, error: scenarioError } = await supabase
+    .from("scenarios")
+    .select("id, call_type")
+    .eq("id", scenarioId)
+    .single();
+
+  if (scenarioError || !scenario) {
+    return NextResponse.json({ error: "Scenario not found" }, { status: 404 });
+  }
+
+  const isPitchScenario = scenario.call_type === "pitch";
+  let resolvedPitchContext = typeof pitchContext === "string" ? pitchContext.trim() : "";
+  let resolvedPitchBriefing: Record<string, unknown> | null = null;
+
+  if (isPitchScenario) {
+    const briefingValidation = validatePitchBriefing(pitchBriefing);
+    if (!briefingValidation.valid || !briefingValidation.value) {
+      return NextResponse.json(
+        {
+          error: "Invalid pitchBriefing for pitch scenario",
+          details: briefingValidation.errors,
+        },
+        { status: 400 }
+      );
+    }
+
+    resolvedPitchBriefing = briefingValidation.value as unknown as Record<string, unknown>;
+    resolvedPitchContext = buildPitchContextFromBriefing(briefingValidation.value);
   }
 
   // Create session in DB
@@ -19,6 +53,8 @@ export async function POST(request: NextRequest) {
       scenario_id: scenarioId,
       persona_id: personaId,
       status: "connecting",
+      pitch_context: resolvedPitchContext || null,
+      pitch_briefing: resolvedPitchBriefing,
       livekit_room_name: `session-${Date.now()}-${user.id.slice(0, 8)}`,
     })
     .select()
@@ -41,6 +77,9 @@ export async function POST(request: NextRequest) {
         scenario_id: scenarioId,
         persona_id: personaId,
         user_id: user.id,
+        pitch_context: resolvedPitchContext || "",
+        pitch_briefing: resolvedPitchBriefing || undefined,
+        inferred_role: typeof inferredRole === "string" && inferredRole.trim() ? inferredRole.trim() : undefined,
       }),
     });
 
@@ -59,7 +98,7 @@ export async function POST(request: NextRequest) {
       roomName: session.livekit_room_name,
       livekitUrl: process.env.NEXT_PUBLIC_LIVEKIT_URL,
     });
-  } catch (error) {
+  } catch {
     await supabase.from("sessions").update({ status: "error" }).eq("id", session.id);
     return NextResponse.json({ error: "Voice pipeline service unavailable" }, { status: 503 });
   }

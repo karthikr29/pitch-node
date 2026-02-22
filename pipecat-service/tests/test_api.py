@@ -290,6 +290,46 @@ class TestSessionStart:
             assert response.status_code == 200
             mock_lk_svc.start_pipeline.assert_called_once()
 
+    def test_start_session_passes_pitch_briefing_to_pipeline(self, client):
+        with patch("app.api.routes.supabase_service") as mock_svc, \
+             patch("app.api.routes.livekit_service") as mock_lk_svc:
+            mock_svc.get_scenario = AsyncMock(return_value={**MOCK_SCENARIO, "call_type": "pitch"})
+            mock_svc.get_persona = AsyncMock(return_value=MOCK_PERSONA)
+            mock_lk_svc.create_room_and_token = AsyncMock(return_value="token")
+            mock_lk_svc.start_pipeline = AsyncMock()
+
+            payload = {
+                "session_id": "sess-pitch-1",
+                "room_name": "room-pitch-1",
+                "scenario_id": "scenario-1",
+                "persona_id": "persona-1",
+                "user_id": "user-1",
+                "pitch_context": "AI outbound assistant for SaaS teams",
+                "pitch_briefing": {
+                    "whatYouSell": "AI outbound assistant",
+                    "targetAudience": "B2B SaaS sales teams",
+                    "problemSolved": "Low outbound conversion rates",
+                    "valueProposition": "Higher reply rates with less manual work",
+                    "callGoal": "Secure pilot agreement",
+                    "additionalNotes": "Competing with in-house process",
+                },
+            }
+            response = client.post(
+                "/api/v1/sessions/start",
+                headers={"Authorization": VALID_AUTH},
+                json=payload,
+            )
+
+            assert response.status_code == 200
+            mock_lk_svc.start_pipeline.assert_called_once_with(
+                room_name="room-pitch-1",
+                session_id="sess-pitch-1",
+                scenario={**MOCK_SCENARIO, "call_type": "pitch"},
+                persona=MOCK_PERSONA,
+                pitch_context="AI outbound assistant for SaaS teams",
+                pitch_briefing=payload["pitch_briefing"],
+            )
+
 
 # ──────────────────────────────────────────────────────────
 # Session End

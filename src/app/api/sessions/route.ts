@@ -28,15 +28,19 @@ export async function GET(request: NextRequest) {
     const persona = row.personas as Record<string, unknown> | null;
     const analytics = row.session_analytics as Record<string, unknown> | Record<string, unknown>[] | null;
     const analyticsObj = Array.isArray(analytics) ? analytics[0] : analytics;
+    const pitchBriefing = row.pitch_briefing as Record<string, string> | null;
 
     return {
       id: row.id,
       date: row.created_at,
       scenarioName: scenario?.title ?? "Unknown Scenario",
       personaName: persona?.name ?? "Unknown Persona",
-      score: analyticsObj?.overall_score ?? 0,
+      score: analyticsObj?.overall_score ?? null,
+      analysisReady: !!analyticsObj,
       duration: row.duration_seconds ?? 0,
       callType: scenario?.call_type ?? "discovery",
+      whatYouSell: pitchBriefing?.whatYouSell ?? null,
+      targetAudience: pitchBriefing?.targetAudience ?? null,
     };
   });
 

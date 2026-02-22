@@ -484,6 +484,9 @@ async def create_sales_pipeline(
     persona: dict,
     livekit_url: str,
     bot_token: str,
+    pitch_context: str = "",
+    pitch_briefing: dict | None = None,
+    inferred_role: str | None = None,
 ):
     """
     Creates and runs a Pipecat voice AI pipeline for a sales training session.
@@ -502,7 +505,13 @@ async def create_sales_pipeline(
         "end_reason": None,
     }
 
-    system_prompt = build_system_prompt(scenario, persona)
+    system_prompt = build_system_prompt(
+        scenario,
+        persona,
+        pitch_context=pitch_context,
+        pitch_briefing=pitch_briefing,
+        inferred_role=inferred_role,
+    )
     transcript_buffer: list[dict] = []
     latency_tracker = TurnLatencyTracker(session_id)
 
@@ -531,7 +540,6 @@ async def create_sales_pipeline(
         live_options=LiveOptions(
             interim_results=True,
             endpointing=170,
-            utterance_end_ms="350",
             vad_events=False,
         ),
     )

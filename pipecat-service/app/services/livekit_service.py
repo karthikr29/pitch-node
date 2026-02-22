@@ -119,7 +119,16 @@ class LiveKitService:
             "Session finalization remains with explicit end-session flow."
         )
 
-    async def start_pipeline(self, room_name: str, session_id: str, scenario: dict, persona: dict):
+    async def start_pipeline(
+        self,
+        room_name: str,
+        session_id: str,
+        scenario: dict,
+        persona: dict,
+        pitch_context: str = "",
+        pitch_briefing: dict | None = None,
+        inferred_role: str | None = None,
+    ):
         """Start the voice AI pipeline for a session."""
         # Store the room name for this session so we can delete it later.
         self._session_rooms[session_id] = room_name
@@ -135,6 +144,9 @@ class LiveKitService:
                 persona=persona,
                 livekit_url=settings.LIVEKIT_URL,
                 bot_token=bot_token,
+                pitch_context=pitch_context,
+                pitch_briefing=pitch_briefing,
+                inferred_role=inferred_role,
             )
         )
         self._active_pipelines[session_id] = pipeline_task

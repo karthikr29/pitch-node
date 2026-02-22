@@ -8,6 +8,10 @@ import { SentientPrismVisualizer } from "@/components/ui/sentient-prism-visualiz
 import { StarryBackground } from "@/components/ui/starry-background";
 import { cn } from "@/lib/utils";
 import {
+  buildPitchContextFromBriefing,
+  validatePitchBriefing,
+} from "@/lib/validators";
+import {
   Mic,
   MicOff,
   PhoneOff,
@@ -35,6 +39,19 @@ interface RoomCredentials {
   sessionId: string;
 }
 
+function readPitchBriefingFromStorage(scenarioId: string) {
+  const raw = sessionStorage.getItem(`pitch-briefing:${scenarioId}`);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const validation = validatePitchBriefing(parsed);
+    if (!validation.valid || !validation.value) return null;
+    return validation.value;
+  } catch {
+    return null;
+  }
+}
+
 // Inner component that uses LiveKit hooks (must be inside LiveKitRoom)
 function CallInterface({
   personaName,
@@ -55,11 +72,18 @@ function CallInterface({
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [ending, setEnding] = useState(false);
   const [muted, setMuted] = useState(false);
-  const [speakingState, setSpeakingState] = useState<SpeakingState>("idle");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isConnected = connectionState === ConnectionState.Connected;
   const aiParticipant = participants.find((p) => p.identity.startsWith("ai-"));
+  const speakingState: SpeakingState =
+    !isConnected
+      ? "idle"
+      : aiParticipant?.isSpeaking
+        ? "ai"
+        : localParticipant?.isSpeaking && !muted
+          ? "user"
+          : "idle";
 
   // Timer
   useEffect(() => {
@@ -80,23 +104,6 @@ function CallInterface({
       localParticipant.setMicrophoneEnabled(true).catch(console.error);
     }
   }, [isConnected, localParticipant]);
-
-  // Detect speaking state based on tracks
-  useEffect(() => {
-    if (!isConnected) {
-      setSpeakingState("idle");
-      return;
-    }
-
-    // Check if AI is speaking (has active audio track)
-    if (aiParticipant?.isSpeaking) {
-      setSpeakingState("ai");
-    } else if (localParticipant?.isSpeaking && !muted) {
-      setSpeakingState("user");
-    } else {
-      setSpeakingState("idle");
-    }
-  }, [isConnected, aiParticipant?.isSpeaking, localParticipant?.isSpeaking, muted]);
 
   const formatTime = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -307,6 +314,9 @@ export default function CallRoomPage() {
   const router = useRouter();
   const scenarioId = params.scenarioId as string;
   const personaId = searchParams.get("persona") || "";
+  const personaNameParam = searchParams.get("name") || "";
+  const personaRoleParam = searchParams.get("role") || "";
+  const pitchContextParam = searchParams.get("pitch") || "";
 
   const [callState, setCallState] = useState<CallState>("requesting-mic");
   const [credentials, setCredentials] = useState<RoomCredentials | null>(null);
@@ -316,9 +326,30 @@ export default function CallRoomPage() {
   const sessionEndHandledRef = useRef(false);
   const intentionalDisconnectRef = useRef(false);
 
-  // Persona display info (fetched or defaults)
-  const [personaName, setPersonaName] = useState("AI Prospect");
-  const [personaRole, setPersonaRole] = useState("Sales Training");
+  // Persona display info (from query params or defaults)
+  const [personaName] = useState(personaNameParam || "AI Prospect");
+  const [personaRole] = useState(personaRoleParam || "Sales Training");
+
+  // Check existing mic permission on mount — skip the prompt screen if already granted
+  useEffect(() => {
+    if (!navigator.permissions) return;
+    navigator.permissions
+      .query({ name: "microphone" as PermissionName })
+      .then((result) => {
+        if (result.state === "granted") {
+          setHasMicPermission(true);
+          setCallState("initializing");
+        } else if (result.state === "denied") {
+          setHasMicPermission(false);
+          setError("Microphone access is required for calls. Please allow microphone access in your browser settings and try again.");
+          setCallState("error");
+        }
+        // "prompt" → leave state as "requesting-mic", show the permission screen
+      })
+      .catch(() => {
+        // Permissions API not supported or failed — fall through to normal prompt screen
+      });
+  }, []);
 
   // Request microphone permission
   async function requestMicPermission() {
@@ -347,11 +378,22 @@ export default function CallRoomPage() {
     async function initializeCall() {
       try {
         console.log("[CallPage] Initializing call for scenario:", scenarioId, "persona:", personaId);
+        const pitchBriefing = readPitchBriefingFromStorage(scenarioId);
+        const pitchContextFromBriefing = pitchBriefing
+          ? buildPitchContextFromBriefing(pitchBriefing)
+          : "";
+        const finalPitchContext = pitchContextParam || pitchContextFromBriefing;
 
         const response = await fetch("/api/voice/create-room", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scenarioId, personaId }),
+          body: JSON.stringify({
+            scenarioId,
+            personaId,
+            pitchContext: finalPitchContext,
+            pitchBriefing: pitchBriefing || undefined,
+            inferredRole: personaRoleParam || undefined,
+          }),
         });
 
         if (!response.ok) {
@@ -369,6 +411,9 @@ export default function CallRoomPage() {
           livekitUrl: data.livekitUrl,
           sessionId: data.sessionId,
         });
+        if (pitchBriefing) {
+          sessionStorage.removeItem(`pitch-briefing:${scenarioId}`);
+        }
         setCallState("connecting");
       } catch (err) {
         console.error("[CallPage] Failed to initialize call:", err);
@@ -378,7 +423,7 @@ export default function CallRoomPage() {
     }
 
     initializeCall();
-  }, [callState, hasMicPermission, scenarioId, personaId]);
+  }, [callState, hasMicPermission, scenarioId, personaId, pitchContextParam, personaRoleParam]);
 
   function endSessionInBackground(sessionId: string) {
     void fetch("/api/voice/end-session", {

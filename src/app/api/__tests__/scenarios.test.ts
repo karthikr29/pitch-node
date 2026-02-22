@@ -45,6 +45,7 @@ describe("Scenarios API Route", () => {
     const mockDbRows = [
       { id: "1", title: "Cold Call", description: "desc1", call_type: "cold_call", difficulty: "Easy" },
       { id: "2", title: "Discovery", description: "desc2", call_type: "discovery", difficulty: "Medium" },
+      { id: "3", title: "Pitch - Hard", description: "desc3", call_type: "pitch", difficulty: "Hard" },
     ];
     mockQueryResult = { data: mockDbRows, error: null };
 
@@ -58,6 +59,7 @@ describe("Scenarios API Route", () => {
     expect(body).toEqual([
       { id: "1", title: "Cold Call", description: "desc1", callType: "cold_call", difficulty: "Easy" },
       { id: "2", title: "Discovery", description: "desc2", callType: "discovery", difficulty: "Medium" },
+      { id: "3", title: "Pitch - Hard", description: "desc3", callType: "pitch", difficulty: "Hard" },
     ]);
   });
 

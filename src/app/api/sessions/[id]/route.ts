@@ -32,6 +32,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     durationSeconds: data.duration_seconds,
     status: data.status,
     livekitRoomName: data.livekit_room_name,
+    pitchBriefing: data.pitch_briefing ?? null,
     scenario: scenario ? {
       id: scenario.id,
       title: scenario.title,
