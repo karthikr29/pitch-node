@@ -22,7 +22,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
               className="object-contain"
             />
           </div>
-          <span className="font-display text-3xl font-bold text-text-primary tracking-[0.15em] italic">
+          <span className="font-display text-3xl font-bold text-text-primary tracking-[0.07em]">
             pitch<span className="text-primary">node</span>
           </span>
         </Link>

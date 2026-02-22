@@ -82,7 +82,7 @@ export function NavBar() {
               className="object-contain"
             />
           </div>
-          <span className="font-display text-lg font-bold text-foreground tracking-[0.12em] italic">
+          <span className="font-display text-lg font-bold text-foreground tracking-[0.07em]">
             pitch<span className="text-primary">node</span>
           </span>
         </Link>

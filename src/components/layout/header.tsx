@@ -58,7 +58,7 @@ export function Header() {
             </div>
             <span
               className={cn(
-                "font-display font-bold text-text-primary transition-all duration-300 tracking-[0.15em] italic",
+                "font-display font-bold text-text-primary transition-all duration-300 tracking-[0.07em]",
                 isScrolled ? "text-lg" : "text-xl"
               )}
             >
