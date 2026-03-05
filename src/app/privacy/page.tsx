@@ -72,10 +72,10 @@ export default function PrivacyPolicy() {
                             Voice and Conversation Data
                         </h3>
                         <p>
-                            When you use our AI sales training features (upon launch), we may collect and process
-                            voice recordings and conversation transcripts to provide personalized feedback and
-                            improve your sales skills. This data is processed securely and used solely for
-                            training and improvement purposes.
+                            When you use our AI sales training features, we collect and process call audio recordings
+                            and conversation transcripts to provide personalized feedback and playback in your session
+                            review. Audio recordings are stored in a private bucket, retained for up to 30 days after
+                            processing, and then deleted or marked expired as part of our retention controls.
                         </p>
                     </section>
 

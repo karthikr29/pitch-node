@@ -122,6 +122,8 @@ export default function TermsOfService() {
                         <p>
                             By using our AI training features, you consent to the recording and processing of
                             voice conversations for the purpose of providing feedback and improving your skills.
+                            Session recordings may be available for playback in your feedback view for up to 30 days
+                            after processing, after which recordings are removed or marked expired.
                             Please refer to our Privacy Policy for details on how we handle this data.
                         </p>
                     </section>

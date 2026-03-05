@@ -104,6 +104,7 @@ async def start_session(req: StartSessionRequest, _=Depends(verify_api_key)):
     await livekit_service.start_pipeline(
         room_name=req.room_name,
         session_id=req.session_id,
+        user_id=req.user_id,
         scenario=scenario,
         persona=persona,
         pitch_context=req.pitch_context,

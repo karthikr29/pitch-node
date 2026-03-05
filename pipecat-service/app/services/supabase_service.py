@@ -1,13 +1,18 @@
 import random
 
 from supabase import create_client, Client
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from loguru import logger
 from app.config import settings
+
 
 class SupabaseService:
     def __init__(self):
         self.client: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+
+    @staticmethod
+    def _utc_now_iso() -> str:
+        return datetime.now(timezone.utc).isoformat()
 
     async def get_scenario(self, scenario_id: str) -> dict | None:
         try:
@@ -41,6 +46,120 @@ class SupabaseService:
             "session_id": session_id,
             **analytics,
         }).execute()
+
+    async def upsert_session_recording(self, session_id: str, payload: dict):
+        now = self._utc_now_iso()
+        self.client.table("session_recordings").upsert(
+            {
+                "session_id": session_id,
+                "updated_at": now,
+                **payload,
+            },
+            on_conflict="session_id",
+        ).execute()
+
+    async def update_session_recording_status(
+        self,
+        session_id: str,
+        status: str,
+        **fields,
+    ):
+        self.client.table("session_recordings").update(
+            {
+                "status": status,
+                "updated_at": self._utc_now_iso(),
+                **fields,
+            }
+        ).eq("session_id", session_id).execute()
+
+    async def mark_session_recording_ready(
+        self,
+        session_id: str,
+        provider_recording_id: str,
+        duration_seconds: int | None = None,
+    ):
+        completed_at = datetime.now(timezone.utc)
+        expires_at = completed_at + timedelta(days=max(1, settings.RECORDING_RETENTION_DAYS))
+        await self.update_session_recording_status(
+            session_id,
+            "ready",
+            provider_recording_id=provider_recording_id,
+            mime_type="audio/mpeg",
+            completed_at=completed_at.isoformat(),
+            expires_at=expires_at.isoformat(),
+            duration_seconds=duration_seconds,
+            error_message=None,
+        )
+
+    async def mark_session_recording_failed(
+        self,
+        session_id: str,
+        error_message: str,
+        provider_recording_id: str | None = None,
+        storage_bucket: str | None = None,
+        storage_path: str | None = None,
+        provider: str = "livekit",
+    ):
+        if storage_bucket and storage_path:
+            await self.upsert_session_recording(
+                session_id,
+                {
+                    "provider": provider,
+                    "provider_recording_id": provider_recording_id,
+                    "status": "failed",
+                    "storage_bucket": storage_bucket,
+                    "storage_path": storage_path,
+                    "mime_type": "audio/mpeg",
+                    "error_message": error_message[:500],
+                },
+            )
+            return
+
+        await self.update_session_recording_status(
+            session_id,
+            "failed",
+            provider_recording_id=provider_recording_id,
+            error_message=error_message[:500],
+        )
+
+    async def cleanup_expired_recordings(self, limit: int = 100):
+        now = self._utc_now_iso()
+        try:
+            result = (
+                self.client.table("session_recordings")
+                .select("id, storage_bucket, storage_path")
+                .eq("status", "ready")
+                .lte("expires_at", now)
+                .limit(limit)
+                .execute()
+            )
+            rows = result.data or []
+            for row in rows:
+                bucket = row.get("storage_bucket")
+                path = row.get("storage_path")
+                if bucket and path:
+                    try:
+                        self.client.storage.from_(bucket).remove([path])
+                    except Exception as storage_error:
+                        logger.warning(
+                            f"Failed removing expired recording object {bucket}/{path}: {storage_error}"
+                        )
+                try:
+                    (
+                        self.client.table("session_recordings")
+                        .update(
+                            {
+                                "status": "expired",
+                                "updated_at": now,
+                            }
+                        )
+                        .eq("id", row.get("id"))
+                        .execute()
+                    )
+                except Exception as update_error:
+                    logger.warning(f"Failed updating expired recording row {row.get('id')}: {update_error}")
+        except Exception as e:
+            logger.warning(f"Recording cleanup skipped due to error: {e}")
 
     async def complete_session(self, session_id: str):
         """Mark a session completed and compute duration from started_at."""

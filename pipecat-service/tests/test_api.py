@@ -324,10 +324,12 @@ class TestSessionStart:
             mock_lk_svc.start_pipeline.assert_called_once_with(
                 room_name="room-pitch-1",
                 session_id="sess-pitch-1",
+                user_id="user-1",
                 scenario={**MOCK_SCENARIO, "call_type": "pitch"},
                 persona=MOCK_PERSONA,
                 pitch_context="AI outbound assistant for SaaS teams",
                 pitch_briefing=payload["pitch_briefing"],
+                inferred_role=None,
             )
 
 

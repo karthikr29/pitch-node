@@ -475,7 +475,8 @@ export default function CallRoomPage() {
           <h2 className="text-2xl font-semibold text-white mb-3">Microphone Access Required</h2>
           <p className="text-slate-400 mb-8">
             To have a voice conversation with your AI prospect, we need access to your microphone.
-            Your audio is processed in real-time and is not stored beyond the call transcript.
+            Your call audio is processed in real-time, stored securely for feedback playback, and
+            automatically removed after 30 days.
           </p>
           <div className="flex gap-4">
             <Button onClick={() => router.back()} variant="outline">

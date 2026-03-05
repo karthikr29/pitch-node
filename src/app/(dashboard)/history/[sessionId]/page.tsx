@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   Loader2,
   MessageSquare,
+  Radio,
   Star,
   TrendingUp,
   AlertCircle,
@@ -41,6 +42,16 @@ interface Metrics {
   rapport: number;
 }
 
+type RecordingStatus = "none" | "processing" | "ready" | "failed" | "expired";
+
+interface RecordingDetail {
+  status: RecordingStatus;
+  url: string | null;
+  durationSeconds: number | null;
+  expiresAt: string | null;
+  error: string | null;
+}
+
 interface SessionDetail {
   id: string;
   scenarioName: string;
@@ -53,6 +64,7 @@ interface SessionDetail {
   transcript: TranscriptMessage[];
   highlights: Highlight[];
   suggestions: string[];
+  recording: RecordingDetail;
 }
 
 function getLetterGrade(score: number) {
@@ -74,6 +86,19 @@ function formatTimestamp(ms: number): string {
   const mins = Math.floor(totalSeconds / 60);
   const secs = totalSeconds % 60;
   return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+function formatDateTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString();
+}
+
+function toRecordingStatus(value: unknown): RecordingStatus {
+  if (value === "processing" || value === "ready" || value === "failed" || value === "expired" || value === "none") {
+    return value;
+  }
+  return "none";
 }
 
 function MetricBar({ label, value }: { label: string; value: number }) {
@@ -175,9 +200,19 @@ const fallbackSession: SessionDetail = {
     "When a prospect shares a concern, mirror their language back to build rapport.",
     "Before transitioning to your pitch, summarize what you've heard to confirm understanding.",
   ],
+  recording: {
+    status: "none",
+    url: null,
+    durationSeconds: null,
+    expiresAt: null,
+    error: null,
+  },
 };
 
 function transformApiData(data: Record<string, unknown>, sessionId: string): SessionDetail {
+  const recordingRaw = (data.recording as Record<string, unknown> | null) ?? null;
+  const recordingStatus = toRecordingStatus(recordingRaw?.status);
+
   return {
     id: (data.id as string) || sessionId,
     scenarioName: ((data.scenario as Record<string, unknown>)?.title as string) || "Practice Session",
@@ -199,6 +234,13 @@ function transformApiData(data: Record<string, unknown>, sessionId: string): Ses
     })),
     highlights: ((data.analytics as Record<string, unknown>)?.highlightMoments as Highlight[]) || [],
     suggestions: ((data.analytics as Record<string, unknown>)?.improvementSuggestions as string[]) || [],
+    recording: {
+      status: recordingStatus,
+      url: (recordingRaw?.url as string) ?? null,
+      durationSeconds: (recordingRaw?.durationSeconds as number) ?? null,
+      expiresAt: (recordingRaw?.expiresAt as string) ?? null,
+      error: (recordingRaw?.error as string) ?? null,
+    },
   };
 }
 
@@ -208,6 +250,7 @@ export default function SessionReviewPage() {
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [analysisReady, setAnalysisReady] = useState(false);
+  const [recordingReady, setRecordingReady] = useState(false);
 
   useEffect(() => {
     async function fetchSession() {
@@ -215,15 +258,19 @@ export default function SessionReviewPage() {
         const res = await fetch(`/api/sessions/${sessionId}`);
         if (res.ok) {
           const data = await res.json();
-          setSession(transformApiData(data, sessionId));
+          const transformed = transformApiData(data, sessionId);
+          setSession(transformed);
           setAnalysisReady(!!data.analytics);
+          setRecordingReady(transformed.recording.status !== "processing");
         } else {
           setSession({ ...fallbackSession, id: sessionId });
           setAnalysisReady(true);
+          setRecordingReady(true);
         }
       } catch {
         setSession({ ...fallbackSession, id: sessionId });
         setAnalysisReady(true);
+        setRecordingReady(true);
       } finally {
         setLoading(false);
       }
@@ -237,20 +284,22 @@ export default function SessionReviewPage() {
       const res = await fetch(`/api/sessions/${sessionId}`);
       if (!res.ok) return;
       const data = await res.json();
+      const transformed = transformApiData(data, sessionId);
+      setSession(transformed);
       if (data.analytics) {
-        setSession(transformApiData(data, sessionId));
         setAnalysisReady(true);
       }
+      setRecordingReady(transformed.recording.status !== "processing");
     } catch {
       // silently ignore poll errors
     }
   }, [sessionId]);
 
   useEffect(() => {
-    if (analysisReady || loading) return;
+    if (loading || (analysisReady && recordingReady)) return;
     const timer = setInterval(pollAnalysis, 3000);
     return () => clearInterval(timer);
-  }, [analysisReady, loading, pollAnalysis]);
+  }, [analysisReady, recordingReady, loading, pollAnalysis]);
 
   if (loading) {
     return (
@@ -357,6 +406,56 @@ export default function SessionReviewPage() {
           </Card>
         </div>
       )}
+
+      {/* Recording */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Radio className="w-5 h-5 text-primary" />
+            Call Recording
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {session.recording.status === "ready" && session.recording.url ? (
+            <div className="space-y-3">
+              <audio controls preload="metadata" className="w-full" src={session.recording.url}>
+                Your browser does not support audio playback.
+              </audio>
+              {session.recording.durationSeconds !== null && (
+                <p className="text-sm text-muted-foreground">
+                  Duration: {formatTimestamp(session.recording.durationSeconds * 1000)}
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {session.recording.status === "processing" ? (
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Recording is processing. Playback will appear automatically.
+            </div>
+          ) : null}
+
+          {session.recording.status === "failed" ? (
+            <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-600">
+              {session.recording.error || "Recording could not be prepared for playback."}
+            </div>
+          ) : null}
+
+          {session.recording.status === "expired" ? (
+            <p className="text-sm text-muted-foreground">
+              Recording expired
+              {session.recording.expiresAt ? ` on ${formatDateTime(session.recording.expiresAt)}.` : "."}
+            </p>
+          ) : null}
+
+          {session.recording.status === "none" ? (
+            <p className="text-sm text-muted-foreground">
+              No recording is available for this session.
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
 
       {/* Transcript */}
       <Card>

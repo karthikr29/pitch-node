@@ -226,6 +226,68 @@ export type Database = {
           },
         ]
       }
+      session_recordings: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          duration_seconds: number | null
+          error_message: string | null
+          expires_at: string | null
+          id: string
+          mime_type: string | null
+          provider: string
+          provider_recording_id: string | null
+          session_id: string
+          started_at: string | null
+          status: string
+          storage_bucket: string
+          storage_path: string
+          updated_at: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          duration_seconds?: number | null
+          error_message?: string | null
+          expires_at?: string | null
+          id?: string
+          mime_type?: string | null
+          provider: string
+          provider_recording_id?: string | null
+          session_id: string
+          started_at?: string | null
+          status: string
+          storage_bucket: string
+          storage_path: string
+          updated_at?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          duration_seconds?: number | null
+          error_message?: string | null
+          expires_at?: string | null
+          id?: string
+          mime_type?: string | null
+          provider?: string
+          provider_recording_id?: string | null
+          session_id?: string
+          started_at?: string | null
+          status?: string
+          storage_bucket?: string
+          storage_path?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_recordings_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_transcripts: {
         Row: {
           confidence: number | null

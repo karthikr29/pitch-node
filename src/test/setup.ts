@@ -15,6 +15,7 @@ vi.mock("next/navigation", () => ({
     refresh: vi.fn(),
   }),
   usePathname: () => "/dashboard",
+  useParams: () => ({}),
   useSearchParams: () => new URLSearchParams(),
   redirect: vi.fn(),
 }));
