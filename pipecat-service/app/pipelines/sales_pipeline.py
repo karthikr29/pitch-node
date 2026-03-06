@@ -32,6 +32,7 @@ from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.services.cartesia.tts import CartesiaTTSService
+from pipecat.services.tts_service import TextAggregationMode
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.openai.llm import OpenAILLMService
 from pipecat.transports.livekit.transport import LiveKitParams, LiveKitTransport
@@ -541,6 +542,7 @@ async def create_sales_pipeline(
             interim_results=True,
             endpointing=170,
             vad_events=False,
+            smart_format=True,
         ),
     )
 
@@ -558,7 +560,7 @@ async def create_sales_pipeline(
         api_key=settings.CARTESIA_API_KEY,
         voice_id=cartesia_voice_id,
         sample_rate=24000,
-        aggregate_sentences=False,
+        text_aggregation_mode=TextAggregationMode.TOKEN,
     )
 
     # Transcript collectors - one for user (after STT), one for AI (after LLM)
