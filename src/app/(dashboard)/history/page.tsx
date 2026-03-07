@@ -241,7 +241,7 @@ export default function HistoryPage() {
                               getScoreColor(session.score ?? 0)
                             )}
                           >
-                            {session.score}
+                            {((session.score ?? 0) / 10).toFixed(1)}
                           </span>
                           <span className="text-[9px] text-muted-foreground mt-0.5">
                             {getLetterGrade(session.score ?? 0)}
@@ -350,7 +350,7 @@ export default function HistoryPage() {
                                 getScoreColor(session.score ?? 0)
                               )}
                             >
-                              {session.score}%
+                              {((session.score ?? 0) / 10).toFixed(1)}/10
                             </span>
                             <span
                               className={cn(

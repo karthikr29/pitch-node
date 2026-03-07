@@ -234,10 +234,11 @@ export default function DashboardPage() {
                   <ScoreRing value={avgScore} />
                   <div className="flex items-baseline gap-0.5">
                     <AnimatedCounter
-                      value={avgScore}
+                      value={+(avgScore / 10).toFixed(1)}
+                      decimals={1}
                       className="text-3xl font-bold text-foreground tabular-nums"
                     />
-                    <span className="text-sm text-muted-foreground">%</span>
+                    <span className="text-sm text-muted-foreground">/10</span>
                   </div>
                 </div>
               )}
@@ -281,10 +282,11 @@ export default function DashboardPage() {
                   <ScoreRing value={bestScore} />
                   <div className="flex items-baseline gap-0.5">
                     <AnimatedCounter
-                      value={bestScore}
+                      value={+(bestScore / 10).toFixed(1)}
+                      decimals={1}
                       className="text-3xl font-bold text-foreground tabular-nums"
                     />
-                    <span className="text-sm text-muted-foreground">%</span>
+                    <span className="text-sm text-muted-foreground">/10</span>
                   </div>
                 </div>
               )}
@@ -294,7 +296,7 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* Bottom: Sessions + Quick Start */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:items-start">
         {/* Recent Sessions — 2 columns */}
         <motion.div
           className="lg:col-span-2"
@@ -395,7 +397,7 @@ export default function DashboardPage() {
                         <div
                           className={`shrink-0 px-2.5 py-1 rounded-md text-xs font-bold tabular-nums ${getScoreColor(session.score)} ${getScoreBg(session.score)}`}
                         >
-                          {session.score}%
+                          {(session.score / 10).toFixed(1)}/10
                         </div>
                       </Link>
                     </motion.div>

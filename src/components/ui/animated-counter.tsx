@@ -7,12 +7,14 @@ interface AnimatedCounterProps {
   value: number;
   className?: string;
   duration?: number;
+  decimals?: number;
 }
 
 export function AnimatedCounter({
   value,
   className = "",
   duration = 1.5,
+  decimals = 0,
 }: AnimatedCounterProps) {
   const springValue = useSpring(0, {
     stiffness: 100,
@@ -21,7 +23,7 @@ export function AnimatedCounter({
   });
 
   const displayValue = useTransform(springValue, (latest) =>
-    Math.round(latest).toLocaleString()
+    decimals > 0 ? latest.toFixed(decimals) : Math.round(latest).toLocaleString()
   );
 
   const prevValue = useRef(value);

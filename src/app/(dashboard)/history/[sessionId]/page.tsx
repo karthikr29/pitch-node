@@ -88,7 +88,7 @@ function MetricBar({ label, value }: { label: string; value: number }) {
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-sm">
         <span className="text-muted-foreground">{label}</span>
-        <span className="font-medium text-foreground">{value}%</span>
+        <span className="font-medium text-foreground">{(value / 10).toFixed(1)}/10</span>
       </div>
       <div className="h-2 rounded-full bg-muted overflow-hidden">
         <div
@@ -325,7 +325,7 @@ export default function SessionReviewPage() {
                   getScoreColor(session.overallScore)
                 )}
               >
-                {session.overallScore}
+                {(session.overallScore / 10).toFixed(1)}/10
               </div>
               <Badge
                 className={cn(
