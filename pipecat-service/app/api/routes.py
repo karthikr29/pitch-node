@@ -56,23 +56,30 @@ async def infer_role(req: InferRoleRequest, _=Depends(verify_api_key)):
     else:
         return {"roles": []}
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": settings.CONVERSATION_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.3,
-                "max_tokens": 80,
-            },
-        )
-        result = response.json()
-
-    raw = result["choices"][0]["message"]["content"].strip()
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": settings.CONVERSATION_MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.3,
+                    "max_tokens": 80,
+                },
+            )
+            response.raise_for_status()
+            result = response.json()
+        raw = result["choices"][0]["message"]["content"].strip()
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Inference service timed out")
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Inference service error: {e.response.status_code}")
+    except Exception:
+        raise HTTPException(status_code=502, detail="Inference failed")
     try:
         roles = _json.loads(raw)
         if not isinstance(roles, list) or len(roles) == 0:
@@ -94,10 +101,13 @@ async def start_session(req: StartSessionRequest, _=Depends(verify_api_key)):
         raise HTTPException(status_code=404, detail="Scenario or persona not found")
 
     # Create LiveKit room and get participant token
-    token = await livekit_service.create_room_and_token(
-        room_name=req.room_name,
-        participant_name=req.user_id,
-    )
+    try:
+        token = await livekit_service.create_room_and_token(
+            room_name=req.room_name,
+            participant_name=req.user_id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail="Failed to initialize voice session")
 
     # Start the Pipecat pipeline in background
     # (Pipeline connects to the room as a bot participant)
