@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
-      await supabase.from("sessions").update({ status: "error" }).eq("id", session.id);
+      await supabase.from("sessions").delete().eq("id", session.id);
       return NextResponse.json({ error: "Failed to start voice pipeline" }, { status: 502 });
     }
 
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       livekitUrl: process.env.NEXT_PUBLIC_LIVEKIT_URL,
     });
   } catch {
-    await supabase.from("sessions").update({ status: "error" }).eq("id", session.id);
+    await supabase.from("sessions").delete().eq("id", session.id);
     return NextResponse.json({ error: "Voice pipeline service unavailable" }, { status: 503 });
   }
 }

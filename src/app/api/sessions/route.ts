@@ -11,10 +11,20 @@ export async function GET(request: NextRequest) {
   const callType = request.nextUrl.searchParams.get("callType") || request.nextUrl.searchParams.get("call_type");
   const offset = (page - 1) * limit;
 
+  // Silently clean up sessions that never started (older than 5 minutes)
+  await supabase
+    .from("sessions")
+    .delete()
+    .eq("user_id", user.id)
+    .is("started_at", null)
+    .in("status", ["connecting", "error"])
+    .lt("created_at", new Date(Date.now() - 5 * 60 * 1000).toISOString());
+
   let query = supabase
     .from("sessions")
     .select("*, scenarios(title, call_type, difficulty), personas(name, emoji), session_analytics(scores, overall_score)", { count: "exact" })
     .eq("user_id", user.id)
+    .eq("status", "completed")
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
