@@ -6,6 +6,8 @@ Pipeline: User Audio -> Deepgram STT -> LLM -> Cartesia TTS -> AI Audio
 import asyncio
 import re
 from contextlib import suppress
+
+from num2words import num2words as _num2words
 from typing import Any, Callable
 
 import httpx
@@ -263,6 +265,62 @@ class AIResponseCollector(FrameProcessor):
             self._first_token_seen = False
 
         await self.push_frame(frame, direction)
+
+
+class NumberNormalizerProcessor(FrameProcessor):
+    """Converts numerals in TTS text to spoken words to prevent digit-by-digit pronunciation."""
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        if isinstance(frame, TextFrame) and frame.text:
+            normalized = self._normalize(frame.text)
+            frame = TextFrame(text=normalized)
+        await self.push_frame(frame, direction)
+
+    def _normalize(self, text: str) -> str:
+        # Currency: $1,000 → "one thousand dollars"
+        text = re.sub(
+            r'\$([0-9,]+(?:\.\d+)?)',
+            lambda m: _num2words(float(m.group(1).replace(',', ''))) + ' dollars',
+            text
+        )
+        # Percentages: 30% → "thirty percent"
+        text = re.sub(
+            r'([0-9,]+(?:\.\d+)?)%',
+            lambda m: _num2words(float(m.group(1).replace(',', ''))) + ' percent',
+            text
+        )
+        # Scores/fractions: 7/10 → "seven out of ten"
+        text = re.sub(
+            r'([0-9]+)/([0-9]+)',
+            lambda m: f"{_num2words(int(m.group(1)))} out of {_num2words(int(m.group(2)))}",
+            text
+        )
+        # Ordinals: 1st, 2nd, 3rd, 4th → "first", "second", etc.
+        text = re.sub(
+            r'\b([0-9]+)(st|nd|rd|th)\b',
+            lambda m: _num2words(int(m.group(1)), to='ordinal'),
+            text
+        )
+        # Decimals: 7.5 → "seven point five"
+        text = re.sub(
+            r'\b([0-9]+)\.([0-9]+)\b',
+            lambda m: _num2words(int(m.group(1))) + ' point ' + ' '.join(_num2words(int(d)) for d in m.group(2)),
+            text
+        )
+        # Plain integers with commas: 1,000 → "one thousand"
+        text = re.sub(
+            r'\b([0-9]{1,3}(?:,[0-9]{3})+)\b',
+            lambda m: _num2words(int(m.group(1).replace(',', ''))),
+            text
+        )
+        # Plain integers: 30 → "thirty"
+        text = re.sub(
+            r'\b([0-9]+)\b',
+            lambda m: _num2words(int(m.group(1))),
+            text
+        )
+        return text
 
 
 class OutputSpeechEventCollector(FrameProcessor):
@@ -572,6 +630,8 @@ async def create_sales_pipeline(
     )
     context_aggregator = llm.create_context_aggregator(context)
 
+    number_normalizer = NumberNormalizerProcessor()
+
     turn_gate = UserTurnGateProcessor(
         session_id=session_id,
         latency_tracker=latency_tracker,
@@ -589,6 +649,7 @@ async def create_sales_pipeline(
             context_aggregator.user(),
             llm,
             ai_response_collector,      # Capture AI response after LLM
+            number_normalizer,          # Convert numerals to spoken words before TTS
             tts,
             transport.output(),
             output_speech_collector,    # Track bot speech start for latency metrics

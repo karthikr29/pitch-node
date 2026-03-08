@@ -1,5 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Local spec files
+spec.md
+
 # dependencies
 /node_modules
 /.pnp
