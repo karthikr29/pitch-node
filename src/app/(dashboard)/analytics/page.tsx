@@ -316,7 +316,7 @@ export default function AnalyticsPage() {
                     width={32}
                     tickFormatter={(v) => `${v / 10}`}
                   />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${(v / 10).toFixed(1)}/10`, "Score"]} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${((v ?? 0) / 10).toFixed(1)}/10`, "Score"]} />
                   <Area
                     type="monotone"
                     dataKey="score"
@@ -381,7 +381,7 @@ export default function AnalyticsPage() {
                     width={32}
                     tickFormatter={(v) => `${v / 10}`}
                   />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${(v / 10).toFixed(1)}/10`, "Avg Score"]} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${((v ?? 0) / 10).toFixed(1)}/10`, "Avg Score"]} />
                   <Bar
                     dataKey="avgScore"
                     name="Avg Score"
@@ -434,7 +434,7 @@ export default function AnalyticsPage() {
                     fillOpacity={0.15}
                     strokeWidth={2}
                   />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${(v / 10).toFixed(1)}/10`, "Score"]} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${((v ?? 0) / 10).toFixed(1)}/10`, "Score"]} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
