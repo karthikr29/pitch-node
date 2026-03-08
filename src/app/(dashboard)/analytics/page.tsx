@@ -314,9 +314,9 @@ export default function AnalyticsPage() {
                     axisLine={false}
                     tickLine={false}
                     width={32}
-                    tickFormatter={(v) => `${v / 10}`}
+                    tickFormatter={(v) => `${Number(v) / 10}`}
                   />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${((v ?? 0) / 10).toFixed(1)}/10`, "Score"]} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${(Number(v ?? 0) / 10).toFixed(1)}/10`, "Score"]} />
                   <Area
                     type="monotone"
                     dataKey="score"
@@ -379,9 +379,9 @@ export default function AnalyticsPage() {
                     axisLine={false}
                     tickLine={false}
                     width={32}
-                    tickFormatter={(v) => `${v / 10}`}
+                    tickFormatter={(v) => `${Number(v) / 10}`}
                   />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${((v ?? 0) / 10).toFixed(1)}/10`, "Avg Score"]} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${(Number(v ?? 0) / 10).toFixed(1)}/10`, "Avg Score"]} />
                   <Bar
                     dataKey="avgScore"
                     name="Avg Score"
@@ -424,7 +424,7 @@ export default function AnalyticsPage() {
                     className="text-xs fill-muted-foreground"
                     tick={{ fontSize: 9 }}
                     axisLine={false}
-                    tickFormatter={(v) => `${v / 10}`}
+                    tickFormatter={(v) => `${Number(v) / 10}`}
                   />
                   <Radar
                     name="Score"
@@ -434,7 +434,7 @@ export default function AnalyticsPage() {
                     fillOpacity={0.15}
                     strokeWidth={2}
                   />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${((v ?? 0) / 10).toFixed(1)}/10`, "Score"]} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${(Number(v ?? 0) / 10).toFixed(1)}/10`, "Score"]} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
