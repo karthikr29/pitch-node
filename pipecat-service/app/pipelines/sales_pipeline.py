@@ -49,7 +49,7 @@ analysis_service = AnalysisService()
 OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions"
 _resolved_conversation_model: str | None = None
 _model_resolution_lock = asyncio.Lock()
-USER_TURN_COMMIT_SILENCE_MS = 90
+USER_TURN_COMMIT_SILENCE_MS = 20
 USER_TURN_FALLBACK_COMMIT_MS = 280
 SOFT_REFUSAL_REPEAT_THRESHOLD = 2
 
@@ -597,18 +597,29 @@ async def create_sales_pipeline(
         api_key=settings.DEEPGRAM_API_KEY,
         live_options=LiveOptions(
             interim_results=True,
-            endpointing=170,
-            vad_events=False,
+            endpointing=50,
         ),
     )
 
     conversation_model = await resolve_conversation_model()
 
     # Use OpenAI-compatible endpoint (OpenRouter) with streaming
+    # Provider pinning bypasses OpenRouter's load balancer (~50-70ms overhead) and routes
+    # directly to xAI's infrastructure (~25ms overhead).
     llm = OpenAILLMService(
         api_key=settings.OPENROUTER_API_KEY,
         model=conversation_model,
         base_url="https://openrouter.ai/api/v1",
+        params=OpenAILLMService.InputParams(
+            extra={
+                "extra_body": {
+                    "provider": {
+                        "order": ["xAI"],
+                        "allow_fallbacks": False,
+                    }
+                }
+            }
+        ),
     )
 
     # Cartesia TTS
