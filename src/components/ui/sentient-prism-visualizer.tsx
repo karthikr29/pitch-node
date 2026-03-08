@@ -7,11 +7,11 @@ import * as THREE from "three";
 import { cn } from "@/lib/utils";
 
 interface SentientPrismProps {
-    mode: "ai" | "user" | "idle";
+    mode: "ai" | "user" | "idle" | "thinking";
     className?: string;
 }
 
-function PrismCore({ mode }: { mode: "ai" | "user" | "idle" }) {
+function PrismCore({ mode }: { mode: "ai" | "user" | "idle" | "thinking" }) {
     const meshRef = useRef<THREE.Mesh>(null);
     const materialRef = useRef<THREE.MeshPhysicalMaterial>(null);
 
@@ -44,6 +44,13 @@ function PrismCore({ mode }: { mode: "ai" | "user" | "idle" }) {
             targetSpeed.current = 1.0;
             targetColor.current.set("#d946ef"); // Fuchsia 500
             targetEmissive.current.set("#c026d3"); // Strong glow
+        } else if (mode === "thinking") {
+            // Thinking: slow amber pulse, gentle bob
+            const pulse = Math.sin(state.clock.elapsedTime * 2) * 0.1;
+            targetScale.current = 1.1 + pulse;
+            targetSpeed.current = 0.3;
+            targetColor.current.set("#f59e0b"); // Amber 500
+            targetEmissive.current.set("#d97706"); // Amber glow
         }
 
         // specific rotation logic
@@ -76,7 +83,7 @@ function PrismCore({ mode }: { mode: "ai" | "user" | "idle" }) {
     );
 }
 
-function OuterShell({ mode }: { mode: "ai" | "user" | "idle" }) {
+function OuterShell({ mode }: { mode: "ai" | "user" | "idle" | "thinking" }) {
     const meshRef = useRef<THREE.Mesh>(null);
 
     useFrame((state, delta) => {
@@ -92,6 +99,9 @@ function OuterShell({ mode }: { mode: "ai" | "user" | "idle" }) {
         } else if (mode === 'ai') {
             rotSpeed = 0.8;
             scale = 1.8 + Math.sin(state.clock.elapsedTime * 5) * 0.05;
+        } else if (mode === 'thinking') {
+            rotSpeed = 0.3;
+            scale = 1.55 + Math.sin(state.clock.elapsedTime * 2) * 0.03;
         }
 
         meshRef.current.rotation.y -= delta * rotSpeed;
@@ -104,7 +114,7 @@ function OuterShell({ mode }: { mode: "ai" | "user" | "idle" }) {
     return (
         <Icosahedron args={[1, 1]} ref={meshRef}>
             <meshBasicMaterial
-                color={mode === 'ai' ? "#ec4899" : mode === 'user' ? "#38bdf8" : "#94a3b8"}
+                color={mode === 'ai' ? "#ec4899" : mode === 'user' ? "#38bdf8" : mode === 'thinking' ? "#fbbf24" : "#94a3b8"}
                 wireframe
                 transparent
                 opacity={0.15}
@@ -113,7 +123,7 @@ function OuterShell({ mode }: { mode: "ai" | "user" | "idle" }) {
     );
 }
 
-function Scene({ mode }: { mode: "ai" | "user" | "idle" }) {
+function Scene({ mode }: { mode: "ai" | "user" | "idle" | "thinking" }) {
     return (
         <>
             <ambientLight intensity={0.5} />
@@ -136,7 +146,7 @@ function Scene({ mode }: { mode: "ai" | "user" | "idle" }) {
                 size={2}
                 speed={0.4}
                 opacity={0.5}
-                color={mode === 'ai' ? "#f0abfc" : mode === 'user' ? "#7dd3fc" : "#cbd5e1"}
+                color={mode === 'ai' ? "#f0abfc" : mode === 'user' ? "#7dd3fc" : mode === 'thinking' ? "#fde68a" : "#cbd5e1"}
             />
 
             {/* Environment for reflections */}

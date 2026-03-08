@@ -30,7 +30,7 @@ import {
 import { ConnectionState } from "livekit-client";
 
 type CallState = "requesting-mic" | "initializing" | "connecting" | "connected" | "disconnected" | "error";
-type SpeakingState = "ai" | "user" | "idle";
+type SpeakingState = "ai" | "user" | "idle" | "thinking";
 
 interface RoomCredentials {
   token: string;
@@ -72,11 +72,15 @@ function CallInterface({
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [ending, setEnding] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [speakingState, setSpeakingState] = useState<SpeakingState>("idle");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const thinkingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isConnected = connectionState === ConnectionState.Connected;
   const aiParticipant = participants.find((p) => p.identity.startsWith("ai-"));
-  const speakingState: SpeakingState =
+
+  // Raw LiveKit-derived state (only "ai" | "user" | "idle")
+  const rawSpeakingState =
     !isConnected
       ? "idle"
       : aiParticipant?.isSpeaking
@@ -84,6 +88,39 @@ function CallInterface({
         : localParticipant?.isSpeaking && !muted
           ? "user"
           : "idle";
+
+  useEffect(() => {
+    if (rawSpeakingState === "user") {
+      if (thinkingTimeoutRef.current) clearTimeout(thinkingTimeoutRef.current);
+      setSpeakingState("user");
+    } else if (rawSpeakingState === "ai") {
+      if (thinkingTimeoutRef.current) clearTimeout(thinkingTimeoutRef.current);
+      setSpeakingState("ai");
+    } else {
+      // rawSpeakingState === "idle"
+      setSpeakingState((prev) => {
+        if (prev === "user") {
+          // User just stopped talking — AI must be thinking
+          thinkingTimeoutRef.current = setTimeout(() => {
+            setSpeakingState("idle"); // safety fallback if AI never responds
+          }, 15000);
+          return "thinking";
+        }
+        if (prev === "ai") {
+          // AI finished speaking — back to ready
+          return "idle";
+        }
+        return prev; // keep "thinking" or "idle" unchanged
+      });
+    }
+  }, [rawSpeakingState]);
+
+  // Cleanup thinking timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (thinkingTimeoutRef.current) clearTimeout(thinkingTimeoutRef.current);
+    };
+  }, []);
 
   // Timer
   useEffect(() => {
@@ -244,10 +281,12 @@ function CallInterface({
                       "text-sm uppercase tracking-widest font-semibold transition-colors duration-500",
                       speakingState === "ai" ? "text-primary" :
                         speakingState === "user" ? "text-blue-400" :
+                        speakingState === "thinking" ? "text-amber-400" :
                           "text-slate-600"
                     )}>
                       {speakingState === "ai" ? "AI Speaking..." :
                         speakingState === "user" ? "Listening to you..." :
+                        speakingState === "thinking" ? "Thinking..." :
                           aiParticipant ? "Ready" : "Waiting for AI..."}
                     </span>
                   </motion.div>
