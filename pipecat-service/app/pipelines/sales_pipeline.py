@@ -33,7 +33,8 @@ from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.services.cartesia.tts import CartesiaTTSService
-from pipecat.services.deepgram.flux.stt import DeepgramFluxSTTService
+from pipecat.services.deepgram.stt import DeepgramSTTService
+from deepgram import LiveOptions
 from pipecat.services.openai.llm import OpenAILLMService
 from pipecat.transports.livekit.transport import LiveKitParams, LiveKitTransport
 
@@ -592,11 +593,12 @@ async def create_sales_pipeline(
         ),
     )
 
-    stt = DeepgramFluxSTTService(
+    stt = DeepgramSTTService(
         api_key=settings.DEEPGRAM_API_KEY,
-        params=DeepgramFluxSTTService.InputParams(
-            eot_threshold=0.6,       # lower = fires sooner; 0.7 is default (conservative)
-            eot_timeout_ms=3000,     # fallback: force EOT after 3s if semantic detection missed
+        live_options=LiveOptions(
+            model="nova-3",
+            interim_results=True,
+            endpointing=50,
         ),
     )
 
