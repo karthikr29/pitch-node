@@ -36,6 +36,8 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.services.cartesia.tts import CartesiaTTSService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.openai.llm import OpenAILLMService
+from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.transports.livekit.transport import LiveKitParams, LiveKitTransport
 
 from app.config import settings
@@ -49,7 +51,7 @@ analysis_service = AnalysisService()
 OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions"
 _resolved_conversation_model: str | None = None
 _model_resolution_lock = asyncio.Lock()
-USER_TURN_COMMIT_SILENCE_MS = 20
+USER_TURN_COMMIT_SILENCE_MS = 0
 USER_TURN_FALLBACK_COMMIT_MS = 280
 SOFT_REFUSAL_REPEAT_THRESHOLD = 2
 
@@ -590,6 +592,15 @@ async def create_sales_pipeline(
             audio_in_sample_rate=16000,
             audio_out_sample_rate=24000,
             audio_in_passthrough=True,
+            vad_analyzer=SileroVADAnalyzer(
+                sample_rate=16000,
+                params=VADParams(
+                    confidence=0.7,
+                    start_secs=0.2,
+                    stop_secs=0.2,   # 200ms silence → fires VADUserStoppedSpeakingFrame
+                    min_volume=0.6,
+                ),
+            ),
         ),
     )
 
@@ -597,7 +608,7 @@ async def create_sales_pipeline(
         api_key=settings.DEEPGRAM_API_KEY,
         live_options=LiveOptions(
             interim_results=True,
-            endpointing=50,
+            endpointing=500,    # Safety net only — Silero (stop_secs=0.2s) always fires first
         ),
     )
 
