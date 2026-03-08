@@ -29,9 +29,20 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { Clock, Eye, Filter, Loader2, Mic, Zap, ArrowRight } from "lucide-react";
+import { Eye, Filter, Loader2, Mic, Zap, ArrowRight, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 interface Session {
   id: string;
@@ -86,6 +97,8 @@ export default function HistoryPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [callTypeFilter, setCallTypeFilter] = useState("pitch");
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchSessions = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -114,6 +127,23 @@ export default function HistoryPage() {
   useEffect(() => {
     fetchSessions();
   }, [fetchSessions]);
+
+  async function handleDelete(sessionId: string) {
+    setDeletingId(sessionId);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed");
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      setTotalPages((prev) => {
+        const newTotal = Math.ceil((sessions.length - 1) / PAGE_SIZE);
+        return Math.max(1, newTotal < prev ? newTotal : prev);
+      });
+    } catch {
+      toast.error("Failed to delete session");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   // Poll every 5s while any session is still being analyzed
   useEffect(() => {
@@ -216,13 +246,10 @@ export default function HistoryPage() {
           {/* Mobile: Card-based layout */}
           <div className="space-y-2 md:hidden">
             {sessions.map((session) => (
-              <Link
-                key={session.id}
-                href={`/history/${session.id}`}
-              >
-                <Card className="hover:shadow-md hover:border-primary/30 transition-all group">
-                  <CardContent className="py-3.5 px-4">
-                    <div className="flex items-center gap-3">
+              <Card key={session.id} className="hover:shadow-md hover:border-primary/30 transition-all group">
+                <CardContent className="py-3.5 px-4">
+                  <div className="flex items-center gap-3">
+                    <Link href={`/history/${session.id}`} className="flex items-center gap-3 flex-1 min-w-0">
                       {!session.analysisReady ? (
                         <div className="shrink-0 h-11 w-11 rounded-xl flex flex-col items-center justify-center bg-muted/60 ring-1 ring-border">
                           <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
@@ -275,10 +302,21 @@ export default function HistoryPage() {
                         </div>
                       </div>
                       <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSessionToDelete(session.id)}
+                      disabled={deletingId === session.id}
+                      className="text-red-500 hover:text-red-700 shrink-0 px-2"
+                    >
+                      {deletingId === session.id
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Trash2 className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
 
@@ -367,17 +405,30 @@ export default function HistoryPage() {
                         {formatDuration(session.duration)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="opacity-70 group-hover:opacity-100 transition-opacity"
-                          asChild
-                        >
-                          <Link href={`/history/${session.id}`}>
-                            <Eye className="w-4 h-4 mr-1" />
-                            Review
-                          </Link>
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="opacity-70 group-hover:opacity-100 transition-opacity"
+                            asChild
+                          >
+                            <Link href={`/history/${session.id}`}>
+                              <Eye className="w-4 h-4 mr-1" />
+                              Review
+                            </Link>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSessionToDelete(session.id)}
+                            disabled={deletingId === session.id}
+                            className="text-red-500 hover:text-red-700 opacity-70 group-hover:opacity-100 transition-opacity"
+                          >
+                            {deletingId === session.id
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <Trash2 className="h-4 w-4" />}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -437,6 +488,25 @@ export default function HistoryPage() {
           )}
         </>
       )}
+      <AlertDialog open={!!sessionToDelete} onOpenChange={() => setSessionToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Session</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this session and all its data including transcripts and scores.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { handleDelete(sessionToDelete!); setSessionToDelete(null); }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
