@@ -11,7 +11,6 @@ from num2words import num2words as _num2words
 from typing import Any, Callable
 
 import httpx
-from deepgram import LiveOptions
 from loguru import logger
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
@@ -34,10 +33,8 @@ from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.services.cartesia.tts import CartesiaTTSService
-from pipecat.services.deepgram.stt import DeepgramSTTService
+from pipecat.services.deepgram.flux.stt import DeepgramFluxSTTService
 from pipecat.services.openai.llm import OpenAILLMService
-from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.transports.livekit.transport import LiveKitParams, LiveKitTransport
 
 from app.config import settings
@@ -592,23 +589,14 @@ async def create_sales_pipeline(
             audio_in_sample_rate=16000,
             audio_out_sample_rate=24000,
             audio_in_passthrough=True,
-            vad_analyzer=SileroVADAnalyzer(
-                sample_rate=16000,
-                params=VADParams(
-                    confidence=0.7,
-                    start_secs=0.2,
-                    stop_secs=0.2,   # 200ms silence → fires VADUserStoppedSpeakingFrame
-                    min_volume=0.6,
-                ),
-            ),
         ),
     )
 
-    stt = DeepgramSTTService(
+    stt = DeepgramFluxSTTService(
         api_key=settings.DEEPGRAM_API_KEY,
-        live_options=LiveOptions(
-            interim_results=True,
-            endpointing=500,    # Safety net only — Silero (stop_secs=0.2s) always fires first
+        params=DeepgramFluxSTTService.InputParams(
+            eot_threshold=0.6,       # lower = fires sooner; 0.7 is default (conservative)
+            eot_timeout_ms=3000,     # fallback: force EOT after 3s if semantic detection missed
         ),
     )
 

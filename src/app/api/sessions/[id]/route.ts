@@ -22,7 +22,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const persona = data.personas as Record<string, unknown> | null;
   const analytics = data.session_analytics as Record<string, unknown> | Record<string, unknown>[] | null;
   const analyticsObj = Array.isArray(analytics) ? analytics[0] : analytics;
-  const transcripts = (data.session_transcripts as Record<string, unknown>[] | null) ?? [];
+  const transcripts = ((data.session_transcripts as Record<string, unknown>[] | null) ?? [])
+    .sort((a, b) => ((a.timestamp_ms as number) ?? 0) - ((b.timestamp_ms as number) ?? 0));
 
   const session = {
     id: data.id,
