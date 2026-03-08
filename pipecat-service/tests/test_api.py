@@ -19,6 +19,8 @@ os.environ.setdefault("LIVEKIT_API_SECRET", "testsecret")
 os.environ.setdefault("DEEPGRAM_API_KEY", "test-deepgram")
 os.environ.setdefault("CARTESIA_API_KEY", "test-cartesia")
 os.environ.setdefault("OPENROUTER_API_KEY", "test-openrouter")
+os.environ.setdefault("XAI_API_KEY", "test-xai")
+os.environ.setdefault("XAI_API_BASE_URL", "https://api.x.ai/v1")
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlc3QiLCJyb2xlIjoic2VydmljZV9yb2xlIiwiaWF0IjoxNjAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.abc123")
 os.environ.setdefault("PIPECAT_SERVICE_API_KEY", "test-api-key-123")
@@ -96,7 +98,15 @@ def client(mock_supabase, mock_livekit):
     instantiated at module level.
     """
     # Patch at the routes module level where instances are created
-    with patch("app.api.routes.supabase_service") as mock_svc, \
+    with patch.dict(
+        os.environ,
+        {
+            "PIPECAT_SERVICE_API_KEY": "test-api-key-123",
+            "XAI_API_KEY": "test-xai",
+            "XAI_API_BASE_URL": "https://api.x.ai/v1",
+        },
+        clear=False,
+    ), patch("app.api.routes.supabase_service") as mock_svc, \
          patch("app.api.routes.livekit_service") as mock_lk_svc:
 
         # Configure supabase service mocks
@@ -175,6 +185,60 @@ class TestAuthentication:
             },
         )
         assert response.status_code == 422  # FastAPI validation error (missing header)
+
+
+class TestInferRole:
+    def test_infer_role_uses_direct_xai(self, client):
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "content": '["VP of Sales", "Director of Revenue", "Chief Revenue Officer"]'
+                    }
+                }
+            ]
+        }
+
+        async_client = AsyncMock()
+        async_client.__aenter__.return_value = async_client
+        async_client.__aexit__.return_value = None
+        async_client.post.return_value = mock_response
+
+        with patch("app.api.routes.httpx.AsyncClient", return_value=async_client), \
+             patch("app.api.routes.settings.XAI_API_KEY", "test-xai"), \
+             patch("app.api.routes.settings.XAI_API_BASE_URL", "https://api.x.ai/v1"):
+            response = client.post(
+                "/api/v1/infer-role",
+                headers={"Authorization": VALID_AUTH},
+                json={
+                    "what_you_sell": "AI outbound platform",
+                    "target_audience": "B2B SaaS sales leaders",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["roles"] == [
+            "VP of Sales",
+            "Director of Revenue",
+            "Chief Revenue Officer",
+        ]
+        async_client.post.assert_awaited_once()
+        _, kwargs = async_client.post.await_args
+        assert kwargs["headers"]["Authorization"] == "Bearer test-xai"
+        assert kwargs["json"]["model"] == "grok-4-1-fast-reasoning"
+        assert kwargs["json"]["messages"][0]["role"] == "user"
+
+    def test_infer_role_returns_empty_when_no_inputs(self, client):
+        response = client.post(
+            "/api/v1/infer-role",
+            headers={"Authorization": VALID_AUTH},
+            json={},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"roles": []}
 
 
 # ──────────────────────────────────────────────────────────
@@ -328,6 +392,7 @@ class TestSessionStart:
                 persona=MOCK_PERSONA,
                 pitch_context="AI outbound assistant for SaaS teams",
                 pitch_briefing=payload["pitch_briefing"],
+                inferred_role=None,
             )
 
 

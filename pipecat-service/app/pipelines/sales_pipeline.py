@@ -1,24 +1,28 @@
 """
 Pipecat pipeline for sales training voice conversations.
-Pipeline: User Audio -> Deepgram STT -> LLM -> Cartesia TTS -> AI Audio
+
+Pipeline: LiveKit -> Deepgram Flux -> Grok 4.1 Fast -> Cartesia -> LiveKit
 """
 
 import asyncio
+import json
 import re
 from contextlib import suppress
-
-from num2words import num2words as _num2words
+from datetime import datetime, timezone
 from typing import Any, Callable
+from urllib.parse import urlencode
 
-import httpx
+import websockets
 from loguru import logger
+from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
-    BotStartedSpeakingFrame,
     EndFrame,
     Frame,
     InterimTranscriptionFrame,
     InterruptionFrame,
     LLMFullResponseEndFrame,
+    LLMTextFrame,
     TTSSpeakFrame,
     TextFrame,
     TranscriptionFrame,
@@ -33,22 +37,35 @@ from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.services.cartesia.tts import CartesiaTTSService
-from pipecat.services.deepgram.stt import DeepgramSTTService
-from deepgram import LiveOptions
-from pipecat.services.openai.llm import OpenAILLMService
+from pipecat.services.deepgram.stt import DeepgramSTTService, LiveOptions
+from pipecat.services.grok.llm import GrokLLMService
+from pipecat.services.settings import STTSettings
+from pipecat.services.stt_service import STTService
+from pipecat.services.tts_service import TextAggregationMode
+from pipecat.transcriptions.language import Language
 from pipecat.transports.livekit.transport import LiveKitParams, LiveKitTransport
 
 from app.config import settings
 from app.prompts.system_prompts import build_system_prompt
 from app.services.analysis_service import AnalysisService
 from app.services.supabase_service import SupabaseService
+from app.services.xai_service import normalize_grok_model_name
+
+try:
+    from num2words import num2words as _num2words
+except ModuleNotFoundError:
+    def _num2words(value, to=None):
+        return str(value)
+
 
 supabase_service = SupabaseService()
 analysis_service = AnalysisService()
 
-OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions"
-_resolved_conversation_model: str | None = None
-_model_resolution_lock = asyncio.Lock()
+DEFAULT_CARTESIA_VOICE = "a0e99841-438c-4a64-b679-ae501e7d6091"
+TRANSCRIPT_FLUSH_INTERVAL_SECS = 15
+CONTEXT_SUMMARY_MAX_CHARS = 1600
+TOKEN_RE = re.compile(r"\S+")
+CLAUSE_BOUNDARY_RE = re.compile(r"[,:;?!.]")
 USER_TURN_COMMIT_SILENCE_MS = 0
 USER_TURN_FALLBACK_COMMIT_MS = 280
 SOFT_REFUSAL_REPEAT_THRESHOLD = 2
@@ -67,135 +84,54 @@ SOFT_REFUSAL_PATTERNS = [
 ]
 
 
-async def _is_openrouter_model_available(model: str) -> bool:
-    if not settings.OPENROUTER_API_KEY:
-        logger.error("OPENROUTER_API_KEY is not configured")
-        return False
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                OPENROUTER_CHAT_COMPLETIONS_URL,
-                headers={
-                    "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "messages": [{"role": "user", "content": "ok"}],
-                    "max_tokens": 1,
-                    "temperature": 0,
-                },
-            )
-            return response.is_success
-    except Exception as e:
-        logger.warning(f"Model availability probe failed for {model}: {e}")
-        return False
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 async def resolve_conversation_model() -> str:
-    global _resolved_conversation_model
-
-    if _resolved_conversation_model:
-        return _resolved_conversation_model
-
-    async with _model_resolution_lock:
-        if _resolved_conversation_model:
-            return _resolved_conversation_model
-
-        primary = (settings.CONVERSATION_MODEL or "").strip()
-        fallback = (settings.CONVERSATION_FALLBACK_MODEL or "").strip()
-
-        if not primary and fallback:
-            primary = fallback
-        if not primary:
-            raise RuntimeError("CONVERSATION_MODEL is not configured")
-
-        # If no fallback is configured, keep existing behavior.
-        if not fallback or fallback == primary:
-            _resolved_conversation_model = primary
-            logger.info(f"Using conversation model: {_resolved_conversation_model}")
-            return _resolved_conversation_model
-
-        if await _is_openrouter_model_available(primary):
-            _resolved_conversation_model = primary
-            logger.info(f"Using conversation model: {_resolved_conversation_model}")
-            return _resolved_conversation_model
-
-        logger.warning(
-            f"Primary conversation model '{primary}' unavailable. Falling back to '{fallback}'."
-        )
-
-        _resolved_conversation_model = fallback
-        logger.info(f"Using conversation model: {_resolved_conversation_model}")
-        return _resolved_conversation_model
+    configured = (settings.CONVERSATION_MODEL or "").strip()
+    return normalize_grok_model_name(configured)
 
 
-class TurnLatencyTracker:
-    """Tracks user turn latency checkpoints for debugging responsiveness."""
+def build_conversation_llm(conversation_model: str) -> GrokLLMService:
+    if not settings.XAI_API_KEY:
+        raise RuntimeError("XAI_API_KEY is required for the live conversation path")
 
-    def __init__(self, session_id: str):
-        self._session_id = session_id
-        self._turn_id = 0
-        self._last_stt_final_at: float | None = None
-        self._active_turn: dict[str, Any] | None = None
+    logger.info(
+        f"Using direct xAI Grok client for conversation via {settings.XAI_API_BASE_URL}"
+    )
+    return GrokLLMService(
+        api_key=settings.XAI_API_KEY,
+        base_url=settings.XAI_API_BASE_URL,
+        model=conversation_model,
+    )
 
-    @staticmethod
-    def _now() -> float:
-        return asyncio.get_running_loop().time()
 
-    def mark_stt_final(self):
-        self._last_stt_final_at = self._now()
+def _is_flux_model(model: str) -> bool:
+    return model.strip().lower().startswith("flux")
 
-    def mark_user_commit(self):
-        self._turn_id += 1
-        self._active_turn = {
-            "id": self._turn_id,
-            "stt_final_at": self._last_stt_final_at,
-            "commit_at": self._now(),
-            "llm_first_token_at": None,
-        }
-        self._last_stt_final_at = None
 
-    def mark_llm_first_token(self):
-        if self._active_turn and self._active_turn.get("llm_first_token_at") is None:
-            self._active_turn["llm_first_token_at"] = self._now()
-
-    def mark_tts_start(self):
-        if not self._active_turn:
-            return
-
-        now = self._now()
-        turn = self._active_turn
-        stt_final_at = turn.get("stt_final_at")
-        commit_at = turn.get("commit_at")
-        llm_first_token_at = turn.get("llm_first_token_at")
-
-        stt_to_commit_ms = (commit_at - stt_final_at) * 1000 if stt_final_at and commit_at else None
-        commit_to_llm_ms = (
-            (llm_first_token_at - commit_at) * 1000
-            if llm_first_token_at and commit_at
-            else None
-        )
-        llm_to_tts_ms = (now - llm_first_token_at) * 1000 if llm_first_token_at else None
-        reference = stt_final_at or commit_at
-        total_ms = (now - reference) * 1000 if reference else None
-
-        logger.info(
-            "Turn latency session={} turn={} stt_to_commit_ms={} commit_to_llm_ms={} llm_to_tts_ms={} total_ms={}".format(
-                self._session_id,
-                turn["id"],
-                f"{stt_to_commit_ms:.0f}" if stt_to_commit_ms is not None else "n/a",
-                f"{commit_to_llm_ms:.0f}" if commit_to_llm_ms is not None else "n/a",
-                f"{llm_to_tts_ms:.0f}" if llm_to_tts_ms is not None else "n/a",
-                f"{total_ms:.0f}" if total_ms is not None else "n/a",
-            )
-        )
-        self._active_turn = None
+def build_fallback_stt_service() -> DeepgramSTTService:
+    live_options = LiveOptions(
+        encoding="linear16",
+        language=Language.EN,
+        model=settings.DEEPGRAM_FALLBACK_STT_MODEL,
+        channels=1,
+        interim_results=True,
+        smart_format=False,
+        punctuate=True,
+        profanity_filter=True,
+        vad_events=False,
+    )
+    return DeepgramSTTService(
+        api_key=settings.DEEPGRAM_API_KEY,
+        sample_rate=16000,
+        live_options=live_options,
+    )
 
 
 class UserTranscriptCollector(FrameProcessor):
-    """Collects user transcriptions from STT for saving to database."""
+    """Collects final user transcriptions for transcript persistence."""
 
     def __init__(self, session_id: str, buffer: list[dict]):
         super().__init__()
@@ -211,30 +147,28 @@ class UserTranscriptCollector(FrameProcessor):
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
-        # Capture user speech (from STT)
         if isinstance(frame, TranscriptionFrame):
-            self._buffer.append({
-                "speaker": "user",
-                "content": frame.text,
-                "timestamp_ms": self._get_timestamp_ms(),
-                "confidence": getattr(frame, "confidence", None),
-            })
-            logger.debug(f"Captured user transcript: {frame.text[:50]}...")
+            self._buffer.append(
+                {
+                    "speaker": "user",
+                    "content": frame.text,
+                    "timestamp_ms": self._get_timestamp_ms(),
+                    "confidence": getattr(frame, "confidence", None),
+                }
+            )
 
         await self.push_frame(frame, direction)
 
 
 class AIResponseCollector(FrameProcessor):
-    """Collects AI responses from LLM for saving to database."""
+    """Collects AI responses from streamed LLM text frames."""
 
-    def __init__(self, session_id: str, buffer: list[dict], latency_tracker: TurnLatencyTracker):
+    def __init__(self, session_id: str, buffer: list[dict]):
         super().__init__()
         self._session_id = session_id
         self._buffer = buffer
-        self._latency_tracker = latency_tracker
         self._start_time = None
         self._ai_text_buffer = ""
-        self._first_token_seen = False
 
     def _get_timestamp_ms(self) -> int:
         if self._start_time is None:
@@ -244,97 +178,505 @@ class AIResponseCollector(FrameProcessor):
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
-        # Accumulate AI response text chunks
-        if isinstance(frame, TextFrame):
-            if frame.text and not self._first_token_seen:
-                self._first_token_seen = True
-                self._latency_tracker.mark_llm_first_token()
-            self._ai_text_buffer += frame.text
-
-        # When LLM completes response, save it
+        if isinstance(frame, (TextFrame, LLMTextFrame)):
+            text = getattr(frame, "text", "")
+            self._ai_text_buffer += text
         elif isinstance(frame, LLMFullResponseEndFrame):
             if self._ai_text_buffer:
-                self._buffer.append({
-                    "speaker": "ai",
-                    "content": self._ai_text_buffer.strip(),
-                    "timestamp_ms": self._get_timestamp_ms(),
-                    "confidence": None,
-                })
-                logger.debug(f"Captured AI transcript: {self._ai_text_buffer[:80]}...")
+                self._buffer.append(
+                    {
+                        "speaker": "ai",
+                        "content": self._ai_text_buffer.strip(),
+                        "timestamp_ms": self._get_timestamp_ms(),
+                        "confidence": None,
+                    }
+                )
                 self._ai_text_buffer = ""
-            self._first_token_seen = False
 
         await self.push_frame(frame, direction)
 
 
 class NumberNormalizerProcessor(FrameProcessor):
-    """Converts numerals in TTS text to spoken words to prevent digit-by-digit pronunciation."""
+    """Converts numerals in TTS text to spoken words."""
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
         if isinstance(frame, TextFrame) and frame.text:
-            normalized = self._normalize(frame.text)
-            frame = TextFrame(text=normalized)
+            frame = TextFrame(text=self._normalize(frame.text))
         await self.push_frame(frame, direction)
 
     def _normalize(self, text: str) -> str:
-        # Currency: $1,000 → "one thousand dollars"
         text = re.sub(
-            r'\$([0-9,]+(?:\.\d+)?)',
-            lambda m: _num2words(float(m.group(1).replace(',', ''))) + ' dollars',
-            text
+            r"\$([0-9,]+(?:\.\d+)?)",
+            lambda m: _num2words(float(m.group(1).replace(",", ""))) + " dollars",
+            text,
         )
-        # Percentages: 30% → "thirty percent"
         text = re.sub(
-            r'([0-9,]+(?:\.\d+)?)%',
-            lambda m: _num2words(float(m.group(1).replace(',', ''))) + ' percent',
-            text
+            r"([0-9,]+(?:\.\d+)?)%",
+            lambda m: _num2words(float(m.group(1).replace(",", ""))) + " percent",
+            text,
         )
-        # Scores/fractions: 7/10 → "seven out of ten"
         text = re.sub(
-            r'([0-9]+)/([0-9]+)',
+            r"([0-9]+)/([0-9]+)",
             lambda m: f"{_num2words(int(m.group(1)))} out of {_num2words(int(m.group(2)))}",
-            text
+            text,
         )
-        # Ordinals: 1st, 2nd, 3rd, 4th → "first", "second", etc.
         text = re.sub(
-            r'\b([0-9]+)(st|nd|rd|th)\b',
-            lambda m: _num2words(int(m.group(1)), to='ordinal'),
-            text
+            r"\b([0-9]+)(st|nd|rd|th)\b",
+            lambda m: _num2words(int(m.group(1)), to="ordinal"),
+            text,
         )
-        # Decimals: 7.5 → "seven point five"
         text = re.sub(
-            r'\b([0-9]+)\.([0-9]+)\b',
-            lambda m: _num2words(int(m.group(1))) + ' point ' + ' '.join(_num2words(int(d)) for d in m.group(2)),
-            text
+            r"\b([0-9]+)\.([0-9]+)\b",
+            lambda m: _num2words(int(m.group(1)))
+            + " point "
+            + " ".join(_num2words(int(d)) for d in m.group(2)),
+            text,
         )
-        # Plain integers with commas: 1,000 → "one thousand"
         text = re.sub(
-            r'\b([0-9]{1,3}(?:,[0-9]{3})+)\b',
-            lambda m: _num2words(int(m.group(1).replace(',', ''))),
-            text
+            r"\b([0-9]{1,3}(?:,[0-9]{3})+)\b",
+            lambda m: _num2words(int(m.group(1).replace(",", ""))),
+            text,
         )
-        # Plain integers: 30 → "thirty"
         text = re.sub(
-            r'\b([0-9]+)\b',
+            r"\b([0-9]+)\b",
             lambda m: _num2words(int(m.group(1))),
-            text
+            text,
         )
         return text
 
 
-class OutputSpeechEventCollector(FrameProcessor):
-    """Tracks when bot speech starts on output transport."""
+class ConversationContextManager(FrameProcessor):
+    """Bounds conversation context and maintains a local rolling summary."""
 
-    def __init__(self, latency_tracker: TurnLatencyTracker):
+    def __init__(self, context: OpenAILLMContext):
         super().__init__()
-        self._latency_tracker = latency_tracker
+        self._context = context
+        self._max_recent_messages = max(2, settings.VOICE_CONTEXT_MAX_TURNS * 2)
+        self._summary_text = ""
+
+    @staticmethod
+    def _message_text(message: dict[str, Any]) -> str:
+        content = message.get("content", "")
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            texts: list[str] = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    texts.append(str(item.get("text", "")).strip())
+            return " ".join(text for text in texts if text).strip()
+        return ""
+
+    @staticmethod
+    def _is_summary_message(message: dict[str, Any]) -> bool:
+        return (
+            message.get("role") == "system"
+            and ConversationContextManager._message_text(message).startswith("[Conversation summary]")
+        )
+
+    def _summary_message(self) -> dict[str, str]:
+        return {
+            "role": "system",
+            "content": f"[Conversation summary]\n{self._summary_text}".strip(),
+        }
+
+    def _compose_local_summary(self, evicted_messages: list[dict[str, Any]]) -> str:
+        snippets: list[str] = []
+        if self._summary_text:
+            snippets.append(self._summary_text)
+
+        for message in evicted_messages[-12:]:
+            role = (message.get("role") or "context").capitalize()
+            text = self._message_text(message)
+            if text:
+                snippets.append(f"{role}: {text[:180]}")
+
+        merged = "\n".join(snippets).strip()
+        if len(merged) > CONTEXT_SUMMARY_MAX_CHARS:
+            merged = merged[-CONTEXT_SUMMARY_MAX_CHARS:]
+        return merged
+
+    def _prune_messages_locked(self) -> list[dict[str, Any]]:
+        messages = list(self._context.get_messages())
+        system_messages = [
+            message
+            for message in messages
+            if message.get("role") == "system" and not self._is_summary_message(message)
+        ]
+        conversation_messages = [
+            message for message in messages if message.get("role") != "system"
+        ]
+
+        if len(conversation_messages) <= self._max_recent_messages:
+            return []
+
+        evicted_messages = conversation_messages[:-self._max_recent_messages]
+        recent_messages = conversation_messages[-self._max_recent_messages :]
+        self._summary_text = self._compose_local_summary(evicted_messages)
+
+        rebuilt_messages = list(system_messages)
+        if self._summary_text:
+            rebuilt_messages.append(self._summary_message())
+        rebuilt_messages.extend(recent_messages)
+        self._context.set_messages(rebuilt_messages)
+        return evicted_messages
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
-        if isinstance(frame, BotStartedSpeakingFrame):
-            self._latency_tracker.mark_tts_start()
+
+        if isinstance(frame, LLMFullResponseEndFrame):
+            self._prune_messages_locked()
+
         await self.push_frame(frame, direction)
+
+
+class ClauseChunkingProcessor(FrameProcessor):
+    """Flushes streamed LLM text into low-latency Cartesia-friendly chunks."""
+
+    def __init__(self):
+        super().__init__()
+        self._buffer = ""
+        self._first_chunk_sent = False
+        self._first_chunk_timer: asyncio.Task | None = None
+
+    async def cleanup(self):
+        await self._cancel_first_chunk_timer()
+        await super().cleanup()
+
+    async def _cancel_first_chunk_timer(self):
+        if self._first_chunk_timer and not self._first_chunk_timer.done():
+            self._first_chunk_timer.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._first_chunk_timer
+        self._first_chunk_timer = None
+
+    def _token_count(self) -> int:
+        return len(TOKEN_RE.findall(self._buffer))
+
+    def _ends_with_clause_boundary(self) -> bool:
+        stripped = self._buffer.rstrip()
+        return bool(stripped) and bool(CLAUSE_BOUNDARY_RE.search(stripped[-1]))
+
+    def _should_flush_now(self) -> bool:
+        token_count = self._token_count()
+        if self._ends_with_clause_boundary():
+            return True
+
+        if not self._first_chunk_sent:
+            return token_count >= settings.VOICE_TTS_FIRST_CHUNK_TOKENS
+
+        return token_count >= settings.VOICE_TTS_SUBSEQUENT_CHUNK_TOKENS
+
+    async def _flush_buffer(self):
+        chunk = self._buffer.strip()
+        self._buffer = ""
+        await self._cancel_first_chunk_timer()
+        if not chunk:
+            return
+        self._first_chunk_sent = True
+        await self.push_frame(TextFrame(text=chunk))
+
+    async def _flush_first_chunk_on_timeout(self):
+        try:
+            await asyncio.sleep(settings.VOICE_TTS_FIRST_CHUNK_MAX_WAIT_MS / 1000)
+            if (
+                not self._first_chunk_sent
+                and self._token_count() >= settings.VOICE_TTS_FIRST_CHUNK_MIN_TOKENS
+            ):
+                await self._flush_buffer()
+        except asyncio.CancelledError:
+            raise
+
+    def _ensure_first_chunk_timer(self):
+        if self._first_chunk_sent or self._first_chunk_timer is not None:
+            return
+        self._first_chunk_timer = asyncio.create_task(self._flush_first_chunk_on_timeout())
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+
+        if isinstance(frame, (TextFrame, LLMTextFrame)):
+            text = getattr(frame, "text", "")
+            if text:
+                self._buffer += text
+                self._ensure_first_chunk_timer()
+                if self._should_flush_now():
+                    await self._flush_buffer()
+            return
+
+        if isinstance(frame, LLMFullResponseEndFrame):
+            await self._flush_buffer()
+            self._first_chunk_sent = False
+            await self.push_frame(frame, direction)
+            return
+
+        if isinstance(frame, (InterruptionFrame, EndFrame)):
+            await self._cancel_first_chunk_timer()
+            self._buffer = ""
+            self._first_chunk_sent = False
+            await self.push_frame(frame, direction)
+            return
+
+        await self.push_frame(frame, direction)
+
+
+class LowLatencyCartesiaTTSService(CartesiaTTSService):
+    """Cartesia TTS service that disables server-side continuation buffering."""
+
+    def __init__(self, *, max_buffer_delay_ms: int, **kwargs):
+        self._max_buffer_delay_ms = max(0, max_buffer_delay_ms)
+        kwargs.setdefault("text_aggregation_mode", TextAggregationMode.TOKEN)
+        super().__init__(**kwargs)
+
+    def _build_msg(
+        self,
+        text: str = "",
+        continue_transcript: bool = True,
+        add_timestamps: bool = True,
+    ):
+        payload = json.loads(super()._build_msg(text, continue_transcript, add_timestamps))
+        payload["max_buffer_delay_ms"] = self._max_buffer_delay_ms
+        return json.dumps(payload)
+
+
+class FluxDeepgramSTTService(STTService):
+    """Minimal Deepgram Flux websocket adapter for turn-based transcription."""
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        sample_rate: int = 16000,
+        use_eager_eot: bool = True,
+        eager_eot_threshold: float = 0.35,
+        eot_threshold: float = 0.5,
+        eot_timeout_ms: int = 700,
+        **kwargs,
+    ):
+        super().__init__(
+            sample_rate=sample_rate,
+            ttfs_p99_latency=0.35,
+            settings=STTSettings(model=model, language=None),
+            **kwargs,
+        )
+        self._api_key = api_key
+        self._model = model
+        self._configured_sample_rate = sample_rate
+        self._use_eager_eot = use_eager_eot
+        self._eager_eot_threshold = eager_eot_threshold
+        self._eot_threshold = eot_threshold
+        self._eot_timeout_ms = eot_timeout_ms
+        self._websocket = None
+        self._receive_task: asyncio.Task | None = None
+        self._flux_user_speaking = False
+        self._last_interim_text = ""
+        self._startup_error: Exception | None = None
+
+    def _effective_sample_rate(self) -> int:
+        return self.sample_rate or self._configured_sample_rate or 16000
+
+    def _debug_connection_params(self) -> dict[str, Any]:
+        params = {
+            "encoding": "linear16",
+            "sample_rate": self._effective_sample_rate(),
+            "model": self._model,
+            "eot_threshold": self._eot_threshold,
+            "eot_timeout_ms": self._eot_timeout_ms,
+        }
+        if self._use_eager_eot:
+            params["eager_eot_threshold"] = self._eager_eot_threshold
+        return params
+
+    def _build_uri(self) -> str:
+        query = {key: str(value) for key, value in self._debug_connection_params().items()}
+        return f"wss://api.deepgram.com/v2/listen?{urlencode(query)}"
+
+    def _is_connected(self) -> bool:
+        return self._websocket is not None and not getattr(self._websocket, "closed", True)
+
+    def _extract_transcript(self, payload: dict[str, Any]) -> str:
+        if isinstance(payload.get("transcript"), str):
+            return payload["transcript"].strip()
+
+        turn = payload.get("turn")
+        if isinstance(turn, dict):
+            if isinstance(turn.get("transcript"), str):
+                return turn["transcript"].strip()
+            if isinstance(turn.get("text"), str):
+                return turn["text"].strip()
+
+        alternatives = payload.get("alternatives")
+        if isinstance(alternatives, list) and alternatives:
+            first = alternatives[0]
+            if isinstance(first, dict):
+                if isinstance(first.get("transcript"), str):
+                    return first["transcript"].strip()
+                if isinstance(first.get("text"), str):
+                    return first["text"].strip()
+
+        return ""
+
+    async def _emit_started_speaking(self):
+        if self._flux_user_speaking:
+            return
+        self._flux_user_speaking = True
+        await self.broadcast_frame(UserStartedSpeakingFrame)
+        await self.broadcast_interruption()
+
+    async def _emit_stopped_speaking(self, force: bool = False):
+        if not self._flux_user_speaking and not force:
+            return
+        self._flux_user_speaking = False
+        await self.broadcast_frame(UserStoppedSpeakingFrame)
+
+    async def _connect(self):
+        if self._is_connected():
+            return
+        if self._startup_error:
+            raise RuntimeError("Deepgram Flux STT is unavailable for this session") from self._startup_error
+
+        try:
+            logger.debug(
+                f"Connecting to Deepgram Flux with params: {self._debug_connection_params()}"
+            )
+            self._websocket = await websockets.connect(
+                self._build_uri(),
+                extra_headers={"Authorization": f"token {self._api_key}"},
+                max_size=None,
+                ping_interval=20,
+                ping_timeout=20,
+            )
+            self._startup_error = None
+            self._receive_task = asyncio.create_task(self._receive_loop())
+            await self._call_event_handler("on_connected")
+        except Exception as e:
+            logger.error(f"Failed to connect to Deepgram Flux: {e}")
+            self._websocket = None
+            self._startup_error = e
+            await self._call_event_handler("on_connection_error", e)
+            raise
+
+    async def _disconnect(self, graceful: bool):
+        receive_task = self._receive_task
+        self._receive_task = None
+
+        try:
+            if self._is_connected() and graceful:
+                await self._websocket.send(json.dumps({"type": "CloseStream"}))
+        except Exception as e:
+            logger.debug(f"Deepgram Flux CloseStream failed: {e}")
+
+        try:
+            if self._websocket is not None:
+                await self._websocket.close()
+        finally:
+            self._websocket = None
+
+        if receive_task and not receive_task.done():
+            receive_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await receive_task
+
+        await self._call_event_handler("on_disconnected")
+
+    async def start(self, frame):
+        await super().start(frame)
+        await self._connect()
+
+    async def stop(self, frame):
+        await super().stop(frame)
+        await self._disconnect(graceful=True)
+
+    async def cancel(self, frame):
+        await super().cancel(frame)
+        await self._disconnect(graceful=False)
+
+    async def probe_connection(self):
+        await self._connect()
+        await self._disconnect(graceful=False)
+
+    async def run_stt(self, audio: bytes):
+        if self._startup_error:
+            raise RuntimeError("Deepgram Flux STT is unavailable for this session") from self._startup_error
+        if not self._is_connected():
+            await self._connect()
+
+        try:
+            await self._websocket.send(audio)
+        except Exception as e:
+            await self._call_event_handler("on_connection_error", e)
+            raise
+        yield None
+
+    async def _handle_turn_info(self, payload: dict[str, Any]):
+        event = str(payload.get("event") or "").strip()
+        transcript = self._extract_transcript(payload)
+
+        if event == "StartOfTurn":
+            await self._emit_started_speaking()
+            return
+
+        if event == "EagerEndOfTurn":
+            if self._use_eager_eot:
+                await self._emit_stopped_speaking(force=True)
+            return
+
+        if event == "TurnResumed":
+            await self._emit_started_speaking()
+            return
+
+        if event == "Update":
+            if transcript and transcript != self._last_interim_text:
+                self._last_interim_text = transcript
+                await self.push_frame(
+                    InterimTranscriptionFrame(
+                        transcript,
+                        self._user_id,
+                        _utcnow_iso(),
+                        None,
+                        result=payload,
+                    )
+                )
+            return
+
+        if event == "EndOfTurn":
+            await self._emit_stopped_speaking(force=True)
+            self._last_interim_text = ""
+            if transcript:
+                await self.push_frame(
+                    TranscriptionFrame(
+                        transcript,
+                        self._user_id,
+                        _utcnow_iso(),
+                        None,
+                        result=payload,
+                        finalized=True,
+                    )
+                )
+                await self.stop_processing_metrics()
+
+    async def _receive_loop(self):
+        try:
+            async for message in self._websocket:
+                if isinstance(message, bytes):
+                    continue
+
+                payload = json.loads(message)
+                response_type = payload.get("type")
+
+                if response_type == "TurnInfo":
+                    await self._handle_turn_info(payload)
+                elif response_type == "Error":
+                    await self._call_event_handler("on_connection_error", payload)
+                elif response_type == "Warning":
+                    logger.warning(f"Deepgram Flux warning: {payload}")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error(f"Deepgram Flux receive loop failed: {e}")
+            await self._call_event_handler("on_connection_error", e)
 
 
 class UserTurnGateProcessor(FrameProcessor):
@@ -343,7 +685,6 @@ class UserTurnGateProcessor(FrameProcessor):
     def __init__(
         self,
         session_id: str,
-        latency_tracker: TurnLatencyTracker,
         on_auto_end: Callable[[dict[str, Any]], None],
         pipeline_task: PipelineTask | None = None,
         commit_silence_ms: int = USER_TURN_COMMIT_SILENCE_MS,
@@ -351,7 +692,6 @@ class UserTurnGateProcessor(FrameProcessor):
     ):
         super().__init__()
         self._session_id = session_id
-        self._latency_tracker = latency_tracker
         self._on_auto_end = on_auto_end
         self._task = pipeline_task
         self._commit_silence_ms = commit_silence_ms
@@ -430,7 +770,6 @@ class UserTurnGateProcessor(FrameProcessor):
         if not text:
             return
 
-        self._latency_tracker.mark_user_commit()
         should_auto_end, auto_end_reason = self._should_auto_end(text)
         if should_auto_end:
             self._auto_end_triggered = True
@@ -476,9 +815,6 @@ class UserTurnGateProcessor(FrameProcessor):
             return
 
         if isinstance(frame, InterruptionFrame):
-            # InterruptionFrame is concurrent and does not always have a matching
-            # stop event when STT VAD events are disabled. Treat it as a commit
-            # cancellation signal only, not a durable speaking-state toggle.
             await self._cancel_commit_task()
             await self.push_frame(frame, direction)
             return
@@ -490,18 +826,14 @@ class UserTurnGateProcessor(FrameProcessor):
             return
 
         if isinstance(frame, TranscriptionFrame):
-            # A final transcription candidate means STT has already segmented
-            # speech; bias to fast commit unless explicit speaking-state says otherwise.
             self._user_is_speaking = False
             self._pending_direction = direction
             if frame.text.strip():
-                self._latency_tracker.mark_stt_final()
                 self._pending_segments.append(frame)
                 self._schedule_commit(self._commit_silence_ms, "transcription_frame")
             return
 
         if isinstance(frame, InterimTranscriptionFrame):
-            # Don't forward interim text into LLM context; we commit merged final turns.
             return
 
         if isinstance(frame, EndFrame):
@@ -516,11 +848,13 @@ class UserTurnGateProcessor(FrameProcessor):
 async def run_post_call_analysis(session_id: str, scenario: dict, persona: dict):
     """Run post-call transcript analysis asynchronously."""
     try:
-        all_transcripts = supabase_service.client.table("session_transcripts") \
-            .select("*") \
-            .eq("session_id", session_id) \
-            .order("timestamp_ms") \
+        all_transcripts = (
+            supabase_service.client.table("session_transcripts")
+            .select("*")
+            .eq("session_id", session_id)
+            .order("timestamp_ms")
             .execute()
+        )
 
         if all_transcripts.data:
             logger.info(f"Running post-call analysis on {len(all_transcripts.data)} transcript entries")
@@ -535,6 +869,87 @@ async def run_post_call_analysis(session_id: str, scenario: dict, persona: dict)
         logger.error(f"Post-call analysis failed for session {session_id}: {e}")
 
 
+async def create_session_stt_service(session_id: str) -> tuple[STTService, str]:
+    if not _is_flux_model(settings.DEEPGRAM_STT_MODEL):
+        fallback_stt = build_fallback_stt_service()
+        logger.info(
+            f"Using Deepgram streaming fallback STT for session {session_id} model={settings.DEEPGRAM_FALLBACK_STT_MODEL}"
+        )
+        return fallback_stt, "deepgram-streaming"
+
+    flux_stt = FluxDeepgramSTTService(
+        api_key=settings.DEEPGRAM_API_KEY,
+        model=settings.DEEPGRAM_STT_MODEL,
+        use_eager_eot=settings.VOICE_USE_EAGER_EOT,
+        eager_eot_threshold=settings.VOICE_EAGER_EOT_THRESHOLD,
+        eot_threshold=settings.VOICE_EOT_THRESHOLD,
+        eot_timeout_ms=settings.VOICE_EOT_TIMEOUT_MS,
+    )
+
+    try:
+        await flux_stt.probe_connection()
+        logger.info(
+            f"Using Deepgram Flux STT for session {session_id} model={settings.DEEPGRAM_STT_MODEL}"
+        )
+        return flux_stt, "flux"
+    except Exception as e:
+        if settings.DEEPGRAM_FLUX_REQUIRED:
+            raise RuntimeError(
+                f"Deepgram Flux is required but unavailable for session {session_id}"
+            ) from e
+
+        logger.warning(
+            f"Deepgram Flux unavailable for session {session_id}; "
+            f"falling back to {settings.DEEPGRAM_FALLBACK_STT_MODEL}: {e}"
+        )
+        fallback_stt = build_fallback_stt_service()
+        return fallback_stt, "deepgram-streaming"
+
+
+def _build_transport(
+    *,
+    livekit_url: str,
+    bot_token: str,
+    room_name: str,
+) -> LiveKitTransport:
+    params = LiveKitParams(
+        audio_in_enabled=True,
+        audio_out_enabled=True,
+        audio_in_sample_rate=16000,
+        audio_out_sample_rate=24000,
+        audio_in_passthrough=True,
+    )
+    params.vad_analyzer = SileroVADAnalyzer(
+        sample_rate=16000,
+        params=VADParams(
+            confidence=0.7,
+            start_secs=0.2,
+            stop_secs=0.2,
+            min_volume=0.6,
+        ),
+    )
+
+    return LiveKitTransport(
+        url=livekit_url,
+        token=bot_token,
+        room_name=room_name,
+        params=params,
+    )
+
+
+async def _flush_buffers(
+    session_id: str,
+    transcript_buffer: list[dict],
+):
+    if transcript_buffer:
+        try:
+            await supabase_service.save_transcript(session_id, transcript_buffer.copy())
+            logger.debug(f"Flushed {len(transcript_buffer)} transcript entries")
+            transcript_buffer.clear()
+        except Exception as e:
+            logger.error(f"Failed to save transcript: {e}")
+
+
 async def create_sales_pipeline(
     room_name: str,
     session_id: str,
@@ -546,15 +961,9 @@ async def create_sales_pipeline(
     pitch_briefing: dict | None = None,
     inferred_role: str | None = None,
 ):
-    """
-    Creates and runs a Pipecat voice AI pipeline for a sales training session.
+    """Create and run the voice AI pipeline for a sales training session."""
 
-    Pipeline flow:
-    transport.input() -> STT -> UserTranscriptCollector -> UserTurnGateProcessor
-        -> context_aggregator.user() -> LLM -> AIResponseCollector -> TTS
-        -> transport.output() -> OutputSpeechEventCollector -> context_aggregator.assistant()
-    """
-    logger.info(f"Starting pipeline for session {session_id} in room {room_name}")
+    logger.info(f"Starting cascade pipeline for session {session_id} in room {room_name}")
 
     pipeline_result: dict[str, Any] = {
         "session_id": session_id,
@@ -570,83 +979,39 @@ async def create_sales_pipeline(
         pitch_briefing=pitch_briefing,
         inferred_role=inferred_role,
     )
+    conversation_model = await resolve_conversation_model()
     transcript_buffer: list[dict] = []
-    latency_tracker = TurnLatencyTracker(session_id)
 
-    # Get Cartesia voice ID from persona
-    default_voice = "a0e99841-438c-4a64-b679-ae501e7d6091"
-    cartesia_voice_id = persona.get("cartesia_voice_id") or default_voice
+    transport = _build_transport(
+        livekit_url=livekit_url,
+        bot_token=bot_token,
+        room_name=room_name,
+    )
 
+    cartesia_voice_id = persona.get("cartesia_voice_id") or DEFAULT_CARTESIA_VOICE
     logger.info(f"Using Cartesia voice ID: {cartesia_voice_id}")
 
-    # Initialize LiveKit transport
-    transport = LiveKitTransport(
-        url=livekit_url,
-        token=bot_token,
-        room_name=room_name,
-        params=LiveKitParams(
-            audio_in_enabled=True,
-            audio_out_enabled=True,
-            audio_in_sample_rate=16000,
-            audio_out_sample_rate=24000,
-            audio_in_passthrough=True,
-        ),
-    )
-
-    stt = DeepgramSTTService(
-        api_key=settings.DEEPGRAM_API_KEY,
-        live_options=LiveOptions(
-            model="nova-3",
-            interim_results=True,
-            endpointing=50,
-        ),
-    )
-
-    conversation_model = await resolve_conversation_model()
-
-    # Use OpenAI-compatible endpoint (OpenRouter) with streaming
-    # Provider pinning bypasses OpenRouter's load balancer (~50-70ms overhead) and routes
-    # directly to xAI's infrastructure (~25ms overhead).
-    llm = OpenAILLMService(
-        api_key=settings.OPENROUTER_API_KEY,
-        model=conversation_model,
-        base_url="https://openrouter.ai/api/v1",
-        params=OpenAILLMService.InputParams(
-            extra={
-                "extra_body": {
-                    "provider": {
-                        "order": ["xAI"],
-                        "allow_fallbacks": False,
-                    }
-                }
-            }
-        ),
-    )
-
-    # Cartesia TTS
-    tts = CartesiaTTSService(
+    stt, stt_mode = await create_session_stt_service(session_id)
+    llm = build_conversation_llm(conversation_model)
+    tts = LowLatencyCartesiaTTSService(
         api_key=settings.CARTESIA_API_KEY,
         voice_id=cartesia_voice_id,
+        model=settings.CARTESIA_MODEL,
         sample_rate=24000,
-        aggregate_sentences=False,
+        max_buffer_delay_ms=settings.CARTESIA_MAX_BUFFER_DELAY_MS,
     )
 
-    # Transcript collectors - one for user (after STT), one for AI (after LLM)
-    user_transcript_collector = UserTranscriptCollector(session_id, transcript_buffer)
-    ai_response_collector = AIResponseCollector(session_id, transcript_buffer, latency_tracker)
-    output_speech_collector = OutputSpeechEventCollector(latency_tracker)
-
-    # Set up LLM context with system prompt
     context = OpenAILLMContext(
         messages=[{"role": "system", "content": system_prompt}],
     )
     context_aggregator = llm.create_context_aggregator(context)
-
+    user_transcript_collector = UserTranscriptCollector(session_id, transcript_buffer)
+    ai_response_collector = AIResponseCollector(session_id, transcript_buffer)
+    clause_chunker = ClauseChunkingProcessor()
     number_normalizer = NumberNormalizerProcessor()
-
+    context_manager = ConversationContextManager(context=context)
     turn_gate = UserTurnGateProcessor(
         session_id=session_id,
-        latency_tracker=latency_tracker,
         on_auto_end=lambda reason: pipeline_result.update(
             {"auto_complete_session": True, "end_reason": reason}
         ),
@@ -656,16 +1021,17 @@ async def create_sales_pipeline(
         [
             transport.input(),
             stt,
-            user_transcript_collector,  # Capture user speech after STT
-            turn_gate,                  # Commit only completed user turns to the LLM
+            user_transcript_collector,
+            turn_gate,
             context_aggregator.user(),
             llm,
-            ai_response_collector,      # Capture AI response after LLM
-            number_normalizer,          # Convert numerals to spoken words before TTS
+            ai_response_collector,
+            clause_chunker,
+            number_normalizer,
             tts,
             transport.output(),
-            output_speech_collector,    # Track bot speech start for latency metrics
             context_aggregator.assistant(),
+            context_manager,
         ]
     )
 
@@ -679,12 +1045,14 @@ async def create_sales_pipeline(
     )
     turn_gate.set_pipeline_task(task)
 
-    # Event handlers
     @transport.event_handler("on_first_participant_joined")
     async def on_first_participant_joined(transport_ref, participant: Any):
         participant_id = getattr(participant, "identity", participant)
         logger.info(f"User {participant_id} joined room {room_name}")
-        greeting = f"Hello! I'm {persona.get('name', 'your AI prospect')}. How can I help you today?"
+        greeting = (
+            f"Hello! I'm {persona.get('name', 'your AI prospect')}. "
+            "How can I help you today?"
+        )
         await task.queue_frames([TTSSpeakFrame(text=greeting)])
 
     @transport.event_handler("on_participant_left")
@@ -693,33 +1061,25 @@ async def create_sales_pipeline(
 
     @stt.event_handler("on_connected")
     async def on_stt_connected(stt_ref, *args, **kwargs):
-        logger.info(f"Deepgram STT connected for session {session_id}")
+        logger.info(f"Deepgram STT connected for session {session_id} mode={stt_mode}")
 
     @stt.event_handler("on_connection_error")
     async def on_stt_connection_error(stt_ref, error, *args, **kwargs):
         logger.error(
-            f"Deepgram STT connection error for session {session_id}: {error} ({type(error).__name__})"
+            f"Deepgram STT connection error for session {session_id} mode={stt_mode}: "
+            f"{error} ({type(error).__name__})"
         )
 
-    # Periodic transcript flush (every 15s)
-    async def flush_transcript():
+    async def flush_buffers():
         while True:
-            await asyncio.sleep(15)
-            if transcript_buffer:
-                try:
-                    await supabase_service.save_transcript(session_id, transcript_buffer.copy())
-                    logger.debug(f"Flushed {len(transcript_buffer)} transcript entries")
-                    transcript_buffer.clear()
-                except Exception as e:
-                    logger.error(f"Failed to save transcript: {e}")
+            await asyncio.sleep(TRANSCRIPT_FLUSH_INTERVAL_SECS)
+            await _flush_buffers(session_id, transcript_buffer)
 
-    flush_task = asyncio.create_task(flush_transcript())
-
-    # Run the pipeline
+    flush_task = asyncio.create_task(flush_buffers())
     runner = PipelineRunner()
 
     try:
-        logger.info(f"Pipeline running for session {session_id}")
+        logger.info(f"Pipeline running for session {session_id} model={conversation_model}")
         await runner.run(task)
     except asyncio.CancelledError:
         logger.info(f"Pipeline cancelled for session {session_id}")
@@ -732,20 +1092,15 @@ async def create_sales_pipeline(
         with suppress(asyncio.CancelledError):
             await flush_task
 
-        # Final flush of remaining transcripts
-        if transcript_buffer:
-            try:
-                await supabase_service.save_transcript(session_id, transcript_buffer)
-                logger.info(f"Saved final {len(transcript_buffer)} transcript entries")
-            except Exception as e:
-                logger.error(f"Failed to save final transcript: {e}")
+        await _flush_buffers(session_id, transcript_buffer)
 
-        # Trigger post-call analysis in the background so session shutdown is immediate.
         analysis_task = asyncio.create_task(run_post_call_analysis(session_id, scenario, persona))
         analysis_task.add_done_callback(
             lambda task: logger.error(
                 f"Background analysis task failed for session {session_id}: {task.exception()}"
-            ) if not task.cancelled() and task.exception() else None
+            )
+            if not task.cancelled() and task.exception()
+            else None
         )
 
     return pipeline_result
