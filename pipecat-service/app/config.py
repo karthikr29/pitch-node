@@ -29,10 +29,13 @@ class Settings:
         self.SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
         self.SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
         self.CONVERSATION_MODEL: str = os.getenv(
-            "CONVERSATION_MODEL", "meta-llama/llama-3.1-70b-instruct"
+            "CONVERSATION_MODEL", "google/gemini-2.5-flash-lite-preview-09-2025"
         )
         self.CONVERSATION_FALLBACK_MODEL: str = os.getenv("CONVERSATION_FALLBACK_MODEL", "")
         self.ANALYSIS_MODEL: str = os.getenv("ANALYSIS_MODEL", "moonshotai/kimi-k2.5")
+        self.INFER_ROLE_MODEL: str = os.getenv(
+            "INFER_ROLE_MODEL", "google/gemini-2.5-flash-lite-preview-09-2025"
+        )
         self.VOICE_USE_EAGER_EOT: bool = (
             os.getenv("VOICE_USE_EAGER_EOT", "true").lower() == "true"
         )

@@ -170,7 +170,7 @@ def _build_base_prompt(
         "6. If asked to end the call, end politely.",
         "7. Do not invent backstory details absent from scenario context.",
         f"8. The caller's objectives are: {', '.join(objectives)}",
-        "9. Write all numbers as words when speaking (e.g., 'thirty' not '30', 'fifty dollars' not '$50', 'seventy-five percent' not '75%'). This ensures proper speech output.",
+        "9. Write all numbers as words when speaking (e.g., 'thirty' not '30', 'fifty dollars' not '$50', 'seventy-five percent' not '75%'). For times, say 'ten AM' or 'three thirty PM', never '10:00 AM' or '10:00'. This ensures proper speech output.",
     ]
     if extra_rules:
         rules.extend(extra_rules)

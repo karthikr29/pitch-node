@@ -38,7 +38,7 @@ from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.services.cartesia.tts import CartesiaTTSService
 from pipecat.services.deepgram.stt import DeepgramSTTService, LiveOptions
-from pipecat.services.grok.llm import GrokLLMService
+from pipecat.services.openrouter.llm import OpenRouterLLMService
 from pipecat.services.settings import STTSettings
 from pipecat.services.stt_service import STTService
 from pipecat.services.tts_service import TextAggregationMode
@@ -49,7 +49,7 @@ from app.config import settings
 from app.prompts.system_prompts import build_system_prompt
 from app.services.analysis_service import AnalysisService
 from app.services.supabase_service import SupabaseService
-from app.services.xai_service import normalize_grok_model_name
+
 
 try:
     from num2words import num2words as _num2words
@@ -89,20 +89,16 @@ def _utcnow_iso() -> str:
 
 
 async def resolve_conversation_model() -> str:
-    configured = (settings.CONVERSATION_MODEL or "").strip()
-    return normalize_grok_model_name(configured)
+    return (settings.CONVERSATION_MODEL or "google/gemini-2.5-flash-lite-preview-09-2025").strip()
 
 
-def build_conversation_llm(conversation_model: str) -> GrokLLMService:
-    if not settings.XAI_API_KEY:
-        raise RuntimeError("XAI_API_KEY is required for the live conversation path")
+def build_conversation_llm(conversation_model: str) -> OpenRouterLLMService:
+    if not settings.OPENROUTER_API_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY is required for the live conversation path")
 
-    logger.info(
-        f"Using direct xAI Grok client for conversation via {settings.XAI_API_BASE_URL}"
-    )
-    return GrokLLMService(
-        api_key=settings.XAI_API_KEY,
-        base_url=settings.XAI_API_BASE_URL,
+    logger.info(f"Using OpenRouter for conversation model: {conversation_model}")
+    return OpenRouterLLMService(
+        api_key=settings.OPENROUTER_API_KEY,
         model=conversation_model,
     )
 
@@ -206,26 +202,161 @@ class NumberNormalizerProcessor(FrameProcessor):
         await self.push_frame(frame, direction)
 
     def _normalize(self, text: str) -> str:
+        # 1. Time formats (HH:MM AM/PM) — must be first before digits are consumed
+        def _time_to_words(m: re.Match) -> str:
+            hour = int(m.group(1))
+            minute = int(m.group(2))
+            period = (m.group(3) or "").strip().upper()
+            hour_word = _num2words(hour)
+            if minute == 0:
+                minute_part = ""
+            elif minute < 10:
+                minute_part = f" oh {_num2words(minute)}"
+            else:
+                minute_part = f" {_num2words(minute)}"
+            period_part = f" {period}" if period else ""
+            return f"{hour_word}{minute_part}{period_part}"
+
         text = re.sub(
-            r"\$([0-9,]+(?:\.\d+)?)",
-            lambda m: _num2words(float(m.group(1).replace(",", ""))) + " dollars",
+            r"\b(1[0-2]|0?[1-9]):(0[0-9]|[1-5][0-9])\s*(AM|PM|am|pm)\b",
+            _time_to_words,
+            text,
+        )
+
+        # 2. Phone numbers — before large-number and integer patterns
+        def _phone_to_words(m: re.Match) -> str:
+            digits = re.sub(r"\D", "", m.group(0))
+            words = ["oh" if d == "0" else _num2words(int(d)) for d in digits]
+            if len(digits) == 10:
+                return f"{' '.join(words[:3])}, {' '.join(words[3:6])}, {' '.join(words[6:])}"
+            if len(digits) == 11 and digits[0] == "1":
+                return f"one, {' '.join(words[1:4])}, {' '.join(words[4:7])}, {' '.join(words[7:])}"
+            return " ".join(words)
+
+        text = re.sub(
+            r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b",
+            _phone_to_words,
+            text,
+        )
+
+        # 3 & 4. Large abbreviated numbers ($1.2M, 500K, 2.5B) — before dollar/integer patterns
+        _LARGE_SUFFIXES = {"k": "thousand", "m": "million", "b": "billion", "t": "trillion"}
+
+        def _large_num_to_words(m: re.Match) -> str:
+            has_dollar = bool(m.group(1))
+            integer_str = m.group(2).replace(",", "")
+            decimal_str = m.group(3)
+            suffix_word = _LARGE_SUFFIXES[m.group(4).lower()]
+            if decimal_str:
+                dec_digits = decimal_str.lstrip(".")
+                num_part = (
+                    f"{_num2words(int(integer_str))} point "
+                    f"{' '.join(_num2words(int(d)) for d in dec_digits)}"
+                )
+            else:
+                num_part = _num2words(int(integer_str))
+            result = f"{num_part} {suffix_word}"
+            if has_dollar:
+                result += " dollars"
+            return result
+
+        text = re.sub(
+            r"(\$?)(\d{1,3}(?:,\d{3})*)(\.\d+)?([KMBTkmbt])\b",
+            _large_num_to_words,
+            text,
+        )
+
+        # 5. Multipliers (3x, 10x, 2.5x) — before integer catch-all
+        def _multiplier_to_words(m: re.Match) -> str:
+            raw = m.group(1)
+            value = float(raw)
+            if value == int(value):
+                return f"{_num2words(int(value))} times"
+            int_part = int(value)
+            dec_digits = raw.split(".")[1]
+            return (
+                f"{_num2words(int_part)} point "
+                f"{' '.join(_num2words(int(d)) for d in dec_digits)} times"
+            )
+
+        text = re.sub(r"\b(\d+(?:\.\d+)?)[xX]\b", _multiplier_to_words, text)
+
+        # 6. Percent ranges (10-20%) — before percent regex
+        def _pct_range_to_words(m: re.Match) -> str:
+            lo = float(m.group(1))
+            hi = float(m.group(2))
+            lo_word = _num2words(int(lo)) if lo == int(lo) else _num2words(lo)
+            hi_word = _num2words(int(hi)) if hi == int(hi) else _num2words(hi)
+            return f"{lo_word} to {hi_word} percent"
+
+        text = re.sub(r"(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)%", _pct_range_to_words, text)
+
+        # 7. Dollar ranges ($50-$100) — before dollar regex
+        def _dollar_range_to_words(m: re.Match) -> str:
+            lo_raw = m.group(1).replace(",", "")
+            hi_raw = m.group(2).replace(",", "")
+            lo = float(lo_raw)
+            hi = float(hi_raw)
+            lo_word = _num2words(int(lo)) if lo == int(lo) else _num2words(lo)
+            hi_word = _num2words(int(hi)) if hi == int(hi) else _num2words(hi)
+            return f"{lo_word} to {hi_word} dollars"
+
+        text = re.sub(
+            r"\$([0-9,]+(?:\.\d+)?)-\$([0-9,]+(?:\.\d+)?)",
+            _dollar_range_to_words,
+            text,
+        )
+
+        # 8. Leading-zero-less decimals (.5%, .25) — before percent and decimal patterns
+        text = re.sub(
+            r"(?<!\d)\.(\d+)%",
+            lambda m: f"point {' '.join(_num2words(int(d)) for d in m.group(1))} percent",
             text,
         )
         text = re.sub(
-            r"([0-9,]+(?:\.\d+)?)%",
-            lambda m: _num2words(float(m.group(1).replace(",", ""))) + " percent",
+            r"(?<!\d)\.(\d+)\b",
+            lambda m: f"point {' '.join(_num2words(int(d)) for d in m.group(1))}",
             text,
         )
+
+        # 9. Dollar amounts
+        def _dollar_to_words(m: re.Match) -> str:
+            raw = m.group(1).replace(",", "")
+            value = float(raw)
+            if value == int(value):
+                return f"{_num2words(int(value))} dollars"
+            dollars = int(value)
+            cents = round((value - dollars) * 100)
+            if cents == 0:
+                return f"{_num2words(dollars)} dollars"
+            return f"{_num2words(dollars)} dollars and {_num2words(cents)} cents"
+
+        text = re.sub(r"\$([0-9,]+(?:\.\d+)?)", _dollar_to_words, text)
+
+        # 10. Percentages
+        def _pct_to_words(m: re.Match) -> str:
+            raw = m.group(1).replace(",", "")
+            value = float(raw)
+            spoken = _num2words(int(value)) if value == int(value) else _num2words(value)
+            return f"{spoken} percent"
+
+        text = re.sub(r"([0-9,]+(?:\.\d+)?)%", _pct_to_words, text)
+
+        # 11. Fractions (X/Y)
         text = re.sub(
             r"([0-9]+)/([0-9]+)",
             lambda m: f"{_num2words(int(m.group(1)))} out of {_num2words(int(m.group(2)))}",
             text,
         )
+
+        # 12. Ordinals (1st, 2nd, etc.)
         text = re.sub(
             r"\b([0-9]+)(st|nd|rd|th)\b",
             lambda m: _num2words(int(m.group(1)), to="ordinal"),
             text,
         )
+
+        # 13. Decimals (X.Y)
         text = re.sub(
             r"\b([0-9]+)\.([0-9]+)\b",
             lambda m: _num2words(int(m.group(1)))
@@ -233,11 +364,34 @@ class NumberNormalizerProcessor(FrameProcessor):
             + " ".join(_num2words(int(d)) for d in m.group(2)),
             text,
         )
+
+        # 14. Comma-separated thousands (1,000,000)
         text = re.sub(
             r"\b([0-9]{1,3}(?:,[0-9]{3})+)\b",
             lambda m: _num2words(int(m.group(1).replace(",", ""))),
             text,
         )
+
+        # 15. Year pronunciation: 2000-2099 → "twenty X" (natural speech)
+        def _year_to_words(m: re.Match) -> str:
+            tens = int(m.group(1)) - 2000
+            if tens == 0:
+                return "two thousand"
+            elif tens < 10:
+                return f"twenty oh {_num2words(tens)}"
+            else:
+                return f"twenty {_num2words(tens)}"
+
+        text = re.sub(r"\b(20\d{2})\b", _year_to_words, text)
+
+        # 16. Ratio colons (3:1) — after time pattern (AM/PM consumed), before integer catch-all
+        text = re.sub(
+            r"\b(\d+):(\d+)\b",
+            lambda m: f"{_num2words(int(m.group(1)))} to {_num2words(int(m.group(2)))}",
+            text,
+        )
+
+        # 17. Integer catch-all
         text = re.sub(
             r"\b([0-9]+)\b",
             lambda m: _num2words(int(m.group(1))),

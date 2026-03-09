@@ -8,11 +8,6 @@ import json as _json
 from app.config import settings
 from app.services.livekit_service import LiveKitService
 from app.services.supabase_service import SupabaseService
-from app.services.xai_service import (
-    get_xai_chat_completions_url,
-    get_xai_headers,
-    normalize_grok_model_name,
-)
 
 router = APIRouter()
 livekit_service = LiveKitService()
@@ -61,16 +56,19 @@ async def infer_role(req: InferRoleRequest, _=Depends(verify_api_key)):
     else:
         return {"roles": []}
 
-    if not settings.XAI_API_KEY:
-        raise HTTPException(status_code=500, detail="XAI_API_KEY is not configured")
+    if not settings.OPENROUTER_API_KEY:
+        raise HTTPException(status_code=500, detail="OPENROUTER_API_KEY is not configured")
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
-                get_xai_chat_completions_url(),
-                headers=get_xai_headers(),
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                },
                 json={
-                    "model": normalize_grok_model_name(settings.CONVERSATION_MODEL),
+                    "model": settings.INFER_ROLE_MODEL,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0.3,
                     "max_tokens": 80,
