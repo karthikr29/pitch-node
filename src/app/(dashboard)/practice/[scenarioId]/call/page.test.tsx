@@ -156,6 +156,18 @@ describe("CallRoomPage auto-end behavior", () => {
           });
         }
 
+        if (url === "/api/voice/session-connected") {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                sessionId: "session-1",
+                startedAt: "2026-03-12T00:00:00.000Z",
+                alreadyStarted: false,
+              }),
+          });
+        }
+
         if (url === "/api/voice/end-session") {
           return Promise.resolve({
             ok: true,
@@ -203,6 +215,30 @@ describe("CallRoomPage auto-end behavior", () => {
     await settleCallPage();
 
     expect(screen.getByText("Ending call...")).toBeInTheDocument();
+  });
+
+  it("keeps the preparing loader visible until LiveKit connects", async () => {
+    const fetchMock = vi.mocked(fetch);
+    mockConnectionState = "connecting";
+    const view = render(<CallRoomPage />);
+
+    await settleCallPage();
+
+    expect(screen.getByText("Preparing your call...")).toBeInTheDocument();
+    expect(screen.queryByTestId("visualizer")).not.toBeInTheDocument();
+
+    mockConnectionState = "connected";
+    view.rerender(<CallRoomPage />);
+
+    await settleCallPage();
+
+    expect(screen.queryByText("Preparing your call...")).not.toBeInTheDocument();
+    expect(screen.getByTestId("visualizer")).toBeInTheDocument();
+
+    const sessionConnectedCalls = fetchMock.mock.calls.filter(
+      ([input]) => String(input) === "/api/voice/session-connected"
+    );
+    expect(sessionConnectedCalls).toHaveLength(1);
   });
 
   it("navigates once on remote disconnect after auto-end begins and skips manual end-session", async () => {
@@ -277,7 +313,7 @@ describe("CallRoomPage auto-end behavior", () => {
 
     await settleCallPage();
 
-    expect(screen.getByTestId("livekit-room")).toBeInTheDocument();
+    expect(screen.getByTestId("visualizer")).toBeInTheDocument();
 
     const buttons = screen.getAllByRole("button");
     await act(async () => {

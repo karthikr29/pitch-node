@@ -65,6 +65,41 @@ function readPitchBriefingFromStorage(scenarioId: string) {
   }
 }
 
+function PreparingCallScreen() {
+  return (
+    <div className="fixed inset-0 bg-slate-950 z-50 flex flex-col items-center justify-center">
+      <div className="absolute inset-0 z-0 opacity-60">
+        <StarryBackground />
+      </div>
+      <div className="relative z-10 flex flex-col items-center">
+        <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
+        <p className="text-slate-400">Preparing your call...</p>
+      </div>
+    </div>
+  );
+}
+
+function ConnectionGate({
+  onConnected,
+}: {
+  onConnected: (connectedAt: string) => void;
+}) {
+  const connectionState = useConnectionState();
+  const hasConnectedRef = useRef(false);
+
+  useEffect(() => {
+    if (
+      connectionState === ConnectionState.Connected &&
+      !hasConnectedRef.current
+    ) {
+      hasConnectedRef.current = true;
+      onConnected(new Date().toISOString());
+    }
+  }, [connectionState, onConnected]);
+
+  return null;
+}
+
 // Inner component that uses LiveKit hooks (must be inside LiveKitRoom)
 function CallInterface({
   sessionId,
@@ -442,10 +477,15 @@ export default function CallRoomPage() {
   const [credentials, setCredentials] = useState<RoomCredentials | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
+  const [callReady, setCallReady] = useState(false);
   const hasInitializedRef = useRef(false); // Prevent double initialization from React StrictMode
   const sessionEndHandledRef = useRef(false);
   const intentionalDisconnectRef = useRef(false);
   const autoEndRequestedRef = useRef(false);
+  const connectedAtRef = useRef<string | null>(null);
+  const sessionConnectedSyncedRef = useRef(false);
+  const sessionConnectedInFlightRef = useRef(false);
+  const sessionConnectedRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Persona display info (from query params or defaults)
   const [personaName] = useState(personaNameParam || "AI Prospect");
@@ -546,11 +586,74 @@ export default function CallRoomPage() {
     initializeCall();
   }, [callState, hasMicPermission, scenarioId, personaId, pitchContextParam, personaRoleParam]);
 
-  function endSessionInBackground(sessionId: string) {
+  const clearSessionConnectedRetry = useCallback(() => {
+    if (sessionConnectedRetryRef.current) {
+      clearTimeout(sessionConnectedRetryRef.current);
+      sessionConnectedRetryRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearSessionConnectedRetry();
+    };
+  }, [clearSessionConnectedRetry]);
+
+  const syncSessionConnected = useCallback(async () => {
+    const sessionId = credentials?.sessionId;
+    const connectedAt = connectedAtRef.current;
+
+    if (
+      !sessionId ||
+      !connectedAt ||
+      sessionConnectedSyncedRef.current ||
+      sessionConnectedInFlightRef.current
+    ) {
+      return;
+    }
+
+    sessionConnectedInFlightRef.current = true;
+    clearSessionConnectedRetry();
+
+    try {
+      const response = await fetch("/api/voice/session-connected", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, connectedAt }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to sync session start: ${response.status}`);
+      }
+
+      sessionConnectedSyncedRef.current = true;
+    } catch (err) {
+      console.warn("[CallPage] Failed to sync connected session start:", err);
+      sessionConnectedRetryRef.current = setTimeout(() => {
+        void syncSessionConnected();
+      }, 2000);
+    } finally {
+      sessionConnectedInFlightRef.current = false;
+    }
+  }, [clearSessionConnectedRetry, credentials?.sessionId]);
+
+  const handleConnectionReady = useCallback((connectedAt: string) => {
+    if (connectedAtRef.current) return;
+
+    connectedAtRef.current = connectedAt;
+    setCallReady(true);
+    setCallState("connected");
+    void syncSessionConnected();
+  }, [syncSessionConnected]);
+
+  function endSessionInBackground(sessionId: string, connectedAt?: string | null) {
     void fetch("/api/voice/end-session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId }),
+      body: JSON.stringify({
+        sessionId,
+        connectedAt: connectedAt || undefined,
+      }),
     })
       .then(async (res) => {
         if (!res.ok) {
@@ -573,7 +676,7 @@ export default function CallRoomPage() {
       const shouldFinalizeInBackground =
         source === "manual" || (source === "remote-disconnect" && !autoEndRequestedRef.current);
       if (shouldFinalizeInBackground) {
-        endSessionInBackground(sessionId);
+        endSessionInBackground(sessionId, connectedAtRef.current);
       }
       router.push(`/history/${sessionId}`);
       return;
@@ -633,61 +736,57 @@ export default function CallRoomPage() {
 
   // Loading state - waiting for credentials
   if (callState === "initializing" || !credentials) {
-    return (
-      <div className="fixed inset-0 bg-slate-950 z-50 flex flex-col items-center justify-center">
-        <div className="absolute inset-0 z-0 opacity-60">
-          <StarryBackground />
-        </div>
-        <div className="relative z-10 flex flex-col items-center">
-          <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-          <p className="text-slate-400">Preparing your call...</p>
-        </div>
-      </div>
-    );
+    return <PreparingCallScreen />;
   }
 
-  // Connected state - render LiveKitRoom with the call interface
   return (
-    <LiveKitRoom
-      serverUrl={credentials.livekitUrl}
-      token={credentials.token}
-      connect={true}
-      audio={true}
-      video={false}
-      onDisconnected={() => {
-        console.log("[CallPage] Disconnected from LiveKit");
-        setCallState("disconnected");
-        completeSessionAndNavigate("remote-disconnect");
-      }}
-      onError={(error) => {
-        const message = (error?.message || "").toLowerCase();
-        const expectedDisconnect =
-          message.includes("client initiated disconnect") || intentionalDisconnectRef.current;
-        if (expectedDisconnect) {
-          console.debug("[CallPage] Ignoring expected disconnect error:", error.message);
-          return;
-        }
-        console.error("[CallPage] LiveKit error:", error);
-        setError(error.message);
-        setCallState("error");
-      }}
-    >
-      <CallInterface
-        sessionId={credentials.sessionId}
-        personaName={personaName}
-        personaRole={personaRole}
-        onBeforeDisconnect={() => {
-          intentionalDisconnectRef.current = true;
-        }}
-        onEndCall={handleEndCall}
-        onAutoEndRequested={() => {
-          autoEndRequestedRef.current = true;
-        }}
-        onAutoEndTimeout={() => {
+    <>
+      {!callReady && <PreparingCallScreen />}
+
+      <LiveKitRoom
+        serverUrl={credentials.livekitUrl}
+        token={credentials.token}
+        connect={true}
+        audio={true}
+        video={false}
+        onDisconnected={() => {
+          console.log("[CallPage] Disconnected from LiveKit");
           setCallState("disconnected");
-          completeSessionAndNavigate("auto-end-timeout");
+          completeSessionAndNavigate("remote-disconnect");
         }}
-      />
-    </LiveKitRoom>
+        onError={(error) => {
+          const message = (error?.message || "").toLowerCase();
+          const expectedDisconnect =
+            message.includes("client initiated disconnect") || intentionalDisconnectRef.current;
+          if (expectedDisconnect) {
+            console.debug("[CallPage] Ignoring expected disconnect error:", error.message);
+            return;
+          }
+          console.error("[CallPage] LiveKit error:", error);
+          setError(error.message);
+          setCallState("error");
+        }}
+      >
+        <ConnectionGate onConnected={handleConnectionReady} />
+        {callReady ? (
+          <CallInterface
+            sessionId={credentials.sessionId}
+            personaName={personaName}
+            personaRole={personaRole}
+            onBeforeDisconnect={() => {
+              intentionalDisconnectRef.current = true;
+            }}
+            onEndCall={handleEndCall}
+            onAutoEndRequested={() => {
+              autoEndRequestedRef.current = true;
+            }}
+            onAutoEndTimeout={() => {
+              setCallState("disconnected");
+              completeSessionAndNavigate("auto-end-timeout");
+            }}
+          />
+        ) : null}
+      </LiveKitRoom>
+    </>
   );
 }

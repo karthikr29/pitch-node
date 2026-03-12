@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+function normalizeConnectedAt(value: unknown) {
+  if (typeof value !== "string") return null;
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return parsed.toISOString();
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { sessionId } = await request.json();
+  const { sessionId, connectedAt } = await request.json();
   if (!sessionId) return NextResponse.json({ error: "sessionId required" }, { status: 400 });
 
   // Verify session belongs to user
@@ -43,13 +52,29 @@ export async function POST(request: NextRequest) {
   }
 
   const endedAt = new Date().toISOString();
-  const durationSeconds = session.started_at
-    ? Math.round((new Date(endedAt).getTime() - new Date(session.started_at).getTime()) / 1000)
+  const fallbackStartedAt = session.started_at ? null : normalizeConnectedAt(connectedAt);
+  const effectiveStartedAt = session.started_at || fallbackStartedAt;
+  const durationSeconds = effectiveStartedAt
+    ? Math.round((new Date(endedAt).getTime() - new Date(effectiveStartedAt).getTime()) / 1000)
     : 0;
+  const updatePayload: {
+    status: string;
+    ended_at: string;
+    duration_seconds: number;
+    started_at?: string;
+  } = {
+    status: "completed",
+    ended_at: endedAt,
+    duration_seconds: durationSeconds,
+  };
+
+  if (fallbackStartedAt) {
+    updatePayload.started_at = fallbackStartedAt;
+  }
 
   await supabase
     .from("sessions")
-    .update({ status: "completed", ended_at: endedAt, duration_seconds: durationSeconds })
+    .update(updatePayload)
     .eq("id", sessionId);
 
   return NextResponse.json({ sessionId, duration: durationSeconds });

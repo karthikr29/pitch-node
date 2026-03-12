@@ -143,6 +143,7 @@ describe("Voice API - create-room", () => {
         }),
       })
     );
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it("returns 502 when pipecat service returns error", async () => {
@@ -339,6 +340,183 @@ describe("Voice API - end-session", () => {
     expect(response.status).toBe(200);
     expect(body.sessionId).toBe("s1");
     expect(body.duration).toBeGreaterThan(0);
+  });
+
+  it("uses connectedAt fallback when the session has not started yet", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+
+    const connectedAt = new Date(Date.now() - 45000).toISOString();
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: { id: "s1", user_id: "user-1", started_at: null, livekit_room_name: "room-1" },
+    });
+    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle });
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 });
+    const mockSel = vi.fn().mockReturnValue({ eq: mockEq1 });
+    const mockUpdateEq = vi.fn().mockResolvedValue({ data: null, error: null });
+    const mockUpdateFn = vi.fn().mockReturnValue({ eq: mockUpdateEq });
+    mockFrom.mockReturnValue({ select: mockSel, update: mockUpdateFn });
+
+    mockFetch.mockResolvedValue({ ok: true });
+
+    const { POST } = await import("@/app/api/voice/end-session/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/end-session", {
+      method: "POST",
+      body: JSON.stringify({ sessionId: "s1", connectedAt }),
+    });
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.duration).toBeGreaterThan(0);
+    expect(mockUpdateFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "completed",
+        started_at: connectedAt,
+      })
+    );
+  });
+});
+
+describe("Voice API - session-connected", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it("returns 401 for unauthenticated requests", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+
+    const { POST } = await import("@/app/api/voice/session-connected/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/session-connected", {
+      method: "POST",
+      body: JSON.stringify({ sessionId: "s1", connectedAt: new Date().toISOString() }),
+    });
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe("Unauthorized");
+  });
+
+  it("returns 400 when sessionId is missing or connectedAt is invalid", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+
+    const { POST } = await import("@/app/api/voice/session-connected/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/session-connected", {
+      method: "POST",
+      body: JSON.stringify({ connectedAt: "not-a-date" }),
+    });
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toContain("connectedAt");
+  });
+
+  it("returns 404 when the session is not found", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+
+    const mockSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle });
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 });
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 });
+    mockFrom.mockReturnValue({ select: mockSelect, update: vi.fn() });
+
+    const { POST } = await import("@/app/api/voice/session-connected/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/session-connected", {
+      method: "POST",
+      body: JSON.stringify({ sessionId: "missing", connectedAt: new Date().toISOString() }),
+    });
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(body.error).toContain("not found");
+  });
+
+  it("sets started_at and marks the session active on first connect", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+
+    const connectedAt = "2026-03-12T10:00:00.000Z";
+    const mockSingle = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: { id: "s1", started_at: null },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: { started_at: connectedAt },
+        error: null,
+      });
+    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle });
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 });
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 });
+    const mockIs = vi.fn().mockResolvedValue({ data: null, error: null });
+    const mockUpdateEq2 = vi.fn().mockReturnValue({ is: mockIs });
+    const mockUpdateEq1 = vi.fn().mockReturnValue({ eq: mockUpdateEq2 });
+    const mockUpdateFn = vi.fn().mockReturnValue({ eq: mockUpdateEq1 });
+    mockFrom.mockReturnValue({ select: mockSelect, update: mockUpdateFn });
+
+    const { POST } = await import("@/app/api/voice/session-connected/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/session-connected", {
+      method: "POST",
+      body: JSON.stringify({ sessionId: "s1", connectedAt }),
+    });
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      sessionId: "s1",
+      startedAt: connectedAt,
+      alreadyStarted: false,
+    });
+    expect(mockUpdateFn).toHaveBeenCalledWith({
+      status: "active",
+      started_at: connectedAt,
+    });
+    expect(mockIs).toHaveBeenCalledWith("started_at", null);
+  });
+
+  it("returns the existing started_at without updating when already started", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+
+    const existingStartedAt = "2026-03-12T10:00:00.000Z";
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: { id: "s1", started_at: existingStartedAt },
+      error: null,
+    });
+    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle });
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 });
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 });
+    const mockUpdateFn = vi.fn();
+    mockFrom.mockReturnValue({ select: mockSelect, update: mockUpdateFn });
+
+    const { POST } = await import("@/app/api/voice/session-connected/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/session-connected", {
+      method: "POST",
+      body: JSON.stringify({ sessionId: "s1", connectedAt: new Date().toISOString() }),
+    });
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      sessionId: "s1",
+      startedAt: existingStartedAt,
+      alreadyStarted: true,
+    });
+    expect(mockUpdateFn).not.toHaveBeenCalled();
   });
 });
 

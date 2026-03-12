@@ -90,8 +90,6 @@ export async function POST(request: NextRequest) {
 
     const pipecatData = await response.json();
 
-    await supabase.from("sessions").update({ status: "active", started_at: new Date().toISOString() }).eq("id", session.id);
-
     return NextResponse.json({
       sessionId: session.id,
       token: pipecatData.token,
