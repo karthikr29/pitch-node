@@ -39,9 +39,9 @@ describe("NavBar", () => {
     mockPathname.mockReturnValue("/dashboard");
   });
 
-  it("renders the pitchnode logo text", () => {
+  it("renders the ConvoSparr logo text", () => {
     render(<NavBar />);
-    expect(screen.getByText("node")).toBeInTheDocument();
+    expect(screen.getByText("ConvoSparr")).toBeInTheDocument();
   });
 
   it("renders all 4 nav links on desktop (no Settings)", () => {

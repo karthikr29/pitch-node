@@ -56,7 +56,7 @@ const tiers = [
       "Priority support & onboarding",
     ],
     cta: "Contact Sales",
-    href: "mailto:hello@pitchnode.com",
+    href: "mailto:hello@convosparr.io",
     highlighted: false,
   },
 ];

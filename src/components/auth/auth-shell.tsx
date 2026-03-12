@@ -17,13 +17,13 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           <div className="relative w-10 h-10 transition-transform group-hover:scale-105">
             <Image
               src="/branding/logo.svg"
-              alt="pitchnode Logo"
+              alt="ConvoSparr Logo"
               fill
               className="object-contain"
             />
           </div>
-          <span className="font-display text-3xl font-bold text-text-primary tracking-[0.07em]">
-            pitch<span className="text-primary">node</span>
+          <span className="font-display text-3xl font-bold text-primary tracking-[0.07em]">
+            ConvoSparr
           </span>
         </Link>
 

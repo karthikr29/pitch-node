@@ -188,7 +188,7 @@ class TestAuthentication:
 
 
 class TestInferRole:
-    def test_infer_role_uses_direct_xai(self, client):
+    def test_infer_role_uses_openrouter(self, client):
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
         mock_response.json.return_value = {
@@ -207,8 +207,8 @@ class TestInferRole:
         async_client.post.return_value = mock_response
 
         with patch("app.api.routes.httpx.AsyncClient", return_value=async_client), \
-             patch("app.api.routes.settings.XAI_API_KEY", "test-xai"), \
-             patch("app.api.routes.settings.XAI_API_BASE_URL", "https://api.x.ai/v1"):
+             patch("app.api.routes.settings.OPENROUTER_API_KEY", "test-openrouter"), \
+             patch("app.api.routes.settings.INFER_ROLE_MODEL", "test-infer-model"):
             response = client.post(
                 "/api/v1/infer-role",
                 headers={"Authorization": VALID_AUTH},
@@ -226,8 +226,8 @@ class TestInferRole:
         ]
         async_client.post.assert_awaited_once()
         _, kwargs = async_client.post.await_args
-        assert kwargs["headers"]["Authorization"] == "Bearer test-xai"
-        assert kwargs["json"]["model"] == "grok-4-1-fast-reasoning"
+        assert kwargs["headers"]["Authorization"] == "Bearer test-openrouter"
+        assert kwargs["json"]["model"] == "test-infer-model"
         assert kwargs["json"]["messages"][0]["role"] == "user"
 
     def test_infer_role_returns_empty_when_no_inputs(self, client):
@@ -427,4 +427,37 @@ class TestSessionEnd:
             "/api/v1/sessions/test-session-1/end",
             headers={"Authorization": INVALID_AUTH},
         )
+        assert response.status_code == 401
+
+
+class TestSessionState:
+    def test_session_state_returns_service_state(self, client):
+        with patch("app.api.routes.livekit_service") as mock_lk_svc:
+            mock_lk_svc.get_session_state.return_value = {
+                "sessionId": "sess-state-1",
+                "phase": "ending",
+                "autoEndRequested": True,
+                "endReason": {
+                    "speaker": "user",
+                    "reasonCode": "closing_goodbye",
+                    "trigger": "transcription_frame",
+                },
+                "requestedAt": "2026-03-09T00:00:00Z",
+            }
+
+            response = client.get(
+                "/api/v1/sessions/sess-state-1/state",
+                headers={"Authorization": VALID_AUTH},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["phase"] == "ending"
+        assert response.json()["autoEndRequested"] is True
+
+    def test_session_state_requires_auth(self, client):
+        response = client.get(
+            "/api/v1/sessions/sess-state-2/state",
+            headers={"Authorization": INVALID_AUTH},
+        )
+
         assert response.status_code == 401

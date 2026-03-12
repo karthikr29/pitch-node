@@ -31,9 +31,9 @@ test.describe("Authentication", () => {
     await expect(page.getByText(/password must be at least 6 characters/i)).toBeVisible();
   });
 
-  test("shows pitchnode branding on login page", async ({ page }) => {
+  test("shows ConvoSparr branding on login page", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.getByText("pitchnode")).toBeVisible();
+    await expect(page.getByText("ConvoSparr")).toBeVisible();
   });
 
   test("has back to home link", async ({ page }) => {

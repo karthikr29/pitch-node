@@ -5,8 +5,8 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: {
-    template: "%s | pitchnode",
-    default: "Dashboard | pitchnode",
+    template: "%s | ConvoSparr",
+    default: "Dashboard | ConvoSparr",
   },
   robots: { index: false, follow: false },
 };

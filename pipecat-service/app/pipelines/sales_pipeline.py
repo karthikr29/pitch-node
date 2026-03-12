@@ -69,23 +69,78 @@ CLAUSE_BOUNDARY_RE = re.compile(r"[,:;?!.]")
 USER_TURN_COMMIT_SILENCE_MS = 0
 USER_TURN_FALLBACK_COMMIT_MS = 280
 SOFT_REFUSAL_REPEAT_THRESHOLD = 2
+AUTO_END_FAREWELL = "Understood. I'll let you go now. Goodbye."
 
+EXPLICIT_END_PATTERNS = [
+    re.compile(r"\b(?:please\s+)?(?:end|stop)\s+(?:the\s+)?(?:call|conversation)\b"),
+    re.compile(r"\b(?:please\s+)?disconnect(?:\s+(?:the\s+)?call)?\b"),
+    re.compile(r"\b(?:please\s+)?hang\s+up(?:\s+(?:the\s+)?call)?\b"),
+]
 HARD_STOP_PATTERNS = [
     re.compile(r"\b(not interested|no interest)\b"),
-    re.compile(r"\b(stop|end|disconnect|hang up)\b.*\b(call|conversation)\b"),
     re.compile(r"\b(don['’]t|do not)\s+call\b"),
     re.compile(r"\bleave me alone\b"),
-    re.compile(r"\b(goodbye|bye)\b"),
 ]
 SOFT_REFUSAL_PATTERNS = [
     re.compile(r"^(no|nope|nah)\b"),
     re.compile(r"\bnot now\b"),
     re.compile(r"\bmaybe later\b"),
 ]
+CLOSING_ONLY_PATTERNS = [
+    re.compile(
+        r"^(?:(?:okay|ok|alright|all right|thanks|thank you|got it|understood|sure|sounds good)[,\s]+)*"
+        r"(?:bye|goodbye)"
+        r"(?:[,\s]+(?:for now|then|talk soon|thanks|thank you|have a (?:good|great) day))*[.!?]*$"
+    ),
+    re.compile(
+        r"^(?:(?:okay|ok|alright|all right|thanks|thank you|got it|understood|sure|sounds good)[,\s]+)*"
+        r"(?:talk later|speak later|see you(?: later)?|catch you later)"
+        r"(?:[,\s]+(?:then|soon|thanks|thank you|have a (?:good|great) day))*[.!?]*$"
+    ),
+]
 
 
 def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def normalize_detection_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text.lower()).strip()
+
+
+def detect_closing_intent(text: str, speaker: str) -> dict[str, Any]:
+    normalized = normalize_detection_text(text)
+    result = {
+        "should_end": False,
+        "reason_code": "",
+        "speaker": speaker,
+    }
+    if not normalized:
+        return result
+
+    if any(pattern.search(normalized) for pattern in EXPLICIT_END_PATTERNS):
+        return {
+            "should_end": True,
+            "reason_code": "explicit_end_call",
+            "speaker": speaker,
+        }
+
+    if speaker == "user":
+        if any(pattern.search(normalized) for pattern in HARD_STOP_PATTERNS):
+            return {
+                "should_end": True,
+                "reason_code": "explicit_user_end",
+                "speaker": speaker,
+            }
+
+    if any(pattern.fullmatch(normalized) for pattern in CLOSING_ONLY_PATTERNS):
+        return {
+            "should_end": True,
+            "reason_code": "closing_goodbye",
+            "speaker": speaker,
+        }
+
+    return result
 
 
 async def resolve_conversation_model() -> str:
@@ -159,12 +214,23 @@ class UserTranscriptCollector(FrameProcessor):
 class AIResponseCollector(FrameProcessor):
     """Collects AI responses from streamed LLM text frames."""
 
-    def __init__(self, session_id: str, buffer: list[dict]):
+    def __init__(
+        self,
+        session_id: str,
+        buffer: list[dict],
+        on_auto_end: Callable[[dict[str, Any]], None] | None = None,
+    ):
         super().__init__()
         self._session_id = session_id
         self._buffer = buffer
+        self._on_auto_end = on_auto_end
         self._start_time = None
         self._ai_text_buffer = ""
+        self._task: PipelineTask | None = None
+        self._auto_end_triggered = False
+
+    def set_pipeline_task(self, pipeline_task: PipelineTask):
+        self._task = pipeline_task
 
     def _get_timestamp_ms(self) -> int:
         if self._start_time is None:
@@ -178,16 +244,42 @@ class AIResponseCollector(FrameProcessor):
             text = getattr(frame, "text", "")
             self._ai_text_buffer += text
         elif isinstance(frame, LLMFullResponseEndFrame):
-            if self._ai_text_buffer:
+            completed_text = self._ai_text_buffer.strip()
+            auto_end_reason = None
+            if completed_text:
                 self._buffer.append(
                     {
                         "speaker": "ai",
-                        "content": self._ai_text_buffer.strip(),
+                        "content": completed_text,
                         "timestamp_ms": self._get_timestamp_ms(),
                         "confidence": None,
                     }
                 )
+                detection = detect_closing_intent(completed_text, "ai")
+                if detection["should_end"] and not self._auto_end_triggered:
+                    auto_end_reason = {
+                        "type": "auto_end",
+                        "speaker": detection["speaker"],
+                        "reasonCode": detection["reason_code"],
+                        "trigger": "ai_full_response_end",
+                    }
                 self._ai_text_buffer = ""
+            await self.push_frame(frame, direction)
+            if auto_end_reason:
+                self._auto_end_triggered = True
+                if self._on_auto_end is not None:
+                    self._on_auto_end(auto_end_reason)
+                logger.info(
+                    f"Auto-ending session {self._session_id} after AI closing intent: "
+                    f"{auto_end_reason['reasonCode']}"
+                )
+                if not self._task:
+                    logger.error(
+                        f"Unable to auto-end session {self._session_id}: pipeline task not set"
+                    )
+                    return
+                await self._task.queue_frames([EndFrame(reason=auto_end_reason)])
+            return
 
         await self.push_frame(frame, direction)
 
@@ -889,17 +981,18 @@ class UserTurnGateProcessor(FrameProcessor):
 
     @staticmethod
     def _normalize_text(text: str) -> str:
-        return re.sub(r"\s+", " ", text.lower()).strip()
+        return normalize_detection_text(text)
 
     def _should_auto_end(self, text: str) -> tuple[bool, str]:
+        detection = detect_closing_intent(text, "user")
+        if detection["should_end"]:
+            self._refusal_streak += 1
+            return True, detection["reason_code"]
+
         normalized = self._normalize_text(text)
         if not normalized:
             self._refusal_streak = 0
             return False, ""
-
-        if any(pattern.search(normalized) for pattern in HARD_STOP_PATTERNS):
-            self._refusal_streak += 1
-            return True, "explicit_user_end"
 
         if any(pattern.search(normalized) for pattern in SOFT_REFUSAL_PATTERNS):
             self._refusal_streak += 1
@@ -929,8 +1022,8 @@ class UserTurnGateProcessor(FrameProcessor):
             self._auto_end_triggered = True
             reason = {
                 "type": "auto_end",
-                "source": "ai",
-                "reason": auto_end_reason,
+                "speaker": "user",
+                "reasonCode": auto_end_reason,
                 "trigger": trigger,
             }
             self._on_auto_end(reason)
@@ -942,7 +1035,7 @@ class UserTurnGateProcessor(FrameProcessor):
                 return
             await self._task.queue_frames(
                 [
-                    TTSSpeakFrame(text="Understood. I'll let you go now. Goodbye."),
+                    TTSSpeakFrame(text=AUTO_END_FAREWELL),
                     EndFrame(reason=reason),
                 ]
             )
@@ -1114,6 +1207,7 @@ async def create_sales_pipeline(
     pitch_context: str = "",
     pitch_briefing: dict | None = None,
     inferred_role: str | None = None,
+    on_auto_end_requested: Callable[[dict[str, Any]], None] | None = None,
 ):
     """Create and run the voice AI pipeline for a sales training session."""
 
@@ -1160,15 +1254,25 @@ async def create_sales_pipeline(
     )
     context_aggregator = llm.create_context_aggregator(context)
     user_transcript_collector = UserTranscriptCollector(session_id, transcript_buffer)
-    ai_response_collector = AIResponseCollector(session_id, transcript_buffer)
+
+    def handle_auto_end(reason: dict[str, Any]):
+        already_triggered = bool(pipeline_result["auto_complete_session"])
+        pipeline_result.update({"auto_complete_session": True, "end_reason": reason})
+        if already_triggered or on_auto_end_requested is None:
+            return
+        on_auto_end_requested(reason)
+
+    ai_response_collector = AIResponseCollector(
+        session_id,
+        transcript_buffer,
+        on_auto_end=handle_auto_end,
+    )
     clause_chunker = ClauseChunkingProcessor()
     number_normalizer = NumberNormalizerProcessor()
     context_manager = ConversationContextManager(context=context)
     turn_gate = UserTurnGateProcessor(
         session_id=session_id,
-        on_auto_end=lambda reason: pipeline_result.update(
-            {"auto_complete_session": True, "end_reason": reason}
-        ),
+        on_auto_end=handle_auto_end,
     )
 
     pipeline = Pipeline(
@@ -1198,6 +1302,7 @@ async def create_sales_pipeline(
         ),
     )
     turn_gate.set_pipeline_task(task)
+    ai_response_collector.set_pipeline_task(task)
 
     @transport.event_handler("on_first_participant_joined")
     async def on_first_participant_joined(transport_ref, participant: Any):

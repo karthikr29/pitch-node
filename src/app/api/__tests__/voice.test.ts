@@ -6,6 +6,7 @@ const mockInsert = vi.fn();
 const mockSelectSingle = vi.fn();
 const mockScenarioSingle = vi.fn();
 const mockUpdate = vi.fn();
+const mockDelete = vi.fn();
 const mockEq = vi.fn();
 const mockFrom = vi.fn();
 
@@ -40,6 +41,7 @@ describe("Voice API - create-room", () => {
     });
     mockInsert.mockReturnValue({ select: () => ({ single: () => mockSelectSingle() }) });
     mockUpdate.mockReturnValue({ eq: mockEq });
+    mockDelete.mockReturnValue({ eq: mockEq });
     mockEq.mockResolvedValue({ data: null, error: null });
     mockFrom.mockImplementation((table: string) => {
       if (table === "scenarios") {
@@ -58,6 +60,7 @@ describe("Voice API - create-room", () => {
           mockUpdate(...args);
           return { eq: mockEq };
         },
+        delete: () => mockDelete(),
       };
     });
   });
@@ -336,5 +339,121 @@ describe("Voice API - end-session", () => {
     expect(response.status).toBe(200);
     expect(body.sessionId).toBe("s1");
     expect(body.duration).toBeGreaterThan(0);
+  });
+});
+
+describe("Voice API - session-state", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+
+    process.env.PIPECAT_SERVICE_URL = "http://localhost:8000";
+    process.env.PIPECAT_SERVICE_API_KEY = "test-key";
+  });
+
+  it("returns 401 for unauthenticated requests", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+
+    const { GET } = await import("@/app/api/voice/session-state/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/session-state?sessionId=s1");
+    const response = await GET(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe("Unauthorized");
+  });
+
+  it("returns 400 when sessionId is missing", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+
+    const { GET } = await import("@/app/api/voice/session-state/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/session-state");
+    const response = await GET(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toContain("sessionId");
+  });
+
+  it("returns 404 when session is not owned by user", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+
+    const mockSingle = vi.fn().mockResolvedValue({ data: null });
+    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle });
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 });
+    const mockSel = vi.fn().mockReturnValue({ eq: mockEq1 });
+    mockFrom.mockReturnValue({ select: mockSel });
+
+    const { GET } = await import("@/app/api/voice/session-state/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/session-state?sessionId=missing");
+    const response = await GET(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(body.error).toContain("Session not found");
+  });
+
+  it("returns the proxied session state payload", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: "s1" } });
+    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle });
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 });
+    const mockSel = vi.fn().mockReturnValue({ eq: mockEq1 });
+    mockFrom.mockReturnValue({ select: mockSel });
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          sessionId: "s1",
+          phase: "ending",
+          autoEndRequested: true,
+          endReason: {
+            speaker: "user",
+            reasonCode: "closing_goodbye",
+            trigger: "transcription_frame",
+          },
+          requestedAt: "2026-03-09T00:00:00Z",
+        }),
+    });
+
+    const { GET } = await import("@/app/api/voice/session-state/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/session-state?sessionId=s1");
+    const response = await GET(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.phase).toBe("ending");
+    expect(body.autoEndRequested).toBe(true);
+  });
+
+  it("returns 503 when session state proxy is unavailable", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: "s1" } });
+    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle });
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 });
+    const mockSel = vi.fn().mockReturnValue({ eq: mockEq1 });
+    mockFrom.mockReturnValue({ select: mockSel });
+
+    mockFetch.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    const { GET } = await import("@/app/api/voice/session-state/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/session-state?sessionId=s1");
+    const response = await GET(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toContain("unavailable");
   });
 });

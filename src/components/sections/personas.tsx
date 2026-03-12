@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { BrandName } from "@/components/ui";
 
 const personas = [
   {
@@ -18,7 +19,7 @@ const personas = [
   {
     id: "founder",
     title: "Founders & Entrepreneurs",
-    subtitle: "Pitch investors with confidence",
+    subtitle: "Nail investor pitches",
     description: "Perfect your investor pitch, nail tough Q&As, and walk into every meeting ready to close the deal.",
     stats: [
       { label: "Pitch Ready", value: "3x" },
@@ -158,7 +159,7 @@ export function Personas() {
           className="text-center mb-16 md:mb-24"
         >
           <div className="inline-block px-4 py-2 rounded-full border text-sm font-medium mb-6 bg-primary/5 border-primary/20 text-primary">
-            Built for Anyone Who Sells or Pitches
+            Built for Anyone Who Sells
           </div>
 
           <h2 className="font-display text-3xl md:text-5xl lg:text-6xl font-bold text-text-primary mb-6 tracking-tight">
@@ -166,7 +167,7 @@ export function Personas() {
             <span className="text-primary">For</span>
           </h2>
           <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-            Whether you&apos;re closing deals, pitching investors, or presenting to stakeholders - <span className="italic">pitch<span className="text-primary">node</span></span> accelerates your growth.
+            Whether you&apos;re closing deals, pitching investors, or presenting to stakeholders — <BrandName italic /> sharpens your performance.
           </p>
         </motion.div>
 

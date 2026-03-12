@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "pitchnode - Master Every Sales Conversation";
+export const alt = "ConvoSparr — Master Every Sales Conversation";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -42,16 +42,16 @@ export default async function Image() {
               color: "white",
             }}
           >
-            p
+            C
           </div>
           <span
             style={{
               fontSize: "48px",
               fontWeight: 700,
-              color: "white",
+              color: "#EC7211",
             }}
           >
-            pitchnode
+            ConvoSparr
           </span>
         </div>
         <div
@@ -75,8 +75,7 @@ export default async function Image() {
             lineHeight: 1.5,
           }}
         >
-          Practice live sales calls against AI opponents. Map every response.
-          Prove readiness before the real thing.
+          Practice real sales conversations against AI opponents. Master every pitch, call, and close.
         </div>
         <div
           style={{
@@ -88,7 +87,7 @@ export default async function Image() {
             fontWeight: 600,
           }}
         >
-          pitchnode.io
+          convosparr.io
         </div>
       </div>
     ),

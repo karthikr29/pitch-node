@@ -1,4 +1,5 @@
 export { AnimatedCounter } from "./animated-counter";
+export { BrandName } from "./brand-name";
 export { Button } from "./button";
 export { Input } from "./input";
 export { Modal } from "./modal";

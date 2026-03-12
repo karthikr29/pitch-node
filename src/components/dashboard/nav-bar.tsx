@@ -77,13 +77,13 @@ export function NavBar() {
           <div className="relative w-8 h-8 transition-transform group-hover:scale-105">
             <Image
               src="/branding/logo.svg"
-              alt="pitchnode Logo"
+              alt="ConvoSparr Logo"
               fill
               className="object-contain"
             />
           </div>
-          <span className="font-display text-lg font-bold text-foreground tracking-[0.07em]">
-            pitch<span className="text-primary">node</span>
+          <span className="font-display text-lg font-bold text-primary tracking-[0.07em]">
+            ConvoSparr
           </span>
         </Link>
 

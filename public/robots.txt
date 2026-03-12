@@ -1,11 +1,11 @@
-# Robots.txt for pitchnode
-# https://pitchnode.io
+# Robots.txt for ConvoSparr
+# https://convosparr.io
 
 User-agent: *
 Allow: /
 
 # Sitemap location
-Sitemap: https://pitchnode.io/sitemap.xml
+Sitemap: https://convosparr.io/sitemap.xml
 
 # Disallow API routes
 Disallow: /api/

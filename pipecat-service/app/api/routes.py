@@ -131,6 +131,10 @@ async def end_session(session_id: str, _=Depends(verify_api_key)):
     await livekit_service.stop_pipeline(session_id)
     return {"status": "ended", "session_id": session_id}
 
+@router.get("/sessions/{session_id}/state")
+async def session_state(session_id: str, _=Depends(verify_api_key)):
+    return livekit_service.get_session_state(session_id)
+
 @router.get("/health")
 async def health():
     return {"status": "ok"}

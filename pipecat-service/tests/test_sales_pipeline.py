@@ -1,8 +1,10 @@
 import asyncio
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from pipecat.frames.frames import EndFrame, TranscriptionFrame
 from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 from pipecat.processors.frame_processor import FrameDirection
 from pipecat.frames.frames import InterruptionFrame, LLMFullResponseEndFrame, LLMTextFrame, TextFrame
@@ -13,7 +15,10 @@ from app.pipelines.sales_pipeline import (
     ConversationContextManager,
     FluxDeepgramSTTService,
     LowLatencyCartesiaTTSService,
+    AIResponseCollector,
+    UserTurnGateProcessor,
     create_session_stt_service,
+    detect_closing_intent,
     settings,
 )
 from app.services.xai_service import normalize_grok_model_name
@@ -199,6 +204,125 @@ async def test_clause_chunker_clears_buffer_on_interruption():
 
     assert not [frame for frame in pushed if isinstance(frame, TextFrame)]
     assert any(isinstance(frame, InterruptionFrame) for frame in pushed)
+
+
+def test_detect_closing_intent_matches_standalone_goodbye():
+    result = detect_closing_intent("Goodbye, talk soon.", "ai")
+
+    assert result == {
+        "should_end": True,
+        "reason_code": "closing_goodbye",
+        "speaker": "ai",
+    }
+
+
+def test_detect_closing_intent_matches_explicit_end_call():
+    result = detect_closing_intent("Please end the call", "user")
+
+    assert result == {
+        "should_end": True,
+        "reason_code": "explicit_end_call",
+        "speaker": "user",
+    }
+
+
+def test_detect_closing_intent_ignores_non_closing_goodbye_mentions():
+    result = detect_closing_intent("I do not want to say bye to this deal.", "user")
+
+    assert result == {
+        "should_end": False,
+        "reason_code": "",
+        "speaker": "user",
+    }
+
+
+@pytest.mark.asyncio
+async def test_ai_response_collector_requests_auto_end_for_closing_response():
+    reasons: list[dict] = []
+    collector = AIResponseCollector(
+        "session-1",
+        [],
+        on_auto_end=lambda reason: reasons.append(reason),
+    )
+    task = SimpleNamespace(queue_frames=AsyncMock())
+    collector.set_pipeline_task(task)
+    collector.push_frame = AsyncMock()
+
+    await collector.process_frame(LLMTextFrame(text="Goodbye, talk soon."), FrameDirection.DOWNSTREAM)
+    await collector.process_frame(LLMFullResponseEndFrame(), FrameDirection.DOWNSTREAM)
+
+    assert reasons == [
+        {
+            "type": "auto_end",
+            "speaker": "ai",
+            "reasonCode": "closing_goodbye",
+            "trigger": "ai_full_response_end",
+        }
+    ]
+    queued_frames = task.queue_frames.await_args.args[0]
+    assert len(queued_frames) == 1
+    assert isinstance(queued_frames[0], EndFrame)
+    await collector.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_ai_response_collector_ignores_non_closing_goodbye_mentions():
+    reasons: list[dict] = []
+    collector = AIResponseCollector(
+        "session-2",
+        [],
+        on_auto_end=lambda reason: reasons.append(reason),
+    )
+    task = SimpleNamespace(queue_frames=AsyncMock())
+    collector.set_pipeline_task(task)
+    collector.push_frame = AsyncMock()
+
+    await collector.process_frame(
+        LLMTextFrame(text="You do not need to say goodbye to churn anymore."),
+        FrameDirection.DOWNSTREAM,
+    )
+    await collector.process_frame(LLMFullResponseEndFrame(), FrameDirection.DOWNSTREAM)
+
+    assert reasons == []
+    task.queue_frames.assert_not_awaited()
+    await collector.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_user_turn_gate_queues_farewell_and_endframe_for_goodbye():
+    reasons: list[dict] = []
+    processor = UserTurnGateProcessor("session-3", on_auto_end=lambda reason: reasons.append(reason))
+    task = SimpleNamespace(queue_frames=AsyncMock())
+    processor.set_pipeline_task(task)
+    processor.push_frame = AsyncMock()
+
+    await processor.process_frame(
+        TranscriptionFrame(
+            text="bye",
+            user_id="user-1",
+            timestamp="2026-03-09T00:00:00Z",
+            language=None,
+            result={},
+            finalized=True,
+        ),
+        FrameDirection.DOWNSTREAM,
+    )
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+
+    assert reasons == [
+        {
+            "type": "auto_end",
+            "speaker": "user",
+            "reasonCode": "closing_goodbye",
+            "trigger": "transcription_frame",
+        }
+    ]
+    queued_frames = task.queue_frames.await_args.args[0]
+    assert len(queued_frames) == 2
+    assert queued_frames[0].text == "Understood. I'll let you go now. Goodbye."
+    assert isinstance(queued_frames[1], EndFrame)
+    await processor.cleanup()
 
 
 def test_low_latency_cartesia_tts_builds_zero_buffer_payload():

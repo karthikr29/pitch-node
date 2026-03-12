@@ -2,10 +2,10 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "pitchnode - Master Every Sales Conversation",
-    short_name: "pitchnode",
+    name: "ConvoSparr — Master Every Sales Conversation",
+    short_name: "ConvoSparr",
     description:
-      "Practice live sales calls and pitches against AI opponents. Map every response. Master objections.",
+      "Practice real sales conversations against AI opponents before the real meeting happens.",
     start_url: "/",
     display: "standalone",
     background_color: "#F2F3F3",

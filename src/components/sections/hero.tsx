@@ -40,7 +40,7 @@ export function Hero() {
                 />
               </div>
               <span className="text-sm font-semibold tracking-wide uppercase text-primary">
-                Practice Before You Pitch &bull; Now Live
+                Practice Before It Happens &bull; Now Live
               </span>
             </motion.div>
 
@@ -68,6 +68,7 @@ export function Hero() {
               >
                 <TypeAnimation
                   sequence={[
+                    "Pitch", 2000,
                     "Cold Call", 2000,
                     "Discovery", 2000,
                     "Demo", 2000,
@@ -126,7 +127,7 @@ export function Hero() {
               transition={{ duration: 0.6, delay: 0.6 }}
               className="text-lg md:text-xl text-text-secondary max-w-2xl mb-8 leading-relaxed font-medium"
             >
-              Practice live sales calls and pitches against{" "}
+              Practice real sales conversations against{" "}
               <span className="text-text-primary font-bold">AI opponents</span> who
               push back, challenge you, and make you better.{" "}
               <span className="text-primary dark:text-accent font-bold">

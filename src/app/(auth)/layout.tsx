@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Sign in to pitchnode",
+  title: "Sign in to ConvoSparr",
   description:
     "Sign in or create an account to start practicing sales conversations with AI.",
   robots: { index: false, follow: false },

@@ -35,19 +35,20 @@ const cabinetGrotesk = localFont({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://pitchnode.io"),
+  metadataBase: new URL("https://convosparr.io"),
   title: {
-    default: "pitchnode - Master Every Sales Conversation",
-    template: "%s | pitchnode",
+    default: "ConvoSparr — Master Every Sales Conversation",
+    template: "%s | ConvoSparr",
   },
   description:
-    "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
+    "Practice pitch meetings, cold calls, discovery calls, demos, objections, negotiations, and closing conversations against AI opponents. Master every sales conversation before it happens.",
   keywords: [
     "sales training",
-    "pitch practice",
-    "AI sales",
+    "sales conversation practice",
+    "AI sales simulation",
+    "cold call practice",
+    "discovery call training",
     "objection handling",
-    "pitch coaching",
     "sales roleplay",
     "AI sales training",
     "sales skills",
@@ -67,27 +68,27 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: "pitchnode - Master Every Sales Conversation",
+    title: "ConvoSparr — Master Every Sales Conversation",
     description:
-      "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
+      "Practice pitch meetings, cold calls, discovery calls, demos, objections, negotiations, and closing conversations against AI opponents. Master every sales conversation before it happens.",
     type: "website",
-    url: "https://pitchnode.io",
-    siteName: "pitchnode",
+    url: "https://convosparr.io",
+    siteName: "ConvoSparr",
     locale: "en_US",
     images: [
       {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "pitchnode - Master Every Sales Conversation",
+        alt: "ConvoSparr — Master Every Sales Conversation",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "pitchnode - Master Every Sales Conversation",
+    title: "ConvoSparr — Master Every Sales Conversation",
     description:
-      "Practice live sales calls and pitches against AI opponents. Map every response. Master objections.",
+      "Practice pitch meetings, cold calls, discovery calls, demos, objections, and negotiations against AI opponents. Master every sales conversation.",
     images: ["/opengraph-image"],
   },
   icons: {
@@ -113,20 +114,20 @@ export default function RootLayout({
               "@graph": [
                 {
                   "@type": "Organization",
-                  name: "pitchnode",
-                  url: "https://pitchnode.io",
-                  logo: "https://pitchnode.io/branding/logo.svg",
+                  name: "ConvoSparr",
+                  url: "https://convosparr.io",
+                  logo: "https://convosparr.io/branding/logo.svg",
                   description:
-                    "AI-powered sales training platform. Practice live sales calls and master every conversation.",
+                    "AI-powered sales conversation practice platform. Train for every pitch, cold call, discovery, demo, objection, negotiation, and close.",
                 },
                 {
                   "@type": "WebApplication",
-                  name: "pitchnode",
-                  url: "https://pitchnode.io",
+                  name: "ConvoSparr",
+                  url: "https://convosparr.io",
                   applicationCategory: "BusinessApplication",
                   operatingSystem: "Web",
                   description:
-                    "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
+                    "Practice pitch meetings, cold calls, discovery calls, demos, objections, negotiations, and closing conversations against AI opponents. Master every sales conversation before it happens.",
                   offers: {
                     "@type": "Offer",
                     price: "0",

@@ -31,12 +31,25 @@ import { ConnectionState } from "livekit-client";
 
 type CallState = "requesting-mic" | "initializing" | "connecting" | "connected" | "disconnected" | "error";
 type SpeakingState = "ai" | "user" | "idle" | "thinking";
+type CallCompletionSource = "manual" | "remote-disconnect" | "auto-end-timeout";
+type SessionPhase = "active" | "ending" | "ended" | "unknown";
 
 interface RoomCredentials {
   token: string;
   roomName: string;
   livekitUrl: string;
   sessionId: string;
+}
+
+interface SessionStatePayload {
+  sessionId: string;
+  phase: SessionPhase;
+  autoEndRequested: boolean;
+  endReason: {
+    speaker: "user" | "ai";
+    reasonCode: string;
+    trigger: string;
+  } | null;
 }
 
 function readPitchBriefingFromStorage(scenarioId: string) {
@@ -54,15 +67,21 @@ function readPitchBriefingFromStorage(scenarioId: string) {
 
 // Inner component that uses LiveKit hooks (must be inside LiveKitRoom)
 function CallInterface({
+  sessionId,
   personaName,
   personaRole,
   onBeforeDisconnect,
   onEndCall,
+  onAutoEndRequested,
+  onAutoEndTimeout,
 }: {
+  sessionId: string;
   personaName: string;
   personaRole: string;
   onBeforeDisconnect: () => void;
   onEndCall: () => void;
+  onAutoEndRequested: () => void;
+  onAutoEndTimeout: () => void;
 }) {
   const { localParticipant } = useLocalParticipant();
   const room = useRoomContext();
@@ -73,11 +92,14 @@ function CallInterface({
   const [ending, setEnding] = useState(false);
   const [muted, setMuted] = useState(false);
   const [speakingState, setSpeakingState] = useState<SpeakingState>("idle");
+  const [autoEnding, setAutoEnding] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const thinkingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoEndFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isConnected = connectionState === ConnectionState.Connected;
   const aiParticipant = participants.find((p) => p.identity.startsWith("ai-"));
+  const isEnding = ending || autoEnding;
 
   // Raw LiveKit-derived state (only "ai" | "user" | "idle")
   const rawSpeakingState =
@@ -121,6 +143,61 @@ function CallInterface({
       if (thinkingTimeoutRef.current) clearTimeout(thinkingTimeoutRef.current);
     };
   }, []);
+
+  const clearAutoEndFallback = useCallback(() => {
+    if (autoEndFallbackRef.current) {
+      clearTimeout(autoEndFallbackRef.current);
+      autoEndFallbackRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isConnected) {
+      clearAutoEndFallback();
+    }
+  }, [clearAutoEndFallback, isConnected]);
+
+  useEffect(() => {
+    if (!isConnected || !sessionId) return;
+
+    let isMounted = true;
+
+    const pollSessionState = async () => {
+      try {
+        const response = await fetch(
+          `/api/voice/session-state?sessionId=${encodeURIComponent(sessionId)}`,
+          { cache: "no-store" }
+        );
+        if (!response.ok) return;
+
+        const payload = (await response.json()) as SessionStatePayload;
+        if (!isMounted) return;
+
+        if (payload.phase === "ending" || payload.phase === "ended") {
+          setAutoEnding(true);
+          onAutoEndRequested();
+          if (!autoEndFallbackRef.current) {
+            autoEndFallbackRef.current = setTimeout(() => {
+              onAutoEndTimeout();
+            }, 2500);
+          }
+        }
+      } catch {
+        // Keep existing LiveKit behavior when session-state polling fails.
+      }
+    };
+
+    void pollSessionState();
+    const intervalId = setInterval(() => {
+      void pollSessionState();
+    }, 1000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+      clearAutoEndFallback();
+    };
+  }, [clearAutoEndFallback, isConnected, onAutoEndRequested, onAutoEndTimeout, sessionId]);
 
   // Timer
   useEffect(() => {
@@ -210,7 +287,9 @@ function CallInterface({
                 {formatTime(elapsedSeconds)}
               </span>
               {aiParticipant && (
-                <span className="ml-2 text-xs text-green-400">● AI Connected</span>
+                <span className={cn("ml-2 text-xs", autoEnding ? "text-amber-400" : "text-green-400")}>
+                  {autoEnding ? "● Ending" : "● AI Connected"}
+                </span>
               )}
             </motion.div>
           )}
@@ -279,12 +358,14 @@ function CallInterface({
                   >
                     <span className={cn(
                       "text-sm uppercase tracking-widest font-semibold transition-colors duration-500",
-                      speakingState === "ai" ? "text-primary" :
+                      isEnding ? "text-amber-400" :
+                        speakingState === "ai" ? "text-primary" :
                         speakingState === "user" ? "text-blue-400" :
                         speakingState === "thinking" ? "text-amber-400" :
                           "text-slate-600"
                     )}>
-                      {speakingState === "ai" ? "AI Speaking..." :
+                      {isEnding ? "Ending call..." :
+                        speakingState === "ai" ? "AI Speaking..." :
                         speakingState === "user" ? "Listening to you..." :
                         speakingState === "thinking" ? "Thinking..." :
                           aiParticipant ? "Ready" : "Waiting for AI..."}
@@ -317,7 +398,7 @@ function CallInterface({
                 muted ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "text-white bg-white/5"
               )}
               onClick={handleMuteToggle}
-              disabled={status !== "connected"}
+              disabled={status !== "connected" || isEnding}
             >
               {muted ? (
                 <MicOff className="w-7 h-7" />
@@ -331,9 +412,9 @@ function CallInterface({
               size="icon-lg"
               className="rounded-full w-20 h-20 bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg shadow-red-900/50 transition-all hover:scale-105 active:scale-95 border-0"
               onClick={handleEndCall}
-              disabled={ending || status === "disconnected"}
+              disabled={isEnding || status === "disconnected"}
             >
-              {ending ? (
+              {isEnding ? (
                 <Loader2 className="w-8 h-8 animate-spin text-white" />
               ) : (
                 <PhoneOff className="w-8 h-8 text-white fill-current" />
@@ -364,6 +445,7 @@ export default function CallRoomPage() {
   const hasInitializedRef = useRef(false); // Prevent double initialization from React StrictMode
   const sessionEndHandledRef = useRef(false);
   const intentionalDisconnectRef = useRef(false);
+  const autoEndRequestedRef = useRef(false);
 
   // Persona display info (from query params or defaults)
   const [personaName] = useState(personaNameParam || "AI Prospect");
@@ -481,14 +563,18 @@ export default function CallRoomPage() {
       });
   }
 
-  const completeSessionAndNavigate = useCallback((source: "manual" | "remote-disconnect") => {
+  const completeSessionAndNavigate = useCallback((source: CallCompletionSource) => {
     if (sessionEndHandledRef.current) return;
     sessionEndHandledRef.current = true;
 
     const sessionId = credentials?.sessionId;
     if (sessionId) {
       console.log(`[CallPage] Finalizing session (${source}) (non-blocking):`, sessionId);
-      endSessionInBackground(sessionId);
+      const shouldFinalizeInBackground =
+        source === "manual" || (source === "remote-disconnect" && !autoEndRequestedRef.current);
+      if (shouldFinalizeInBackground) {
+        endSessionInBackground(sessionId);
+      }
       router.push(`/history/${sessionId}`);
       return;
     }
@@ -587,12 +673,20 @@ export default function CallRoomPage() {
       }}
     >
       <CallInterface
+        sessionId={credentials.sessionId}
         personaName={personaName}
         personaRole={personaRole}
         onBeforeDisconnect={() => {
           intentionalDisconnectRef.current = true;
         }}
         onEndCall={handleEndCall}
+        onAutoEndRequested={() => {
+          autoEndRequestedRef.current = true;
+        }}
+        onAutoEndTimeout={() => {
+          setCallState("disconnected");
+          completeSessionAndNavigate("auto-end-timeout");
+        }}
       />
     </LiveKitRoom>
   );
