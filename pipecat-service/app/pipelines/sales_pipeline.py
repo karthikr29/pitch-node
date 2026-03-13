@@ -184,15 +184,13 @@ def build_fallback_stt_service() -> DeepgramSTTService:
 class UserTranscriptCollector(FrameProcessor):
     """Collects final user transcriptions for transcript persistence."""
 
-    def __init__(self, session_id: str, buffer: list[dict]):
+    def __init__(self, session_id: str, buffer: list[dict], start_time: float):
         super().__init__()
         self._session_id = session_id
         self._buffer = buffer
-        self._start_time = None
+        self._start_time = start_time
 
     def _get_timestamp_ms(self) -> int:
-        if self._start_time is None:
-            self._start_time = asyncio.get_event_loop().time()
         return int((asyncio.get_event_loop().time() - self._start_time) * 1000)
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
@@ -218,13 +216,14 @@ class AIResponseCollector(FrameProcessor):
         self,
         session_id: str,
         buffer: list[dict],
+        start_time: float,
         on_auto_end: Callable[[dict[str, Any]], None] | None = None,
     ):
         super().__init__()
         self._session_id = session_id
         self._buffer = buffer
         self._on_auto_end = on_auto_end
-        self._start_time = None
+        self._start_time = start_time
         self._ai_text_buffer = ""
         self._task: PipelineTask | None = None
         self._auto_end_triggered = False
@@ -233,8 +232,6 @@ class AIResponseCollector(FrameProcessor):
         self._task = pipeline_task
 
     def _get_timestamp_ms(self) -> int:
-        if self._start_time is None:
-            self._start_time = asyncio.get_event_loop().time()
         return int((asyncio.get_event_loop().time() - self._start_time) * 1000)
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
@@ -1253,7 +1250,8 @@ async def create_sales_pipeline(
         messages=[{"role": "system", "content": system_prompt}],
     )
     context_aggregator = llm.create_context_aggregator(context)
-    user_transcript_collector = UserTranscriptCollector(session_id, transcript_buffer)
+    session_start_time = asyncio.get_event_loop().time()
+    user_transcript_collector = UserTranscriptCollector(session_id, transcript_buffer, session_start_time)
 
     def handle_auto_end(reason: dict[str, Any]):
         already_triggered = bool(pipeline_result["auto_complete_session"])
@@ -1265,6 +1263,7 @@ async def create_sales_pipeline(
     ai_response_collector = AIResponseCollector(
         session_id,
         transcript_buffer,
+        session_start_time,
         on_auto_end=handle_auto_end,
     )
     clause_chunker = ClauseChunkingProcessor()
@@ -1279,8 +1278,8 @@ async def create_sales_pipeline(
         [
             transport.input(),
             stt,
-            user_transcript_collector,
             turn_gate,
+            user_transcript_collector,
             context_aggregator.user(),
             llm,
             ai_response_collector,

@@ -20,6 +20,19 @@ export async function GET(request: NextRequest) {
     .in("status", ["connecting", "error"])
     .lt("created_at", new Date(Date.now() - 5 * 60 * 1000).toISOString());
 
+  // Resolve scenario IDs for the given call type filter
+  let scenarioIds: string[] | null = null;
+  if (callType) {
+    const { data: matchedScenarios } = await supabase
+      .from("scenarios")
+      .select("id")
+      .eq("call_type", callType);
+    scenarioIds = (matchedScenarios ?? []).map((s) => s.id);
+    if (scenarioIds.length === 0) {
+      return NextResponse.json({ sessions: [], totalPages: 0, page, limit });
+    }
+  }
+
   let query = supabase
     .from("sessions")
     .select("*, scenarios(title, call_type, difficulty), personas(name, emoji), session_analytics(scores, overall_score)", { count: "exact" })
@@ -28,7 +41,7 @@ export async function GET(request: NextRequest) {
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
-  if (callType) query = query.eq("scenarios.call_type", callType);
+  if (scenarioIds !== null) query = query.in("scenario_id", scenarioIds);
 
   const { data, error, count } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -36,7 +36,6 @@ import {
   ChevronsUpDown,
   Check,
   Shuffle,
-  Dices,
   MessageSquareText,
   Loader2,
   UserCheck,
@@ -62,6 +61,7 @@ interface Persona {
   title: string;
   description: string;
   persona_type: string;
+  accent: string;
 }
 
 const personaTypeLabels: Record<string, string> = {
@@ -143,6 +143,7 @@ const fallbackPersonas: Persona[] = [
     title: "VP of Engineering",
     description: "Challenges every claim and demands proof.",
     persona_type: "skeptical",
+    accent: "",
   },
   {
     id: "persona-2",
@@ -151,6 +152,7 @@ const fallbackPersonas: Persona[] = [
     title: "CEO",
     description: "Has limited time and low patience. Wants bottom-line value fast.",
     persona_type: "aggressive",
+    accent: "",
   },
   {
     id: "persona-3",
@@ -159,6 +161,7 @@ const fallbackPersonas: Persona[] = [
     title: "Head of Operations",
     description: "Warm and open but needs to be led.",
     persona_type: "friendly",
+    accent: "",
   },
 ];
 
@@ -181,6 +184,7 @@ export default function PreCallSetupPage() {
   });
   const [loading, setLoading] = useState(true);
   const [comboboxOpen, setComboboxOpen] = useState(false);
+  const [commandValue, setCommandValue] = useState("");
   const [inferredRoles, setInferredRoles] = useState<string[]>([]);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [inferringRole, setInferringRole] = useState(false);
@@ -191,16 +195,15 @@ export default function PreCallSetupPage() {
     [personas, selectedPersonaId]
   );
 
-  // Group personas by type
-  const groupedPersonas = useMemo(() => {
-    const groups: Record<string, Persona[]> = {};
-    for (const p of personas) {
-      const key = p.persona_type || "other";
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(p);
+  useEffect(() => {
+    if (comboboxOpen) {
+      setCommandValue(
+        selectedPersona
+          ? `${selectedPersona.name} ${selectedPersona.persona_type}`
+          : ""
+      );
     }
-    return groups;
-  }, [personas]);
+  }, [comboboxOpen]);
 
   useEffect(() => {
     async function fetchData() {
@@ -239,6 +242,7 @@ export default function PreCallSetupPage() {
               title: p.title as string || "",
               description: p.description as string,
               persona_type: p.persona_type as string || "other",
+              accent: p.accent as string || "",
             }))
           );
         } else {
@@ -645,54 +649,43 @@ export default function PreCallSetupPage() {
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[var(--radix-popover-trigger-width)] sm:w-[400px] p-0" align="start">
-              <Command>
+              <Command value={commandValue} onValueChange={setCommandValue}>
                 <CommandInput placeholder="Search by name or type..." />
                 <CommandList>
                   <CommandEmpty>No persona found.</CommandEmpty>
 
-                  {/* Random Pick as first option */}
-                  <CommandGroup heading="Quick Pick">
-                    <CommandItem
-                      onSelect={() => {
-                        handleSurpriseMe();
-                        setComboboxOpen(false);
-                      }}
-                      className="cursor-pointer"
-                    >
-                      <Dices className="mr-2 h-4 w-4 text-primary" />
-                      <span className="font-medium text-primary">Random Opponent</span>
-                    </CommandItem>
-                  </CommandGroup>
-
-                  {/* Grouped personas */}
-                  {Object.entries(groupedPersonas).map(([type, groupPersonas]) => (
-                    <CommandGroup
-                      key={type}
-                      heading={personaTypeLabels[type] || type}
-                    >
-                      {groupPersonas.map((persona) => (
-                        <CommandItem
-                          key={persona.id}
-                          value={`${persona.name} ${persona.persona_type}`}
-                          onSelect={() => {
-                            setSelectedPersonaId(persona.id);
-                            setComboboxOpen(false);
-                          }}
-                          className="cursor-pointer"
-                        >
+                  {/* Flat persona list with type label on right */}
+                  <CommandGroup>
+                    {personas.map((persona) => (
+                      <CommandItem
+                        key={persona.id}
+                        value={`${persona.name} ${persona.persona_type}`}
+                        onSelect={() => {
+                          setSelectedPersonaId(persona.id);
+                          setComboboxOpen(false);
+                        }}
+                        className="cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between w-full min-w-0">
                           <span className="font-medium truncate">{persona.name}</span>
-                          <Check
-                            className={cn(
-                              "ml-auto h-4 w-4 shrink-0",
-                              selectedPersonaId === persona.id
-                                ? "opacity-100 text-primary"
-                                : "opacity-0"
-                            )}
-                          />
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  ))}
+                          <span className="text-xs text-muted-foreground/70 ml-3 shrink-0 italic group-data-[selected=true]:text-accent-foreground/70">
+                            {persona.accent
+                              ? `${persona.accent.charAt(0).toUpperCase() + persona.accent.slice(1)} · `
+                              : ""}
+                            {personaTypeLabels[persona.persona_type] || persona.persona_type}
+                          </span>
+                        </div>
+                        <Check
+                          className={cn(
+                            "ml-2 h-4 w-4 shrink-0",
+                            selectedPersonaId === persona.id
+                              ? "opacity-100 text-primary group-data-[selected=true]:text-accent-foreground"
+                              : "opacity-0"
+                          )}
+                        />
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
                 </CommandList>
               </Command>
             </PopoverContent>
@@ -717,9 +710,16 @@ export default function PreCallSetupPage() {
                 <h4 className="text-base font-semibold text-foreground">
                   {selectedPersona.name}
                 </h4>
-                <Badge variant="outline" className="text-xs">
-                  {personaTypeLabels[selectedPersona.persona_type] || selectedPersona.persona_type}
-                </Badge>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge variant="outline" className="text-xs">
+                    {personaTypeLabels[selectedPersona.persona_type] || selectedPersona.persona_type}
+                  </Badge>
+                  {selectedPersona.accent && (
+                    <Badge variant="outline" className="text-xs capitalize">
+                      {selectedPersona.accent} accent
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-sm text-foreground leading-relaxed pt-1">
                   {selectedPersona.description}
                 </p>

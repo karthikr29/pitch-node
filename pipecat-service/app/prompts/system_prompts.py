@@ -8,6 +8,15 @@ and pitch calls.
 from typing import Callable
 
 
+SPEECH_ONLY_SUFFIX = (
+    "\n\n## Speech Output Rule\n"
+    "CRITICAL: You are on a live phone call. Only output spoken words. "
+    "Never use asterisks, stage directions, or action text "
+    "(e.g., *pauses*, *sighs*, *thinks*, *clears throat*). "
+    "If you want to convey hesitation, say 'Hmm.' or 'Well...' naturally."
+)
+
+
 CALL_TYPE_KNOWLEDGE = {
     "cold_call": """You have NO idea who is calling or what they sell. You did not request this call.
 Treat this as an unexpected interruption and decide quickly whether they earn your attention.""",
@@ -171,6 +180,7 @@ def _build_base_prompt(
         "7. Do not invent backstory details absent from scenario context.",
         f"8. The caller's objectives are: {', '.join(objectives)}",
         "9. Write all numbers as words when speaking (e.g., 'thirty' not '30', 'fifty dollars' not '$50', 'seventy-five percent' not '75%'). For times, say 'ten AM' or 'three thirty PM', never '10:00 AM' or '10:00'. This ensures proper speech output.",
+        "10. Do NOT use asterisks, stage directions, or action text. Speak with words only.",
     ]
     if extra_rules:
         rules.extend(extra_rules)
@@ -302,7 +312,7 @@ def build_system_prompt(
                 difficulty_rules=difficulty_text,
                 objectives=", ".join(objectives),
                 pitch_briefing_section=pitch_briefing_section,
-            )
+            ) + SPEECH_ONLY_SUFFIX
         except (KeyError, IndexError):
             pass
 
@@ -319,4 +329,4 @@ def build_system_prompt(
         objectives=objectives,
         pitch_briefing_section=pitch_briefing_section,
         inferred_role=inferred_role,
-    )
+    ) + SPEECH_ONLY_SUFFIX

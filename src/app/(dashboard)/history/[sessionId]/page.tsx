@@ -19,7 +19,10 @@ import {
   AlertCircle,
   CheckCircle2,
   Lightbulb,
+  Copy,
+  Check,
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface TranscriptMessage {
   speaker: "user" | "ai";
@@ -208,6 +211,25 @@ export default function SessionReviewPage() {
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [analysisReady, setAnalysisReady] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyTranscript = useCallback(async () => {
+    if (!session) return;
+    const text = session.transcript
+      .map((msg) => {
+        const speaker = msg.speaker === "user" ? "You" : `${session.personaName} (Persona)`;
+        return `[${msg.timestamp}] ${speaker}: ${msg.text}`;
+      })
+      .join("\n\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Transcript copied!");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy transcript");
+    }
+  }, [session]);
 
   useEffect(() => {
     async function fetchSession() {
@@ -361,9 +383,24 @@ export default function SessionReviewPage() {
       {/* Transcript */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-primary" />
-            Transcript
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-primary" />
+              Transcript
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCopyTranscript}
+              title="Copy transcript"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            >
+              {copied ? (
+                <Check className="w-4 h-4 text-green-500" />
+              ) : (
+                <Copy className="w-4 h-4" />
+              )}
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>

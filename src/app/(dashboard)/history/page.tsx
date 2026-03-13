@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Pagination,
   PaginationContent,
+  PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
@@ -91,6 +92,18 @@ function getLetterGrade(score: number) {
 
 const PAGE_SIZE = 10;
 
+function getPageNumbers(current: number, total: number): (number | "ellipsis")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages: (number | "ellipsis")[] = [1];
+  if (current > 3) pages.push("ellipsis");
+  for (let p = Math.max(2, current - 1); p <= Math.min(total - 1, current + 1); p++) {
+    pages.push(p);
+  }
+  if (current < total - 2) pages.push("ellipsis");
+  pages.push(total);
+  return pages;
+}
+
 export default function HistoryPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,10 +147,11 @@ export default function HistoryPage() {
       const res = await fetch(`/api/sessions/${sessionId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-      setTotalPages((prev) => {
-        const newTotal = Math.ceil((sessions.length - 1) / PAGE_SIZE);
-        return Math.max(1, newTotal < prev ? newTotal : prev);
-      });
+      if (sessions.length === 1 && page > 1) {
+        setPage((p) => p - 1); // useEffect will trigger fetchSessions
+      } else {
+        await fetchSessions(true);
+      }
     } catch {
       toast.error("Failed to delete session");
     } finally {
@@ -453,8 +467,12 @@ export default function HistoryPage() {
                     }
                   />
                 </PaginationItem>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                  (p) => (
+                {getPageNumbers(page, totalPages).map((p, i) =>
+                  p === "ellipsis" ? (
+                    <PaginationItem key={`ellipsis-${i}`}>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  ) : (
                     <PaginationItem key={p}>
                       <PaginationLink
                         href="#"
