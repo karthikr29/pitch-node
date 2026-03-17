@@ -6,7 +6,7 @@ import { WaitlistNudge } from "./waitlist-nudge";
 import { useWaitlist } from "@/contexts/waitlist-context";
 
 const WAITLIST_POPUP_DELAY = 10000; // 10 seconds
-const SESSION_STORAGE_KEY = "pitch_node_waitlist_shown";
+const SESSION_STORAGE_KEY = "convo_sparr_waitlist_shown";
 
 export function WaitlistTimer() {
     const { isModalOpen, openModal, closeModal } = useWaitlist();

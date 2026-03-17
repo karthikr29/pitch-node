@@ -30,24 +30,24 @@ export function Footer() {
               <div className="relative w-9 h-9 transition-transform group-hover:scale-105">
                 <Image
                   src="/branding/logo.svg"
-                  alt="PitchNode Logo"
+                  alt="ConvoSparr Logo"
                   fill
                   className="object-contain"
                 />
               </div>
-              <span className="font-display text-xl font-bold text-text-primary">
-                PitchNode
+              <span className="font-display text-xl font-bold text-primary tracking-[0.07em]">
+                ConvoSparr
               </span>
             </Link>
 
             <p className="text-primary font-semibold text-sm tracking-wide">
-              The Science of Sales Performance
+              Master Every Sales Conversation
             </p>
 
             <p className="text-text-secondary text-sm leading-relaxed max-w-sm">
-              Practice live sales calls and pitches against AI opponents.
-              Map every response. Master objections.
-              Prove readiness before the real thing.
+              Practice real sales conversations against AI opponents before
+              the real meeting happens. Master objections, refine your pitch,
+              close with confidence.
             </p>
 
             {/* Social proof or mission */}
@@ -126,10 +126,10 @@ export function Footer() {
             </h4>
             <div className="space-y-3">
               <a
-                href="mailto:hello@pitchnode.com"
+                href="mailto:hello@convosparr.io"
                 className="text-text-secondary hover:text-primary text-sm transition-colors block"
               >
-                hello@pitchnode.com
+                hello@convosparr.io
               </a>
             </div>
           </div>
@@ -138,7 +138,7 @@ export function Footer() {
         {/* Bottom bar */}
         <div className="mt-12 pt-6 border-t border-border/30 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-text-muted text-xs">
-            © {currentYear} PitchNode. All rights reserved.
+            © {currentYear} ConvoSparr. All rights reserved.
           </p>
 
           <div className="flex items-center gap-2 text-xs text-text-muted">

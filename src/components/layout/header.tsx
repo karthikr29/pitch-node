@@ -54,7 +54,7 @@ export function Header({ onOpenWaitlist }: HeaderProps) {
             >
               <Image
                 src="/branding/logo.svg"
-                alt="PitchNode Logo"
+                alt="ConvoSparr Logo"
                 fill
                 className="object-contain"
                 priority
@@ -62,11 +62,11 @@ export function Header({ onOpenWaitlist }: HeaderProps) {
             </div>
             <span
               className={cn(
-                "font-display font-bold text-text-primary transition-all duration-300",
+                "font-display font-bold text-primary tracking-[0.07em] transition-all duration-300",
                 isScrolled ? "text-base" : "text-lg"
               )}
             >
-              PitchNode
+              ConvoSparr
             </span>
           </Link>
 

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { Metadata } from "next";
+import { BrandName } from "@/components/ui";
 
 export const metadata: Metadata = {
-    title: "Terms of Service | PitchNode",
-    description: "Terms of Service for PitchNode - Read our terms and conditions for using our AI-powered sales training platform.",
+    title: "Terms of Service",
+    description: "Terms of Service for ConvoSparr — Read our terms and conditions for using our AI-powered sales conversation practice platform.",
 };
 
 export default function TermsOfService() {
@@ -34,7 +35,7 @@ export default function TermsOfService() {
                             1. Acceptance of Terms
                         </h2>
                         <p>
-                            By accessing or using PitchNode (&quot;the Service&quot;), you agree to be bound by these
+                            By accessing or using <BrandName italic /> (&quot;the Service&quot;), you agree to be bound by these
                             Terms of Service. If you do not agree to these terms, please do not use our Service.
                         </p>
                     </section>
@@ -44,7 +45,7 @@ export default function TermsOfService() {
                             2. Description of Service
                         </h2>
                         <p>
-                            PitchNode is an AI-powered sales training platform that enables users to practice
+                            <BrandName italic /> is an AI-powered sales training platform that enables users to practice
                             sales calls, pitches, and negotiations through realistic AI simulations. Our Service
                             provides:
                         </p>
@@ -106,7 +107,7 @@ export default function TermsOfService() {
                         </h2>
                         <p>
                             The Service, including all content, features, and functionality, is owned by
-                            PitchNode and protected by intellectual property laws. You may not copy, modify,
+                            <BrandName italic /> and protected by intellectual property laws. You may not copy, modify,
                             distribute, or create derivative works without our written permission.
                         </p>
                         <p className="mt-4">
@@ -157,7 +158,7 @@ export default function TermsOfService() {
                             10. Limitation of Liability
                         </h2>
                         <p>
-                            To the maximum extent permitted by law, PitchNode shall not be liable for any
+                            To the maximum extent permitted by law, <BrandName italic /> shall not be liable for any
                             indirect, incidental, special, consequential, or punitive damages arising from
                             your use of the Service.
                         </p>
@@ -168,7 +169,7 @@ export default function TermsOfService() {
                             11. Indemnification
                         </h2>
                         <p>
-                            You agree to indemnify and hold harmless PitchNode and its officers, directors,
+                            You agree to indemnify and hold harmless <BrandName italic /> and its officers, directors,
                             employees, and agents from any claims, damages, or expenses arising from your
                             use of the Service or violation of these Terms.
                         </p>
@@ -215,8 +216,8 @@ export default function TermsOfService() {
                         </p>
                         <p className="mt-3">
                             <strong>Email:</strong>{" "}
-                            <a href="mailto:hello@pitchnode.com" className="text-primary hover:underline">
-                                hello@pitchnode.com
+                            <a href="mailto:hello@convosparr.io" className="text-primary hover:underline">
+                                hello@convosparr.io
                             </a>
                         </p>
                     </section>

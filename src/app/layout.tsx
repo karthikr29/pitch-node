@@ -35,19 +35,23 @@ const cabinetGrotesk = localFont({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://pitchnode.ai"),
-  title: "PitchNode - Master Every Sales Conversation",
+  metadataBase: new URL("https://convosparr.io"),
+  title: {
+    default: "ConvoSparr — Master Every Sales Conversation",
+    template: "%s | ConvoSparr",
+  },
   description:
-    "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
+    "Practice real sales conversations against AI opponents before the real meeting happens. Master objections, refine your pitch, close with confidence.",
   keywords: [
     "sales training",
-    "pitch practice",
-    "AI sales",
+    "sales conversation practice",
+    "AI sales coach",
     "objection handling",
-    "pitch coaching",
+    "pitch practice",
     "sales roleplay",
     "AI sales training",
     "sales skills",
+    "ConvoSparr",
   ],
   alternates: {
     canonical: "/",
@@ -64,19 +68,20 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: "PitchNode - Master Every Sales Conversation",
+    title: "ConvoSparr — Master Every Sales Conversation",
     description:
-      "Practice live sales calls and pitches against AI opponents. Map every response. Master objections. Prove readiness before the real thing.",
+      "Practice real sales conversations against AI opponents before the real meeting happens. Master objections, refine your pitch, close with confidence.",
     type: "website",
-    url: "https://pitchnode.ai",
-    siteName: "PitchNode",
+    url: "https://convosparr.io",
+    siteName: "ConvoSparr",
     locale: "en_US",
+    images: [{ url: "/opengraph-image" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "PitchNode - Master Every Sales Conversation",
+    title: "ConvoSparr — Master Every Sales Conversation",
     description:
-      "Practice live sales calls and pitches against AI opponents. Map every response. Master objections.",
+      "Practice real sales conversations against AI opponents before the real meeting happens. Master objections, refine your pitch, close with confidence.",
   },
   icons: {
     icon: "/favicon.ico",

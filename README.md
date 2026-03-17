@@ -1,8 +1,8 @@
-# PitchNode - Landing Page
+# ConvoSparr - Sales Conversation Practice
 
-**The Science of Sales Performance**
+**Master Every Sales Conversation**
 
-A modern "Coming Soon" landing page for PitchNode, an AI-powered sales training platform where sales professionals practice live voice conversations against intelligent AI buyer personas.
+A modern landing page for ConvoSparr, an AI-powered sales conversation practice platform where sales professionals practice live voice conversations against intelligent AI buyer personas before the real meeting happens.
 
 ## Features
 
