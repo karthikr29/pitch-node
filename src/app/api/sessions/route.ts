@@ -6,8 +6,10 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const page = parseInt(request.nextUrl.searchParams.get("page") || "1");
-  const limit = parseInt(request.nextUrl.searchParams.get("limit") || "10");
+  const rawLimit = parseInt(request.nextUrl.searchParams.get("limit") || "10");
+  const limit = Math.min(Math.max(1, rawLimit), 100);
+  const rawPage = parseInt(request.nextUrl.searchParams.get("page") || "1");
+  const page = Math.max(1, rawPage);
   const callType = request.nextUrl.searchParams.get("callType") || request.nextUrl.searchParams.get("call_type");
   const offset = (page - 1) * limit;
 

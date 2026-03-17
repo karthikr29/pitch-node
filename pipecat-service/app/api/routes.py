@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Header
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 import os
 import httpx
@@ -19,20 +19,20 @@ def verify_api_key(authorization: str = Header(...)):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 class InferRoleRequest(BaseModel):
-    what_you_sell: str = ""
-    target_audience: str = ""
-    pitch_context: str = ""
+    what_you_sell: str = Field(default="", max_length=500)
+    target_audience: str = Field(default="", max_length=500)
+    pitch_context: str = Field(default="", max_length=2000)
 
 
 class StartSessionRequest(BaseModel):
-    session_id: str
-    room_name: str
-    scenario_id: str
-    persona_id: str
-    user_id: str
-    pitch_context: str = ""
+    session_id: str = Field(max_length=36)
+    room_name: str = Field(max_length=100)
+    scenario_id: str = Field(max_length=36)
+    persona_id: str = Field(max_length=36)
+    user_id: str = Field(max_length=36)
+    pitch_context: str = Field(default="", max_length=3000)
     pitch_briefing: Optional[dict] = None
-    inferred_role: Optional[str] = None
+    inferred_role: Optional[str] = Field(default=None, max_length=150)
 
 class StartSessionResponse(BaseModel):
     token: str

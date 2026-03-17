@@ -1,21 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-function normalizeConnectedAt(value: unknown) {
-  if (typeof value !== "string") return null;
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-
-  return parsed.toISOString();
-}
-
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { sessionId, connectedAt } = await request.json();
+  const { sessionId } = await request.json();
   if (!sessionId) return NextResponse.json({ error: "sessionId required" }, { status: 400 });
 
   // Verify session belongs to user
@@ -27,6 +18,10 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
+
+  if (session.status === "completed") {
+    return NextResponse.json({ sessionId, duration: session.duration_seconds ?? 0 });
+  }
 
   // Call Pipecat backend to end session
   try {
@@ -52,7 +47,7 @@ export async function POST(request: NextRequest) {
   }
 
   const endedAt = new Date().toISOString();
-  const fallbackStartedAt = session.started_at ? null : normalizeConnectedAt(connectedAt);
+  const fallbackStartedAt = session.started_at ? null : endedAt;
   const effectiveStartedAt = session.started_at || fallbackStartedAt;
   const durationSeconds = effectiveStartedAt
     ? Math.round((new Date(endedAt).getTime() - new Date(effectiveStartedAt).getTime()) / 1000)
@@ -75,7 +70,8 @@ export async function POST(request: NextRequest) {
   await supabase
     .from("sessions")
     .update(updatePayload)
-    .eq("id", sessionId);
+    .eq("id", sessionId)
+    .eq("user_id", user.id);
 
   return NextResponse.json({ sessionId, duration: durationSeconds });
 }

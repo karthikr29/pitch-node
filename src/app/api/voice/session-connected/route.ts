@@ -1,28 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-function normalizeConnectedAt(value: unknown) {
-  if (typeof value !== "string") return null;
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-
-  return parsed.toISOString();
-}
-
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { sessionId, connectedAt } = await request.json();
-  const normalizedConnectedAt = normalizeConnectedAt(connectedAt);
+  const { sessionId } = await request.json();
 
-  if (!sessionId || !normalizedConnectedAt) {
-    return NextResponse.json(
-      { error: "sessionId and a valid connectedAt are required" },
-      { status: 400 }
-    );
+  if (!sessionId) {
+    return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
   }
 
   const { data: session, error: sessionError } = await supabase
@@ -44,11 +31,13 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const serverStartedAt = new Date().toISOString();
+
   const { error: updateError } = await supabase
     .from("sessions")
     .update({
       status: "active",
-      started_at: normalizedConnectedAt,
+      started_at: serverStartedAt,
     })
     .eq("id", sessionId)
     .eq("user_id", user.id)
@@ -72,6 +61,6 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     sessionId,
     startedAt: updatedSession.started_at,
-    alreadyStarted: updatedSession.started_at !== normalizedConnectedAt,
+    alreadyStarted: false,
   });
 }

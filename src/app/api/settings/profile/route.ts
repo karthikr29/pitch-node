@@ -13,6 +13,13 @@ export async function PATCH(request: NextRequest) {
     if (body[field] !== undefined) updates[field] = body[field];
   }
 
+  if (updates.avatar_url && typeof updates.avatar_url === "string") {
+    const supabaseStorageUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/`;
+    if (updates.avatar_url !== "" && !updates.avatar_url.startsWith(supabaseStorageUrl)) {
+      return NextResponse.json({ error: "Invalid avatar_url" }, { status: 400 });
+    }
+  }
+
   const { data, error } = await supabase
     .from("profiles")
     .update(updates)

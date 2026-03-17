@@ -30,17 +30,43 @@ class SupabaseService:
         except Exception:
             return None
 
+    def _session_exists(self, session_id: str) -> bool:
+        try:
+            result = (
+                self.client.table("sessions")
+                .select("id")
+                .eq("id", session_id)
+                .single()
+                .execute()
+            )
+            return bool(result.data)
+        except Exception:
+            return False
+
     async def save_transcript(self, session_id: str, entries: list[dict]):
-        if entries:
+        if not entries:
+            return
+        try:
+            if not self._session_exists(session_id):
+                logger.warning(f"save_transcript: session {session_id} not found, skipping")
+                return
             self.client.table("session_transcripts").insert(
                 [{"session_id": session_id, **e} for e in entries]
             ).execute()
+        except Exception as e:
+            logger.error(f"Failed to save transcript for session {session_id}: {e}")
 
     async def save_analytics(self, session_id: str, analytics: dict):
-        self.client.table("session_analytics").upsert({
-            "session_id": session_id,
-            **analytics,
-        }).execute()
+        try:
+            if not self._session_exists(session_id):
+                logger.warning(f"save_analytics: session {session_id} not found, skipping")
+                return
+            self.client.table("session_analytics").upsert({
+                "session_id": session_id,
+                **analytics,
+            }).execute()
+        except Exception as e:
+            logger.error(f"Failed to save analytics for session {session_id}: {e}")
 
     async def complete_session(self, session_id: str):
         """Mark a session completed and compute duration from started_at."""
@@ -53,6 +79,10 @@ class SupabaseService:
                 .execute()
             )
             session = result.data or {}
+
+            if session.get("status") in ("completed", "abandoned"):
+                logger.warning(f"Session {session_id} already in terminal state, skipping update")
+                return
 
             ended_at_dt = datetime.now(timezone.utc)
             ended_at = ended_at_dt.isoformat()

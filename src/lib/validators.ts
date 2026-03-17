@@ -34,6 +34,15 @@ export function validatePhone(phone: string): { valid: boolean; error?: string }
   return { valid: true };
 }
 
+export const MAX_FIELD_LENGTHS = {
+  whatYouSell: 500,
+  targetAudience: 500,
+  problemSolved: 500,
+  valueProposition: 500,
+  callGoal: 300,
+  additionalNotes: 1000,
+} as const;
+
 export interface PitchBriefing {
   whatYouSell: string;
   targetAudience: string;
@@ -80,6 +89,14 @@ export function validatePitchBriefing(input: unknown): PitchBriefingValidationRe
   for (const field of pitchRequiredFields) {
     if (!briefing[field]) {
       errors.push(`${field} is required for pitch calls`);
+    }
+  }
+
+  // Enforce field length limits
+  for (const [field, maxLen] of Object.entries(MAX_FIELD_LENGTHS) as [keyof typeof MAX_FIELD_LENGTHS, number][]) {
+    const val = briefing[field];
+    if (val && val.length > maxLen) {
+      errors.push(`${field} must be ${maxLen} characters or fewer`);
     }
   }
 

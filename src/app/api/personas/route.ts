@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const personaType = searchParams.get("type");
 
-  let query = supabase.from("personas").select("*").eq("is_active", true).order("name");
+  let query = supabase.from("personas").select("id, name, title, description, emoji, persona_type, colors, accent, gender, is_active").eq("is_active", true).order("name");
 
   if (personaType) query = query.eq("persona_type", personaType);
 

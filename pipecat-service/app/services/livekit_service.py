@@ -216,6 +216,7 @@ class LiveKitService:
 
         if auto_complete_session:
             await self._cancel_auto_end_fallback(session_id)
+            self._finalized_auto_end_sessions.discard(session_id)  # reset guard — fallback may have been cancelled mid-flight
             logger.info(
                 f"Pipeline requested automatic session completion for {session_id}. "
                 f"Reason: {end_reason}"

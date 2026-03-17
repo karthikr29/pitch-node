@@ -15,6 +15,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "scenarioId and personaId are required" }, { status: 400 });
   }
 
+  // Rate limit: max 30 sessions per user per hour
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const { count } = await supabase
+    .from("sessions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .gte("created_at", oneHourAgo);
+  if ((count ?? 0) >= 30) {
+    return NextResponse.json({ error: "Rate limit exceeded. Max 30 sessions per hour." }, { status: 429 });
+  }
+
   const { data: scenario, error: scenarioError } = await supabase
     .from("scenarios")
     .select("id, call_type")
@@ -55,7 +66,7 @@ export async function POST(request: NextRequest) {
       status: "connecting",
       pitch_context: resolvedPitchContext || null,
       pitch_briefing: resolvedPitchBriefing,
-      livekit_room_name: `session-${Date.now()}-${user.id.slice(0, 8)}`,
+      livekit_room_name: `session-${crypto.randomUUID()}`,
     })
     .select()
     .single();
@@ -79,7 +90,7 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         pitch_context: resolvedPitchContext || "",
         pitch_briefing: resolvedPitchBriefing || undefined,
-        inferred_role: typeof inferredRole === "string" && inferredRole.trim() ? inferredRole.trim() : undefined,
+        inferred_role: typeof inferredRole === "string" && inferredRole.trim() ? inferredRole.trim().slice(0, 150) : undefined,
       }),
     });
 

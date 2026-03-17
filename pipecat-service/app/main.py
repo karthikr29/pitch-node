@@ -1,18 +1,50 @@
+import os
+from datetime import datetime, timedelta, timezone
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
+from app.services.supabase_service import SupabaseService
+from loguru import logger
 
-app = FastAPI(title="ConvoSparr Voice Pipeline", version="1.0.0")
+debug = os.getenv("APP_DEBUG", "false").lower() == "true"
 
+app = FastAPI(
+    title="ConvoSparr Voice Pipeline",
+    version="1.0.0",
+    docs_url="/docs" if debug else None,
+    redoc_url="/redoc" if debug else None,
+    openapi_url="/openapi.json" if debug else None,
+)
+
+allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=allowed_origins or [],
+    allow_methods=["POST", "GET"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(router, prefix="/api/v1")
+
+@app.on_event("startup")
+async def reconcile_orphaned_sessions():
+    """On startup, mark sessions that were left connecting/active as abandoned."""
+    try:
+        supabase = SupabaseService()
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=15)).isoformat()
+        result = (
+            supabase.client.table("sessions")
+            .update({"status": "abandoned"})
+            .in_("status", ["connecting", "active"])
+            .lt("created_at", cutoff)
+            .execute()
+        )
+        count = len(result.data or [])
+        if count > 0:
+            logger.info(f"Startup reconciliation: marked {count} orphaned sessions as abandoned")
+    except Exception as e:
+        logger.error(f"Startup reconciliation failed: {e}")
 
 @app.get("/health")
 async def health():

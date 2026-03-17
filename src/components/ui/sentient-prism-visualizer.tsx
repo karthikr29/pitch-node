@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Float, MeshDistortMaterial, Icosahedron, Torus, Environment, Sparkles } from "@react-three/drei";
+import { Float, MeshDistortMaterial, Icosahedron, Torus, Sparkles } from "@react-three/drei";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import { cn } from "@/lib/utils";
@@ -149,8 +149,6 @@ function Scene({ mode }: { mode: "ai" | "user" | "idle" | "thinking" }) {
                 color={mode === 'ai' ? "#f0abfc" : mode === 'user' ? "#7dd3fc" : mode === 'thinking' ? "#fde68a" : "#cbd5e1"}
             />
 
-            {/* Environment for reflections */}
-            <Environment preset="city" />
         </>
     );
 }

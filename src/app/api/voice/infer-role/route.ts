@@ -18,9 +18,9 @@ export async function POST(request: NextRequest) {
         "Authorization": `Bearer ${process.env.PIPECAT_SERVICE_API_KEY}`,
       },
       body: JSON.stringify({
-        what_you_sell: body.whatYouSell || "",
-        target_audience: body.targetAudience || "",
-        pitch_context: body.pitchContext || "",
+        what_you_sell: (body.whatYouSell || "").trim().slice(0, 500),
+        target_audience: (body.targetAudience || "").trim().slice(0, 500),
+        pitch_context: (body.pitchContext || "").trim().slice(0, 2000),
       }),
     });
 

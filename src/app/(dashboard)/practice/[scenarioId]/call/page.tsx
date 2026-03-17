@@ -470,7 +470,7 @@ export default function CallRoomPage() {
   const scenarioId = params.scenarioId as string;
   const personaId = searchParams.get("persona") || "";
   const personaNameParam = searchParams.get("name") || "";
-  const personaRoleParam = searchParams.get("role") || "";
+  const personaRoleParam = (searchParams.get("role") || "").replace(/[^a-zA-Z0-9 ,.'()-]/g, "").slice(0, 150);
   const pitchContextParam = searchParams.get("pitch") || "";
 
   const [callState, setCallState] = useState<CallState>("requesting-mic");
@@ -512,14 +512,16 @@ export default function CallRoomPage() {
       });
   }, []);
 
+  const isDev = process.env.NODE_ENV === "development";
+
   // Request microphone permission
   async function requestMicPermission() {
     try {
-      console.log("[CallPage] Requesting microphone permission...");
+      if (isDev) console.log("[CallPage] Requesting microphone permission...");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       // Stop the tracks immediately - we just needed to get permission
       stream.getTracks().forEach(track => track.stop());
-      console.log("[CallPage] Microphone permission granted");
+      if (isDev) console.log("[CallPage] Microphone permission granted");
       setHasMicPermission(true);
       setCallState("initializing");
     } catch (err) {
@@ -538,7 +540,7 @@ export default function CallRoomPage() {
 
     async function initializeCall() {
       try {
-        console.log("[CallPage] Initializing call for scenario:", scenarioId, "persona:", personaId);
+        if (isDev) console.log("[CallPage] Initializing call for scenario:", scenarioId, "persona:", personaId);
         const pitchBriefing = readPitchBriefingFromStorage(scenarioId);
         const pitchContextFromBriefing = pitchBriefing
           ? buildPitchContextFromBriefing(pitchBriefing)
@@ -564,7 +566,7 @@ export default function CallRoomPage() {
         }
 
         const data = await response.json();
-        console.log("[CallPage] Room created:", data.roomName, "LiveKit URL:", data.livekitUrl);
+        if (isDev) console.log("[CallPage] Room created:", data.roomName, "LiveKit URL:", data.livekitUrl);
 
         setCredentials({
           token: data.token,
@@ -672,9 +674,11 @@ export default function CallRoomPage() {
 
     const sessionId = credentials?.sessionId;
     if (sessionId) {
-      console.log(`[CallPage] Finalizing session (${source}) (non-blocking):`, sessionId);
+      if (isDev) console.log(`[CallPage] Finalizing session (${source}) (non-blocking):`, sessionId);
       const shouldFinalizeInBackground =
-        source === "manual" || (source === "remote-disconnect" && !autoEndRequestedRef.current);
+        source === "manual" ||
+        source === "auto-end-timeout" ||
+        (source === "remote-disconnect" && !autoEndRequestedRef.current);
       if (shouldFinalizeInBackground) {
         endSessionInBackground(sessionId, connectedAtRef.current);
       }
@@ -750,7 +754,7 @@ export default function CallRoomPage() {
         audio={true}
         video={false}
         onDisconnected={() => {
-          console.log("[CallPage] Disconnected from LiveKit");
+          if (isDev) console.log("[CallPage] Disconnected from LiveKit");
           setCallState("disconnected");
           completeSessionAndNavigate("remote-disconnect");
         }}

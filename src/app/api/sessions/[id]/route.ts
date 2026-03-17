@@ -9,7 +9,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   const { data: rawData, error } = await supabase
     .from("sessions")
-    .select("*, scenarios(*), personas(*), session_transcripts(*), session_analytics(*)")
+    .select(`
+      id, created_at, started_at, ended_at, duration_seconds, status, pitch_briefing,
+      scenarios(id, title, description, call_type, difficulty, context_briefing, objectives, evaluation_criteria),
+      personas(id, name, emoji, title, description, persona_type),
+      session_transcripts(id, speaker, content, timestamp_ms, confidence),
+      session_analytics(overall_score, letter_grade, ai_summary, highlight_moments, improvement_suggestions, scores)
+    `)
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -32,7 +38,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     endedAt: data.ended_at,
     durationSeconds: data.duration_seconds,
     status: data.status,
-    livekitRoomName: data.livekit_room_name,
     pitchBriefing: data.pitch_briefing ?? null,
     scenario: scenario ? {
       id: scenario.id,

@@ -106,6 +106,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         {/* JSON-LD Structured Data */}
+        {/* SECURITY: Static hardcoded content only. Never interpolate user data here. */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -139,6 +140,7 @@ export default function RootLayout({
           }}
         />
         {/* Prevent flash of wrong theme */}
+        {/* SECURITY: Static hardcoded content only. Never interpolate user data here. */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
