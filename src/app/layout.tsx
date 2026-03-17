@@ -37,7 +37,7 @@ const cabinetGrotesk = localFont({
 export const metadata: Metadata = {
   metadataBase: new URL("https://convosparr.io"),
   title: {
-    default: "ConvoSparr — Master Every Sales Conversation",
+    default: "ConvoSparr: Master Every Sales Conversation",
     template: "%s | ConvoSparr",
   },
   description:
@@ -68,7 +68,7 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: "ConvoSparr — Master Every Sales Conversation",
+    title: "ConvoSparr: Master Every Sales Conversation",
     description:
       "Practice pitch meetings, cold calls, discovery calls, demos, objections, negotiations, and closing conversations against AI opponents. Master every sales conversation before it happens.",
     type: "website",
@@ -80,13 +80,13 @@ export const metadata: Metadata = {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "ConvoSparr — Master Every Sales Conversation",
+        alt: "ConvoSparr: Master Every Sales Conversation",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "ConvoSparr — Master Every Sales Conversation",
+    title: "ConvoSparr: Master Every Sales Conversation",
     description:
       "Practice pitch meetings, cold calls, discovery calls, demos, objections, and negotiations against AI opponents. Master every sales conversation.",
     images: ["/opengraph-image"],

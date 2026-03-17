@@ -4,7 +4,7 @@ import { BrandName } from "@/components/ui";
 
 export const metadata: Metadata = {
     title: "Privacy Policy",
-    description: "Privacy Policy for ConvoSparr — Learn how we collect, use, and protect your personal information.",
+    description: "Privacy Policy for ConvoSparr: Learn how we collect, use, and protect your personal information.",
 };
 
 export default function PrivacyPolicy() {

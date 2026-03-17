@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "ConvoSparr — Master Every Sales Conversation",
+    name: "ConvoSparr: Master Every Sales Conversation",
     short_name: "ConvoSparr",
     description:
       "Practice real sales conversations against AI opponents before the real meeting happens.",

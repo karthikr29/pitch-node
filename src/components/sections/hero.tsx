@@ -2,10 +2,15 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Button, WaveformBackground, FrequencyOrb } from "@/components/ui";
+import { Button, WaveformBackground } from "@/components/ui";
 import { Suspense, lazy } from "react";
 import { ArrowRight, Mic2, Activity } from "lucide-react";
-import { TypeAnimation } from "react-type-animation";
+import dynamic from "next/dynamic";
+
+const TypeAnimation = dynamic(
+  () => import("react-type-animation").then((m) => m.TypeAnimation),
+  { ssr: false }
+);
 
 const HeroScene = lazy(() => import("@/components/3d/hero-scene"));
 
@@ -13,13 +18,6 @@ export function Hero() {
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden bg-background-primary">
       <WaveformBackground variant="primary" className="opacity-40" />
-
-      <div className="absolute top-20 -left-20 opacity-50 dark:opacity-70">
-        <FrequencyOrb size="xl" variant="primary" />
-      </div>
-      <div className="absolute bottom-20 -right-20 opacity-50 dark:opacity-70">
-        <FrequencyOrb size="lg" variant="accent" />
-      </div>
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
         <div className="grid lg:grid-cols-12 gap-8 items-center">
@@ -68,6 +66,7 @@ export function Hero() {
               >
                 <TypeAnimation
                   sequence={[
+                    1200,
                     "Pitch", 2000,
                     "Cold Call", 2000,
                     "Discovery", 2000,
@@ -82,7 +81,6 @@ export function Hero() {
                   repeat={Infinity}
                   cursor={true}
                   style={{ display: 'inline-block', minWidth: '200px' }}
-                  preRenderFirstString={false}
                 />
                 <motion.div
                   className="absolute inset-0 blur-2xl opacity-0 dark:opacity-50 -z-10"

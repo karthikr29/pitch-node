@@ -43,7 +43,11 @@ export function Header() {
           )}
         >
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group">
+          <a
+            href="/"
+            onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+            className="flex items-center gap-2.5 group"
+          >
             <div
               className={cn(
                 "relative transition-all duration-300 group-hover:scale-105",
@@ -61,15 +65,24 @@ export function Header() {
             <span
               className={cn(
                 "font-display font-bold text-primary transition-all duration-300 tracking-[0.07em]",
-                isScrolled ? "text-lg" : "text-xl"
+                isScrolled ? "text-base" : "text-lg"
               )}
             >
               ConvoSparr
             </span>
-          </Link>
+          </a>
 
           {/* Navigation */}
           <nav className="hidden md:flex items-center gap-6">
+            <a
+              href="#problem-solution"
+              className={cn(
+                "font-medium text-text-secondary hover:text-text-primary transition-all duration-300",
+                isScrolled ? "text-[0.8125rem]" : "text-sm"
+              )}
+            >
+              Why It Works
+            </a>
             <a
               href="#how-it-works"
               className={cn(
@@ -89,13 +102,13 @@ export function Header() {
               Features
             </a>
             <a
-              href="#pricing"
+              href="#personas"
               className={cn(
                 "font-medium text-text-secondary hover:text-text-primary transition-all duration-300",
                 isScrolled ? "text-[0.8125rem]" : "text-sm"
               )}
             >
-              Pricing
+              Who It&apos;s For
             </a>
           </nav>
 

@@ -4,7 +4,7 @@ import { BrandName } from "@/components/ui";
 
 export const metadata: Metadata = {
     title: "Terms of Service",
-    description: "Terms of Service for ConvoSparr — Read our terms and conditions for using our AI-powered sales conversation practice platform.",
+    description: "Terms of Service for ConvoSparr: Read our terms and conditions for using our AI-powered sales conversation practice platform.",
 };
 
 export default function TermsOfService() {
