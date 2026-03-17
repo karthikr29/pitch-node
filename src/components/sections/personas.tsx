@@ -167,7 +167,7 @@ export function Personas() {
             <span className="text-primary">For</span>
           </h2>
           <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-            Whether you&apos;re closing deals, pitching investors, or presenting to stakeholders — <BrandName italic /> sharpens your performance.
+            Whether you&apos;re closing deals, pitching investors, or presenting to stakeholders: <BrandName italic /> sharpens your performance.
           </p>
         </motion.div>
 

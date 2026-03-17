@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Button, WaveformBackground, FrequencyOrb } from "@/components/ui";
+import { Button, WaveformBackground } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { Suspense, lazy } from "react";
 import { ArrowRight, Mic2, Activity } from "lucide-react";
@@ -21,15 +21,7 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
       {/* Waveform Background - Voice Frequency Aesthetic */}
       <WaveformBackground variant="primary" className="opacity-40" />
 
-      {/* Frequency Orbs - AWS Orange Theme */}
-      <div className="absolute top-20 -left-20 opacity-50 dark:opacity-70">
-        <FrequencyOrb size="xl" variant="primary" />
-      </div>
-      <div className="absolute bottom-20 -right-20 opacity-50 dark:opacity-70">
-        <FrequencyOrb size="lg" variant="accent" />
-      </div>
-
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
+<div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
         {/* Asymmetric Grid Layout - Bold & Unconventional */}
         <div className="grid lg:grid-cols-12 gap-8 items-center">
           {/* Content - Spans 7 columns on large screens for asymmetry */}
@@ -86,6 +78,8 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
               >
                 <TypeAnimation
                   sequence={[
+                    "Pitch Call",
+                    2000,
                     "Cold Call",
                     2000,
                     "Discovery",
