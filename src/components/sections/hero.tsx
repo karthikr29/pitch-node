@@ -5,7 +5,12 @@ import { Button, WaveformBackground } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { Suspense, lazy } from "react";
 import { ArrowRight, Mic2, Activity } from "lucide-react";
-import { TypeAnimation } from "react-type-animation";
+import dynamic from "next/dynamic";
+
+const TypeAnimation = dynamic(
+  () => import("react-type-animation").then((m) => m.TypeAnimation),
+  { ssr: false }
+);
 
 import { WaitlistCounter } from "./waitlist-counter";
 
@@ -78,6 +83,7 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
               >
                 <TypeAnimation
                   sequence={[
+                    1200,
                     "Pitch Call",
                     2000,
                     "Cold Call",
@@ -99,7 +105,6 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
                   repeat={Infinity}
                   cursor={true}
                   style={{ display: 'inline-block', minWidth: '200px' }}
-                  preRenderFirstString={false}
                 />
                 {/* AWS Orange glow effect in dark mode */}
                 <motion.div
