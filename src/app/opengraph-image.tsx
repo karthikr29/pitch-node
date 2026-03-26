@@ -87,7 +87,7 @@ export default async function Image() {
             fontWeight: 600,
           }}
         >
-          convosparr.io
+          convosparr.com
         </div>
       </div>
     ),

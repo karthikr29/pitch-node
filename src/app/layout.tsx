@@ -35,7 +35,7 @@ const cabinetGrotesk = localFont({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://convosparr.io"),
+  metadataBase: new URL("https://convosparr.com"),
   title: {
     default: "ConvoSparr: Master Every Sales Conversation",
     template: "%s | ConvoSparr",
@@ -72,7 +72,7 @@ export const metadata: Metadata = {
     description:
       "Practice real sales conversations against AI opponents before the real meeting happens. Master objections, refine your pitch, close with confidence.",
     type: "website",
-    url: "https://convosparr.io",
+    url: "https://convosparr.com",
     siteName: "ConvoSparr",
     locale: "en_US",
     images: [{ url: "/opengraph-image" }],
@@ -96,6 +96,40 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* JSON-LD Structured Data */}
+        {/* SECURITY: Static hardcoded content only. Never interpolate user data here. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@graph": [
+                {
+                  "@type": "Organization",
+                  name: "ConvoSparr",
+                  url: "https://convosparr.com",
+                  logo: "https://convosparr.com/branding/logo.svg",
+                  description:
+                    "AI-powered sales conversation practice platform. Train for every pitch, cold call, discovery, demo, objection, negotiation, and close.",
+                },
+                {
+                  "@type": "WebApplication",
+                  name: "ConvoSparr",
+                  url: "https://convosparr.com",
+                  applicationCategory: "BusinessApplication",
+                  operatingSystem: "Web",
+                  description:
+                    "Practice pitch meetings, cold calls, discovery calls, demos, objections, negotiations, and closing conversations against AI opponents. Master every sales conversation before it happens.",
+                  offers: {
+                    "@type": "Offer",
+                    price: "0",
+                    priceCurrency: "USD",
+                  },
+                },
+              ],
+            }),
+          }}
+        />
         {/* Prevent flash of wrong theme */}
         <script
           dangerouslySetInnerHTML={{

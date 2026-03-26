@@ -1,11 +1,11 @@
 # Robots.txt for ConvoSparr
-# https://convosparr.io
+# https://convosparr.com
 
 User-agent: *
 Allow: /
 
 # Sitemap location
-Sitemap: https://convosparr.io/sitemap.xml
+Sitemap: https://convosparr.com/sitemap.xml
 
 # Disallow API routes
 Disallow: /api/

@@ -126,10 +126,10 @@ export function Footer() {
             </h4>
             <div className="space-y-3">
               <a
-                href="mailto:hello@convosparr.io"
+                href="mailto:hello@convosparr.com"
                 className="text-text-secondary hover:text-primary text-sm transition-colors block"
               >
-                hello@convosparr.io
+                hello@convosparr.com
               </a>
             </div>
           </div>

@@ -13,7 +13,7 @@ const ProgressScene = lazy(() => import("@/components/3d/progress-scene"));
 
 const features = [
   {
-    title: "5+ AI Personas That Fight Back",
+    title: "25+ AI Personas That Fight Back",
     description:
       "The Skeptical Tech Director. The Aggressive Procurement Officer. The Friendly Gatekeeper. Each with distinct personalities, objection patterns, and emotional triggers.",
     Scene: PersonasScene,
