@@ -12,7 +12,6 @@ import {
   useWaitlistForm,
   getStepProgress,
 } from "@/hooks/use-waitlist-form";
-import { submitWaitlist } from "@/app/actions";
 
 interface WaitlistModalProps {
   isOpen: boolean;
@@ -43,7 +42,12 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
     setError(null);
 
     try {
-      const result = await submitWaitlist(formData);
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const result = await res.json();
 
       if (result.success) {
         setStep("success");

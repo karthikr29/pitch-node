@@ -130,6 +130,7 @@ function NeuralCore({ isListening }: { isListening: boolean }) {
               y2={y2}
               stroke="var(--primary)"
               strokeWidth="1"
+              initial={{ opacity: 0.15 }}
               animate={{
                 opacity: isListening ? [0.2, 0.6, 0.2] : 0.15,
               }}

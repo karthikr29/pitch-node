@@ -211,17 +211,26 @@ function ConnectionLines() {
   );
 }
 
+// Fixed initial names — same on server and client to prevent hydration mismatch.
+// Randomization happens in useEffect (client-only, post-hydration).
+const INITIAL_NAMES = ["CEO", "CFO", "CTO", "VP Sales", "Founder"];
+
 export default function PersonasScene() {
   // Refs hold mutable values read inside the interval — avoids stale closure bugs
-  const displayedNamesRef = useRef<string[]>(initDisplayed());
+  const displayedNamesRef = useRef<string[]>(INITIAL_NAMES);
   const recentlyUsedRef   = useRef<string[]>([]);
   const orbIdxRef         = useRef(0);
 
   // State drives rendering
-  const [displayedNames, setDisplayedNames] = useState<string[]>(displayedNamesRef.current);
+  const [displayedNames, setDisplayedNames] = useState<string[]>(INITIAL_NAMES);
   const [fadingOut,      setFadingOut]      = useState<boolean[]>([false, false, false, false, false]);
 
   useEffect(() => {
+    // Randomize initial names after hydration (client-only)
+    const initial = initDisplayed();
+    displayedNamesRef.current = initial;
+    setDisplayedNames(initial);
+
     const id = setInterval(() => {
       const orb = orbIdxRef.current;
       orbIdxRef.current = (orb + 1) % 5;
