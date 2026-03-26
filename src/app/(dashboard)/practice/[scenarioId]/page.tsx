@@ -40,6 +40,8 @@ import {
   Loader2,
   UserCheck,
   ChevronLeft,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 
 interface ScenarioDetail {
@@ -188,6 +190,7 @@ export default function PreCallSetupPage() {
   const [inferredRoles, setInferredRoles] = useState<string[]>([]);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [inferringRole, setInferringRole] = useState(false);
+  const [inferRoleError, setInferRoleError] = useState(false);
   const lastInferredPayloadRef = useRef<string>("");
 
   const selectedPersona = useMemo(
@@ -269,6 +272,7 @@ export default function PreCallSetupPage() {
       if (!what || !who) {
         setInferredRoles([]);
         setSelectedRole(null);
+        setInferRoleError(false);
         lastInferredPayloadRef.current = "";
         return;
       }
@@ -279,31 +283,38 @@ export default function PreCallSetupPage() {
 
       setInferredRoles([]);
       setSelectedRole(null);
+      setInferRoleError(false);
       setInferringRole(true);
-      try {
-        const res = await fetch("/api/voice/infer-role", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: payload,
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.roles) && data.roles.length > 0) {
-            setInferredRoles(data.roles);
-            setSelectedRole(data.roles[0]);
+      let succeeded = false;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await fetch("/api/voice/infer-role", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: payload,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.roles) && data.roles.length > 0) {
+              setInferredRoles(data.roles);
+              setSelectedRole(data.roles[0]);
+            }
+            succeeded = true;
+            break;
           }
+        } catch {
+          // try next attempt
         }
-      } catch {
-        // Silent — fallback to DB title at call time
-      } finally {
-        setInferringRole(false);
       }
+      if (!succeeded) setInferRoleError(true);
+      setInferringRole(false);
     } else {
       const ctx = pitchContext.trim();
 
       if (!ctx) {
         setInferredRoles([]);
         setSelectedRole(null);
+        setInferRoleError(false);
         lastInferredPayloadRef.current = "";
         return;
       }
@@ -314,26 +325,37 @@ export default function PreCallSetupPage() {
 
       setInferredRoles([]);
       setSelectedRole(null);
+      setInferRoleError(false);
       setInferringRole(true);
-      try {
-        const res = await fetch("/api/voice/infer-role", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: payload,
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.roles) && data.roles.length > 0) {
-            setInferredRoles(data.roles);
-            setSelectedRole(data.roles[0]);
+      let succeeded = false;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await fetch("/api/voice/infer-role", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: payload,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.roles) && data.roles.length > 0) {
+              setInferredRoles(data.roles);
+              setSelectedRole(data.roles[0]);
+            }
+            succeeded = true;
+            break;
           }
+        } catch {
+          // try next attempt
         }
-      } catch {
-        // Silent
-      } finally {
-        setInferringRole(false);
       }
+      if (!succeeded) setInferRoleError(true);
+      setInferringRole(false);
     }
+  }
+
+  function retryInferRole() {
+    lastInferredPayloadRef.current = "";
+    triggerRoleInference();
   }
 
   function handleSurpriseMe() {
@@ -585,13 +607,18 @@ export default function PreCallSetupPage() {
       )}
 
       {/* Buyer Role Selection */}
-      {(inferringRole || inferredRoles.length > 0) && (
+      {(inferringRole || inferredRoles.length > 0 || inferRoleError) && (
         <div className="space-y-2.5">
           <p className="text-sm text-muted-foreground flex items-center gap-2">
             {inferringRole ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin shrink-0" />
                 Identifying your buyer...
+              </>
+            ) : inferRoleError ? (
+              <>
+                <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+                <span className="text-destructive">Couldn&apos;t identify buyer role.</span>
               </>
             ) : (
               <>
@@ -600,6 +627,16 @@ export default function PreCallSetupPage() {
               </>
             )}
           </p>
+          {!inferringRole && inferRoleError && (
+            <button
+              type="button"
+              onClick={retryInferRole}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Try again
+            </button>
+          )}
           {!inferringRole && inferredRoles.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {inferredRoles.map((role) => (
