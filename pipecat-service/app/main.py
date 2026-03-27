@@ -1,11 +1,27 @@
 import os
 from datetime import datetime, timedelta, timezone
 
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.loguru import LoguruIntegration
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.services.supabase_service import SupabaseService
 from loguru import logger
+
+_sentry_dsn = os.getenv("SENTRY_DSN")
+if _sentry_dsn:
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        environment=os.getenv("RAILWAY_ENVIRONMENT", "development"),
+        traces_sample_rate=1.0,
+        send_default_pii=False,
+        integrations=[
+            FastApiIntegration(),
+            LoguruIntegration(),
+        ],
+    )
 
 debug = os.getenv("APP_DEBUG", "false").lower() == "true"
 

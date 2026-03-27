@@ -11,7 +11,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https:",
-  `connect-src 'self' ${supabaseUrl} ${livekitHost ? `wss://${livekitHost} https://${livekitHost}` : ""}`.trim(),
+  `connect-src 'self' ${supabaseUrl} ${livekitHost ? `wss://${livekitHost} https://${livekitHost}` : ""} https://o4511115106516992.ingest.de.sentry.io`.trim(),
   "media-src 'self' blob:",
   "frame-ancestors 'none'",
   "base-uri 'self'",
