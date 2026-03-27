@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { type PitchBriefing } from "@/lib/validators";
+import * as Sentry from "@sentry/nextjs";
 import {
   type LucideIcon,
   Search,
@@ -302,6 +303,7 @@ export default function PracticeLibraryPage() {
             }))
           );
         } else {
+          Sentry.logger.warn("practice: scenarios API non-OK", { status: scenariosRes.status });
           setScenarios(fallbackScenarios);
         }
 
@@ -320,6 +322,7 @@ export default function PracticeLibraryPage() {
             }))
           );
         } else {
+          Sentry.logger.warn("practice: personas API non-OK", { status: personasRes.status });
           setPersonas(fallbackPersonas);
         }
 
@@ -330,6 +333,7 @@ export default function PracticeLibraryPage() {
           }
         }
       } catch {
+        Sentry.logger.warn("practice: data fetch failed, using fallback data");
         setScenarios(fallbackScenarios);
         setPersonas(fallbackPersonas);
       } finally {
@@ -415,6 +419,7 @@ export default function PracticeLibraryPage() {
             if (Array.isArray(data.roles) && data.roles.length > 0) {
               setInferredRoles(data.roles);
               setSelectedRole(data.roles[0]);
+              Sentry.logger.info("practice: role inference succeeded", { rolesCount: data.roles.length });
             }
             succeeded = true;
             break;
@@ -423,7 +428,10 @@ export default function PracticeLibraryPage() {
           // try next attempt
         }
       }
-      if (!succeeded) setInferRoleError(true);
+      if (!succeeded) {
+        setInferRoleError(true);
+        Sentry.logger.warn("practice: role inference failed after all attempts");
+      }
       setInferringRole(false);
     } else {
       const ctx = pitchContext.trim();
@@ -459,6 +467,7 @@ export default function PracticeLibraryPage() {
             if (Array.isArray(data.roles) && data.roles.length > 0) {
               setInferredRoles(data.roles);
               setSelectedRole(data.roles[0]);
+              Sentry.logger.info("practice: role inference succeeded", { rolesCount: data.roles.length });
             }
             succeeded = true;
             break;
@@ -467,7 +476,10 @@ export default function PracticeLibraryPage() {
           // try next attempt
         }
       }
-      if (!succeeded) setInferRoleError(true);
+      if (!succeeded) {
+        setInferRoleError(true);
+        Sentry.logger.warn("practice: role inference failed after all attempts");
+      }
       setInferringRole(false);
     }
   }

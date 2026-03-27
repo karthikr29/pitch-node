@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import * as Sentry from "@sentry/nextjs";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -21,6 +22,10 @@ export async function POST(request: NextRequest) {
     .gte("called_at", oneMinuteAgo);
 
   if ((recentCalls ?? 0) >= 10) {
+    Sentry.logger.warn("voice/infer-role: rate limit exceeded", {
+      userId: user.id,
+      recentCallCount: recentCalls ?? 0,
+    });
     const res = NextResponse.json(
       { error: "Rate limit exceeded. Try again in a minute." },
       { status: 429 }
@@ -51,12 +56,21 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
+      Sentry.logger.warn("voice/infer-role: Pipecat returned error", {
+        userId: user.id,
+        pipecatStatus: response.status,
+      });
       return NextResponse.json({ error: "Inference failed" }, { status: 502 });
     }
 
     const data = await response.json();
+    Sentry.logger.info("voice/infer-role: inference succeeded", {
+      userId: user.id,
+      rolesCount: Array.isArray(data.roles) ? data.roles.length : 0,
+    });
     return NextResponse.json({ roles: data.roles });
-  } catch {
+  } catch (error) {
+    Sentry.captureException(error, { tags: { route: "voice/infer-role" } });
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import * as Sentry from "@sentry/nextjs";
 
 function buildUnknownState(sessionId: string) {
   return {
@@ -44,6 +45,10 @@ export async function GET(request: NextRequest) {
     });
 
     if (response.status === 404) {
+      Sentry.logger.debug("voice/session-state: Pipecat has no state for session (pipeline may not be running)", {
+        sessionId,
+        userId: user.id,
+      });
       return NextResponse.json(buildUnknownState(sessionId));
     }
 
@@ -53,7 +58,8 @@ export async function GET(request: NextRequest) {
 
     const payload = await response.json();
     return NextResponse.json(payload);
-  } catch {
+  } catch (error) {
+    Sentry.captureException(error, { tags: { route: "voice/session-state" } });
     return NextResponse.json({ error: "Voice session state unavailable" }, { status: 503 });
   }
 }

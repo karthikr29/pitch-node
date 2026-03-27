@@ -45,6 +45,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import * as Sentry from "@sentry/nextjs";
 
 interface Session {
   id: string;
@@ -145,9 +146,11 @@ export default function HistoryPage() {
         setSessions(data.sessions || []);
         setTotalPages(data.totalPages || 1);
       } else {
+        Sentry.logger.warn("history: sessions API non-OK", { status: res.status, page });
         setSessions([]);
       }
     } catch {
+      Sentry.logger.warn("history: session list fetch failed", { page, callTypeFilter });
       setSessions([]);
     } finally {
       setLoading(false);
@@ -163,6 +166,7 @@ export default function HistoryPage() {
     try {
       const res = await fetch(`/api/sessions/${sessionId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
+      Sentry.logger.info("history: session deleted", { sessionId });
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       if (sessions.length === 1 && page > 1) {
         setPage((p) => p - 1); // useEffect will trigger fetchSessions
@@ -170,6 +174,7 @@ export default function HistoryPage() {
         await fetchSessions(true);
       }
     } catch {
+      Sentry.logger.warn("history: session delete failed", { sessionId });
       toast.error("Failed to delete session");
     } finally {
       setDeletingId(null);

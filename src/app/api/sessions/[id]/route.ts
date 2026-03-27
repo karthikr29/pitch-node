@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import * as Sentry from "@sentry/nextjs";
 
 function formatMs(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -7,117 +8,137 @@ function formatMs(ms: number): string {
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const { id } = await params;
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: rawData, error } = await supabase
-    .from("sessions")
-    .select(`
-      id, created_at, started_at, ended_at, duration_seconds, status, pitch_briefing, inferred_role,
-      scenarios(id, title, description, call_type, difficulty, context_briefing, objectives, evaluation_criteria),
-      personas(id, name, emoji, title, description, persona_type),
-      session_transcripts(id, speaker, content, timestamp_ms, confidence),
-      session_analytics(overall_score, letter_grade, ai_summary, highlight_moments, improvement_suggestions, scores)
-    `)
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .single();
+    const { data: rawData, error } = await supabase
+      .from("sessions")
+      .select(`
+        id, created_at, started_at, ended_at, duration_seconds, status, pitch_briefing, inferred_role,
+        scenarios(id, title, description, call_type, difficulty, context_briefing, objectives, evaluation_criteria),
+        personas(id, name, emoji, title, description, persona_type),
+        session_transcripts(id, speaker, content, timestamp_ms, confidence),
+        session_analytics(overall_score, letter_grade, ai_summary, highlight_moments, improvement_suggestions, scores)
+      `)
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 404 });
+    if (error) return NextResponse.json({ error: error.message }, { status: 404 });
 
-  // Cast to Record to avoid Supabase type inference issues with complex joins
-  const data = rawData as Record<string, unknown>;
-  const scenario = data.scenarios as Record<string, unknown> | null;
-  const persona = data.personas as Record<string, unknown> | null;
-  const analytics = data.session_analytics as Record<string, unknown> | Record<string, unknown>[] | null;
-  const analyticsObj = Array.isArray(analytics) ? analytics[0] : analytics;
-  const transcripts = ((data.session_transcripts as Record<string, unknown>[] | null) ?? [])
-    .sort((a, b) => ((a.timestamp_ms as number) ?? 0) - ((b.timestamp_ms as number) ?? 0));
+    // Cast to Record to avoid Supabase type inference issues with complex joins
+    const data = rawData as Record<string, unknown>;
+    const scenario = data.scenarios as Record<string, unknown> | null;
+    const persona = data.personas as Record<string, unknown> | null;
+    const analytics = data.session_analytics as Record<string, unknown> | Record<string, unknown>[] | null;
+    const analyticsObj = Array.isArray(analytics) ? analytics[0] : analytics;
+    const transcripts = ((data.session_transcripts as Record<string, unknown>[] | null) ?? [])
+      .sort((a, b) => ((a.timestamp_ms as number) ?? 0) - ((b.timestamp_ms as number) ?? 0));
 
-  const session = {
-    id: data.id,
-    createdAt: data.created_at,
-    startedAt: data.started_at,
-    endedAt: data.ended_at,
-    durationSeconds: data.duration_seconds,
-    status: data.status,
-    pitchBriefing: data.pitch_briefing ?? null,
-    inferredRole: (data.inferred_role as string | null) ?? null,
-    scenario: scenario ? {
-      id: scenario.id,
-      title: scenario.title,
-      description: scenario.description,
-      callType: scenario.call_type,
-      difficulty: scenario.difficulty,
-      contextBriefing: scenario.context_briefing,
-      objectives: scenario.objectives,
-      evaluationCriteria: scenario.evaluation_criteria,
-    } : null,
-    persona: persona ? {
-      id: persona.id,
-      name: persona.name,
-      emoji: persona.emoji,
-      title: persona.title,
-      description: persona.description,
-      personaType: persona.persona_type,
-    } : null,
-    analytics: analyticsObj ? (() => {
-      const scoresObj = analyticsObj.scores as Record<string, number> | null;
-      const rawHighlights = (analyticsObj.highlight_moments as Record<string, unknown>[] | null) ?? [];
-      return {
-        overallScore: analyticsObj.overall_score,
-        letterGrade: analyticsObj.letter_grade,
-        aiSummary: (analyticsObj.ai_summary as string | null) ?? null,
-        highlightMoments: rawHighlights.map((h) => {
-          const idx = h.timestamp_index as number | undefined;
-          const tsMs = (idx !== undefined ? transcripts[idx]?.timestamp_ms : undefined) as number | undefined;
-          return {
-            type: h.type === "positive" ? "good" : "bad",
-            text: (h.description as string) || "",
-            suggestion: (h.suggestion as string) || undefined,
-            timestamp: tsMs !== undefined ? formatMs(tsMs) : undefined,
-          };
-        }),
-        improvementSuggestions: analyticsObj.improvement_suggestions,
-        metrics: {
-          activeListening:   scoresObj?.active_listening   ?? 0,
-          objectionHandling: scoresObj?.objection_handling ?? 0,
-          closing:           scoresObj?.closing_technique  ?? 0,
-          rapport:           scoresObj?.rapport_building   ?? 0,
-        },
-      };
-    })() : null,
-    transcripts: transcripts.map((t: Record<string, unknown>) => ({
-      id: t.id,
-      speaker: t.speaker,
-      content: t.content,
-      timestampMs: t.timestamp_ms,
-      confidence: t.confidence,
-    })),
-  };
+    const session = {
+      id: data.id,
+      createdAt: data.created_at,
+      startedAt: data.started_at,
+      endedAt: data.ended_at,
+      durationSeconds: data.duration_seconds,
+      status: data.status,
+      pitchBriefing: data.pitch_briefing ?? null,
+      inferredRole: (data.inferred_role as string | null) ?? null,
+      scenario: scenario ? {
+        id: scenario.id,
+        title: scenario.title,
+        description: scenario.description,
+        callType: scenario.call_type,
+        difficulty: scenario.difficulty,
+        contextBriefing: scenario.context_briefing,
+        objectives: scenario.objectives,
+        evaluationCriteria: scenario.evaluation_criteria,
+      } : null,
+      persona: persona ? {
+        id: persona.id,
+        name: persona.name,
+        emoji: persona.emoji,
+        title: persona.title,
+        description: persona.description,
+        personaType: persona.persona_type,
+      } : null,
+      analytics: analyticsObj ? (() => {
+        const scoresObj = analyticsObj.scores as Record<string, number> | null;
+        const rawHighlights = (analyticsObj.highlight_moments as Record<string, unknown>[] | null) ?? [];
+        return {
+          overallScore: analyticsObj.overall_score,
+          letterGrade: analyticsObj.letter_grade,
+          aiSummary: (analyticsObj.ai_summary as string | null) ?? null,
+          highlightMoments: rawHighlights.map((h) => {
+            const idx = h.timestamp_index as number | undefined;
+            const tsMs = (idx !== undefined ? transcripts[idx]?.timestamp_ms : undefined) as number | undefined;
+            return {
+              type: h.type === "positive" ? "good" : "bad",
+              text: (h.description as string) || "",
+              suggestion: (h.suggestion as string) || undefined,
+              timestamp: tsMs !== undefined ? formatMs(tsMs) : undefined,
+            };
+          }),
+          improvementSuggestions: analyticsObj.improvement_suggestions,
+          metrics: {
+            activeListening:   scoresObj?.active_listening   ?? 0,
+            objectionHandling: scoresObj?.objection_handling ?? 0,
+            closing:           scoresObj?.closing_technique  ?? 0,
+            rapport:           scoresObj?.rapport_building   ?? 0,
+          },
+        };
+      })() : null,
+      transcripts: transcripts.map((t: Record<string, unknown>) => ({
+        id: t.id,
+        speaker: t.speaker,
+        content: t.content,
+        timestampMs: t.timestamp_ms,
+        confidence: t.confidence,
+      })),
+    };
 
-  return NextResponse.json(session);
+    Sentry.logger.debug("sessions/[id] GET: returned", {
+      userId: user.id,
+      sessionId: id,
+      hasAnalytics: session.analytics !== null,
+      transcriptCount: session.transcripts.length,
+    });
+    return NextResponse.json(session);
+  } catch (error) {
+    Sentry.captureException(error, { tags: { route: "sessions/[id]", method: "GET" } });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const { id } = await params;
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Verify ownership
-  const { data: session } = await supabase
-    .from("sessions")
-    .select("id")
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .single();
-  if (!session) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Verify ownership
+    const { data: session } = await supabase
+      .from("sessions")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .single();
+    if (!session) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const { error } = await supabase.from("sessions").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const { error } = await supabase.from("sessions").delete().eq("id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ success: true });
+    Sentry.logger.info("sessions/[id] DELETE: session deleted", {
+      userId: user.id,
+      sessionId: id,
+    });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    Sentry.captureException(error, { tags: { route: "sessions/[id]", method: "DELETE" } });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

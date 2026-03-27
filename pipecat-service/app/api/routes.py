@@ -4,6 +4,7 @@ from typing import Optional
 import os
 import httpx
 import json as _json
+from loguru import logger
 
 from app.config import settings
 from app.services.livekit_service import LiveKitService
@@ -54,6 +55,7 @@ async def infer_role(req: InferRoleRequest, _=Depends(verify_api_key)):
             'Reply with ONLY a JSON array of 3 strings. Example: ["VP of Sales", "Director of Revenue", "Chief Revenue Officer"]'
         )
     else:
+        logger.debug("infer-role: empty input, returning empty roles")
         return {"roles": []}
 
     if not settings.OPENROUTER_API_KEY:
@@ -78,8 +80,10 @@ async def infer_role(req: InferRoleRequest, _=Depends(verify_api_key)):
             result = response.json()
         raw = result["choices"][0]["message"]["content"].strip()
     except httpx.TimeoutException:
+        logger.warning("infer-role: OpenRouter timed out")
         raise HTTPException(status_code=504, detail="Inference service timed out")
     except httpx.HTTPStatusError as e:
+        logger.warning("infer-role: OpenRouter HTTP error", extra={"status_code": e.response.status_code})
         raise HTTPException(status_code=502, detail=f"Inference service error: {e.response.status_code}")
     except Exception:
         raise HTTPException(status_code=502, detail="Inference failed")
@@ -89,18 +93,29 @@ async def infer_role(req: InferRoleRequest, _=Depends(verify_api_key)):
             raise ValueError
         roles = [str(r).strip() for r in roles[:3]]
     except Exception:
+        logger.warning("infer-role: JSON parse failed, using fallback", extra={"raw_preview": raw[:50] if raw else ""})
         roles = [raw] if raw else ["Decision Maker"]
 
+    logger.info("infer-role: succeeded", extra={"roles_count": len(roles)})
     return {"roles": roles}
 
 
 @router.post("/sessions/start", response_model=StartSessionResponse)
 async def start_session(req: StartSessionRequest, _=Depends(verify_api_key)):
+    logger.info(
+        "sessions/start: received",
+        extra={"session_id": req.session_id, "scenario_id": req.scenario_id, "persona_id": req.persona_id}
+    )
+
     # Fetch scenario and persona from Supabase
     scenario = await supabase_service.get_scenario(req.scenario_id)
     persona = await supabase_service.get_persona(req.persona_id)
 
     if not scenario or not persona:
+        logger.warning(
+            "sessions/start: scenario or persona not found",
+            extra={"session_id": req.session_id, "scenario_found": scenario is not None, "persona_found": persona is not None}
+        )
         raise HTTPException(status_code=404, detail="Scenario or persona not found")
 
     # Create LiveKit room and get participant token
@@ -110,6 +125,10 @@ async def start_session(req: StartSessionRequest, _=Depends(verify_api_key)):
             participant_name=req.user_id,
         )
     except Exception as e:
+        logger.error(
+            "sessions/start: LiveKit room creation failed",
+            extra={"session_id": req.session_id, "error": str(e)}
+        )
         raise HTTPException(status_code=502, detail="Failed to initialize voice session")
 
     # Start the Pipecat pipeline in background
@@ -124,16 +143,21 @@ async def start_session(req: StartSessionRequest, _=Depends(verify_api_key)):
         inferred_role=req.inferred_role,
     )
 
+    logger.info("sessions/start: pipeline started", extra={"session_id": req.session_id, "room_name": req.room_name})
     return StartSessionResponse(token=token, room_name=req.room_name)
 
 @router.post("/sessions/{session_id}/end")
 async def end_session(session_id: str, _=Depends(verify_api_key)):
+    logger.info("sessions/end: received", extra={"session_id": session_id})
     await livekit_service.stop_pipeline(session_id)
+    logger.info("sessions/end: pipeline stopped", extra={"session_id": session_id})
     return {"status": "ended", "session_id": session_id}
 
 @router.get("/sessions/{session_id}/state")
 async def session_state(session_id: str, _=Depends(verify_api_key)):
-    return livekit_service.get_session_state(session_id)
+    state = livekit_service.get_session_state(session_id)
+    logger.debug("sessions/state: queried", extra={"session_id": session_id, "phase": state.get("phase", "unknown")})
+    return state
 
 @router.get("/health")
 async def health():

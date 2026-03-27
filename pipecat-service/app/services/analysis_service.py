@@ -1,29 +1,40 @@
 import json
 import httpx
+from loguru import logger
 from app.config import settings
 from app.prompts.analysis_prompts import get_analysis_prompt
 
 class AnalysisService:
     async def analyze_session(self, transcript: list[dict], scenario: dict, persona: dict) -> dict:
+        logger.info(
+            "analysis: starting",
+            extra={"transcript_entries": len(transcript), "scenario_id": scenario.get("id"), "persona_id": persona.get("id")}
+        )
+
         prompt = get_analysis_prompt(transcript, scenario, persona)
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": settings.ANALYSIS_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.3,
-                },
-                timeout=60.0,
-            )
-            result = response.json()
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": settings.ANALYSIS_MODEL,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.3,
+                    },
+                    timeout=60.0,
+                )
+                result = response.json()
+            content = result["choices"][0]["message"]["content"]
+        except Exception as e:
+            logger.error("analysis: OpenRouter request failed", extra={"error": str(e)})
+            return self._parse_analysis("")
 
-        content = result["choices"][0]["message"]["content"]
+        logger.debug("analysis: OpenRouter responded, parsing", extra={"content_length": len(content)})
         return self._parse_analysis(content)
 
     def _parse_analysis(self, content: str) -> dict:
@@ -33,7 +44,7 @@ class AnalysisService:
             end = content.rfind("}") + 1
             if start >= 0 and end > start:
                 data = json.loads(content[start:end])
-                return {
+                parsed = {
                     "scores": {
                         "objection_handling": data.get("objection_handling", 0),
                         "active_listening": data.get("active_listening", 0),
@@ -46,8 +57,17 @@ class AnalysisService:
                     "improvement_suggestions": data.get("improvement_suggestions", []),
                     "ai_summary": data.get("summary", ""),
                 }
+                logger.info(
+                    "analysis: parsed successfully",
+                    extra={
+                        "overall_score": parsed["overall_score"],
+                        "letter_grade": parsed["letter_grade"],
+                        "highlights_count": len(parsed["highlight_moments"]),
+                    }
+                )
+                return parsed
         except (json.JSONDecodeError, KeyError, IndexError):
-            pass
+            logger.warning("analysis: JSON parse failed, returning zero-score fallback", extra={"content_preview": content[:80] if content else ""})
         return {
             "scores": {"objection_handling": 0, "active_listening": 0, "closing_technique": 0, "rapport_building": 0},
             "overall_score": 0,

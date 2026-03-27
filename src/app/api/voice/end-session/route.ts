@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import * as Sentry from "@sentry/nextjs";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -20,6 +21,11 @@ export async function POST(request: NextRequest) {
   if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
 
   if (session.status === "completed") {
+    Sentry.logger.debug("voice/end-session: already completed", {
+      userId: user.id,
+      sessionId,
+      durationSeconds: session.duration_seconds ?? 0,
+    });
     return NextResponse.json({ sessionId, duration: session.duration_seconds ?? 0 });
   }
 
@@ -44,6 +50,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     // Pipeline may have already ended or timed out during shutdown.
     console.warn("[voice/end-session] Non-fatal Pipecat shutdown issue:", error);
+    Sentry.captureException(error, { level: "warning", tags: { route: "voice/end-session" } });
   }
 
   const endedAt = new Date().toISOString();
@@ -73,5 +80,11 @@ export async function POST(request: NextRequest) {
     .eq("id", sessionId)
     .eq("user_id", user.id);
 
+  Sentry.logger.info("voice/end-session: session marked completed", {
+    userId: user.id,
+    sessionId,
+    durationSeconds,
+    usedFallbackStartedAt: !!fallbackStartedAt,
+  });
   return NextResponse.json({ sessionId, duration: durationSeconds });
 }

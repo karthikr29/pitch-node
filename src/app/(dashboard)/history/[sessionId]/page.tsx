@@ -22,6 +22,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import * as Sentry from "@sentry/nextjs";
 
 interface TranscriptMessage {
   speaker: "user" | "ai";
@@ -240,10 +241,17 @@ export default function SessionReviewPage() {
           const data = await res.json();
           setSession(transformApiData(data, sessionId));
           setAnalysisReady(!!data.analytics);
+          Sentry.logger.info("history/detail: session loaded", {
+            sessionId,
+            hasAnalytics: !!data.analytics,
+            transcriptCount: (data.transcripts as unknown[] ?? []).length,
+          });
         } else {
+          Sentry.logger.warn("history/detail: session fetch failed", { sessionId });
           setError(true);
         }
       } catch {
+        Sentry.logger.warn("history/detail: session fetch failed", { sessionId });
         setError(true);
       } finally {
         setLoading(false);
@@ -260,6 +268,7 @@ export default function SessionReviewPage() {
       if (data.analytics) {
         setSession(transformApiData(data, sessionId));
         setAnalysisReady(true);
+        Sentry.logger.info("history/detail: analysis became ready via poll", { sessionId });
       }
     } catch {
       // silently ignore poll errors

@@ -4,6 +4,7 @@ import {
   buildPitchContextFromBriefing,
   validatePitchBriefing,
 } from "@/lib/validators";
+import * as Sentry from "@sentry/nextjs";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -25,6 +26,10 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (existingSession) {
+    Sentry.logger.warn("voice/create-room: active session conflict", {
+      userId: user.id,
+      existingSessionId: existingSession.id,
+    });
     return NextResponse.json(
       { error: "A session is already in progress.", sessionId: existingSession.id },
       { status: 409 }
@@ -87,6 +92,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: sessionError.message }, { status: 500 });
   }
 
+  Sentry.logger.info("voice/create-room: session created, calling Pipecat", {
+    userId: user.id,
+    sessionId: session.id,
+    scenarioId,
+    personaId,
+    callType: scenario.call_type,
+  });
+
   // Call Pipecat backend to create room and start pipeline
   try {
     const pipecatUrl = process.env.PIPECAT_SERVICE_URL || "http://localhost:8000";
@@ -109,19 +122,30 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
+      Sentry.logger.warn("voice/create-room: Pipecat returned error, rolling back session", {
+        userId: user.id,
+        sessionId: session.id,
+        pipecatStatus: response.status,
+      });
       await supabase.from("sessions").delete().eq("id", session.id);
       return NextResponse.json({ error: "Failed to start voice pipeline" }, { status: 502 });
     }
 
     const pipecatData = await response.json();
 
+    Sentry.logger.info("voice/create-room: room ready", {
+      userId: user.id,
+      sessionId: session.id,
+      roomName: session.livekit_room_name,
+    });
     return NextResponse.json({
       sessionId: session.id,
       token: pipecatData.token,
       roomName: session.livekit_room_name,
       livekitUrl: process.env.NEXT_PUBLIC_LIVEKIT_URL,
     });
-  } catch {
+  } catch (error) {
+    Sentry.captureException(error, { tags: { route: "voice/create-room" }, extra: { sessionId: session.id } });
     await supabase.from("sessions").delete().eq("id", session.id);
     return NextResponse.json({ error: "Voice pipeline service unavailable" }, { status: 503 });
   }

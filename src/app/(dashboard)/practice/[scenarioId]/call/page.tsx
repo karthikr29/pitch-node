@@ -28,6 +28,7 @@ import {
   useParticipants,
 } from "@livekit/components-react";
 import { ConnectionState } from "livekit-client";
+import * as Sentry from "@sentry/nextjs";
 
 type CallState = "requesting-mic" | "initializing" | "connecting" | "connected" | "disconnected" | "error";
 type SpeakingState = "ai" | "user" | "idle" | "thinking";
@@ -210,6 +211,11 @@ function CallInterface({
 
         if (payload.phase === "ending" || payload.phase === "ended") {
           setAutoEnding(true);
+          Sentry.logger.info("call: AI-initiated auto-end detected", {
+            sessionId,
+            phase: payload.phase,
+            endReason: payload.endReason?.reasonCode ?? null,
+          });
           onAutoEndRequested();
           if (!autoEndFallbackRef.current) {
             autoEndFallbackRef.current = setTimeout(() => {
@@ -250,7 +256,10 @@ function CallInterface({
   // Enable microphone when connected
   useEffect(() => {
     if (isConnected && localParticipant) {
-      localParticipant.setMicrophoneEnabled(true).catch(console.error);
+      localParticipant.setMicrophoneEnabled(true).catch((err) => {
+        console.error("[CallPage] Failed to enable microphone:", err);
+        Sentry.logger.warn("call: failed to enable microphone after connect", { sessionId });
+      });
     }
   }, [isConnected, localParticipant]);
 
@@ -503,6 +512,7 @@ export default function CallRoomPage() {
         } else if (result.state === "denied") {
           setHasMicPermission(false);
           setError("Microphone access is required for calls. Please allow microphone access in your browser settings and try again.");
+          Sentry.logger.warn("call: microphone permission already denied (pre-prompt)", { scenarioId, personaId });
           setCallState("error");
         }
         // "prompt" → leave state as "requesting-mic", show the permission screen
@@ -528,6 +538,7 @@ export default function CallRoomPage() {
       console.error("[CallPage] Microphone permission denied:", err);
       setHasMicPermission(false);
       setError("Microphone access is required for calls. Please allow microphone access and try again.");
+      Sentry.logger.warn("call: microphone permission denied by user", { scenarioId, personaId });
       setCallState("error");
     }
   }
@@ -577,10 +588,20 @@ export default function CallRoomPage() {
         if (pitchBriefing) {
           sessionStorage.removeItem(`pitch-briefing:${scenarioId}`);
         }
+        Sentry.logger.info("call: room created, connecting to LiveKit", {
+          sessionId: data.sessionId,
+          scenarioId,
+          personaId,
+        });
         setCallState("connecting");
       } catch (err) {
         console.error("[CallPage] Failed to initialize call:", err);
         setError(err instanceof Error ? err.message : "Failed to start call");
+        Sentry.logger.warn("call: room creation failed", {
+          scenarioId,
+          personaId,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        });
         setCallState("error");
       }
     }
@@ -631,6 +652,9 @@ export default function CallRoomPage() {
       sessionConnectedSyncedRef.current = true;
     } catch (err) {
       console.warn("[CallPage] Failed to sync connected session start:", err);
+      Sentry.logger.warn("call: session-connected sync failed, will retry", {
+        sessionId: credentials?.sessionId,
+      });
       sessionConnectedRetryRef.current = setTimeout(() => {
         void syncSessionConnected();
       }, 2000);
@@ -645,6 +669,10 @@ export default function CallRoomPage() {
     connectedAtRef.current = connectedAt;
     setCallReady(true);
     setCallState("connected");
+    Sentry.logger.info("call: LiveKit connected", {
+      sessionId: credentials?.sessionId,
+      connectedAt,
+    });
     void syncSessionConnected();
   }, [syncSessionConnected]);
 
@@ -665,6 +693,9 @@ export default function CallRoomPage() {
       })
       .catch((err) => {
         console.error("[CallPage] End session error:", err);
+        Sentry.logger.warn("call: end-session background call failed", {
+          sessionId: credentials?.sessionId,
+        });
       });
   }
 
@@ -673,6 +704,13 @@ export default function CallRoomPage() {
     sessionEndHandledRef.current = true;
 
     const sessionId = credentials?.sessionId;
+    Sentry.logger.info("call: session completing", {
+      sessionId,
+      source,
+      durationSeconds: connectedAtRef.current
+        ? Math.round((Date.now() - new Date(connectedAtRef.current).getTime()) / 1000)
+        : null,
+    });
     if (sessionId) {
       if (isDev) console.log(`[CallPage] Finalizing session (${source}) (non-blocking):`, sessionId);
       const shouldFinalizeInBackground =
@@ -767,6 +805,10 @@ export default function CallRoomPage() {
             return;
           }
           console.error("[CallPage] LiveKit error:", error);
+          Sentry.logger.warn("call: LiveKit room error", {
+            sessionId: credentials?.sessionId,
+            errorMessage: error.message,
+          });
           setError(error.message);
           setCallState("error");
         }}
