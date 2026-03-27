@@ -58,6 +58,7 @@ Create a `.env.local` file in the project root (see `.env.example` for reference
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 # LiveKit
 NEXT_PUBLIC_LIVEKIT_URL=wss://your-project.livekit.cloud
@@ -69,6 +70,8 @@ PIPECAT_SERVICE_API_KEY=your_shared_secret
 # App
 NEXT_PUBLIC_APP_ENV=development
 ```
+
+`SUPABASE_SERVICE_ROLE_KEY` is server-only. Keep it out of client code and only configure it in the Next.js server environment.
 
 ### Pipecat Voice Backend
 
@@ -99,10 +102,49 @@ When deploying to Vercel, add the following environment variables in **Project S
 |----------|---------------------|-----------------------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Production Supabase URL | Staging Supabase URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Production Supabase anon key | Staging Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Production Supabase service role key | Staging Supabase service role key |
 | `NEXT_PUBLIC_APP_ENV` | `production` | `preview` |
 | `WAITLIST_WEBHOOK_URL` | Production webhook URL | Staging webhook URL (or leave empty to skip webhook in preview) |
 
 > **Note**: Variables prefixed with `NEXT_PUBLIC_` are client-visible. The Supabase anon key is safe to expose when your Row Level Security (RLS) policies are configured correctly.
+
+## Health Check
+
+The Next.js app exposes a public health endpoint at:
+
+- Local: `http://localhost:3000/api/health`
+- Deployed: `<your-app-origin>/api/health`
+
+The endpoint checks:
+
+- Supabase DB connectivity using a server-only admin client
+- Pipecat reachability through `${PIPECAT_SERVICE_URL}/health`
+
+Expected responses:
+
+```json
+{
+  "status": "ok",
+  "db": "ok",
+  "voice": "ok",
+  "timestamp": "2026-03-27T12:00:00.000Z"
+}
+```
+
+```json
+{
+  "status": "degraded",
+  "db": "ok",
+  "voice": "error",
+  "timestamp": "2026-03-27T12:00:00.000Z"
+}
+```
+
+Quick check:
+
+```bash
+curl http://localhost:3000/api/health
+```
 
 #### Branching + Deployment Workflow (`main` + `staging`)
 

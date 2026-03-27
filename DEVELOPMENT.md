@@ -50,8 +50,33 @@ Runs on `http://localhost:3000`.
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key for server-only health checks |
 | `NEXT_PUBLIC_LIVEKIT_URL` | LiveKit server URL |
 | `PIPECAT_SERVICE_URL` | `http://localhost:8000` |
 | `PIPECAT_SERVICE_API_KEY` | Shared secret — must match backend |
 
 > **Supabase:** Always use the **staging** project (`pitch-node-staging`) for local dev. Never connect to production.
+
+---
+
+## Health Check Verification
+
+With both services running locally, verify the frontend health endpoint at:
+
+- `http://localhost:3000/api/health`
+
+It depends on:
+
+- `SUPABASE_SERVICE_ROLE_KEY` being set in `.env.local`
+- Pipecat being reachable at `PIPECAT_SERVICE_URL`
+
+Quick check:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+Expected outcomes:
+
+- `200` with `{"status":"ok","db":"ok","voice":"ok",...}` when both checks pass
+- `503` with `status: "degraded"` when either the DB or Pipecat check fails

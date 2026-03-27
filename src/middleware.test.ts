@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 
 const mockGetUser = vi.fn();
 
@@ -28,6 +29,14 @@ describe("Middleware", () => {
     expect(config.matcher).toBeDefined();
     expect(config.matcher).toHaveLength(1);
     expect(config.matcher[0]).toContain("_next/static");
+    expect(unstable_doesMiddlewareMatch({
+      config,
+      url: "http://localhost:3000/api/health",
+    })).toBe(false);
+    expect(unstable_doesMiddlewareMatch({
+      config,
+      url: "http://localhost:3000/api/personas",
+    })).toBe(true);
   });
 });
 
