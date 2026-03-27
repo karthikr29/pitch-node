@@ -21,6 +21,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { type PitchBriefing } from "@/lib/validators";
 import {
@@ -44,6 +54,8 @@ import {
   ChevronLeft,
   ArrowRight,
   Lock,
+  Radio,
+  PhoneOff,
 } from "lucide-react";
 
 interface Scenario {
@@ -234,6 +246,11 @@ export default function PracticeLibraryPage() {
   const [comboboxOpen, setComboboxOpen] = useState(false);
   const [commandValue, setCommandValue] = useState("");
 
+  const [activeSession, setActiveSession] = useState<{ sessionId: string; sessionStatus: string } | null>(null);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [endingSession, setEndingSession] = useState(false);
+  const [endSessionError, setEndSessionError] = useState<string | null>(null);
+
   const selectedPersona = useMemo(
     () => personas.find((p) => p.id === selectedPersonaId) ?? null,
     [personas, selectedPersonaId]
@@ -266,9 +283,10 @@ export default function PracticeLibraryPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [scenariosRes, personasRes] = await Promise.all([
+        const [scenariosRes, personasRes, activeSessionRes] = await Promise.all([
           fetch("/api/scenarios"),
           fetch("/api/personas"),
+          fetch("/api/voice/active-session"),
         ]);
 
         if (scenariosRes.ok) {
@@ -303,6 +321,13 @@ export default function PracticeLibraryPage() {
           );
         } else {
           setPersonas(fallbackPersonas);
+        }
+
+        if (activeSessionRes.ok) {
+          const asd = await activeSessionRes.json();
+          if (asd.hasActiveSession) {
+            setActiveSession({ sessionId: asd.sessionId, sessionStatus: asd.status });
+          }
         }
       } catch {
         setScenarios(fallbackScenarios);
@@ -501,6 +526,26 @@ export default function PracticeLibraryPage() {
     router.push(`/practice/${resolvedScenarioId}/call${query}`);
   }
 
+  async function handleEndAndStartFresh() {
+    if (!activeSession) return;
+    setEndingSession(true);
+    setEndSessionError(null);
+    try {
+      const res = await fetch("/api/voice/end-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: activeSession.sessionId }),
+      });
+      if (!res.ok) throw new Error("Failed to end session");
+      setActiveSession(null);
+      setShowEndConfirm(false);
+    } catch {
+      setEndSessionError("Could not end the session. Please try again.");
+    } finally {
+      setEndingSession(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -523,6 +568,75 @@ export default function PracticeLibraryPage() {
             <Skeleton className="h-40 w-full" />
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // Active session blocking state
+  if (activeSession) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 px-4">
+        {/* Pulsing LIVE badge */}
+        <div className="flex items-center gap-2.5 mb-8">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-500 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500" />
+          </span>
+          <span className="text-orange-500 text-xs font-semibold tracking-widest uppercase">
+            Live Session Active
+          </span>
+        </div>
+
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 flex flex-col items-center text-center gap-5">
+            <div className="w-16 h-16 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
+              <Radio className="w-7 h-7 text-orange-500" />
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold">A session is already in progress</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                You have an active training call running. End it before starting a new one.
+                Your transcript and analysis will be saved automatically.
+              </p>
+            </div>
+
+            {endSessionError && (
+              <p className="text-sm text-red-500">{endSessionError}</p>
+            )}
+
+            <Button className="w-full mt-1" onClick={() => setShowEndConfirm(true)}>
+              <PhoneOff className="w-4 h-4 mr-2" />
+              End Session &amp; Start Fresh
+            </Button>
+          </CardContent>
+        </Card>
+
+        <AlertDialog open={showEndConfirm} onOpenChange={setShowEndConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>End this session?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will immediately disconnect the active call on all devices.
+                Your transcript and analysis will still be saved.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={endingSession}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleEndAndStartFresh}
+                disabled={endingSession}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {endingSession ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Ending&hellip;</>
+                ) : (
+                  <><PhoneOff className="w-4 h-4 mr-2" />End Session</>
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }

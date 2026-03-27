@@ -15,15 +15,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "scenarioId and personaId are required" }, { status: 400 });
   }
 
-  // Rate limit: max 30 sessions per user per hour
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { count } = await supabase
+  // Enforce max 1 active session per user at any time
+  const { data: existingSession } = await supabase
     .from("sessions")
-    .select("id", { count: "exact", head: true })
+    .select("id")
     .eq("user_id", user.id)
-    .gte("created_at", oneHourAgo);
-  if ((count ?? 0) >= 30) {
-    return NextResponse.json({ error: "Rate limit exceeded. Max 30 sessions per hour." }, { status: 429 });
+    .in("status", ["connecting", "active"])
+    .limit(1)
+    .maybeSingle();
+
+  if (existingSession) {
+    return NextResponse.json(
+      { error: "A session is already in progress.", sessionId: existingSession.id },
+      { status: 409 }
+    );
   }
 
   const { data: scenario, error: scenarioError } = await supabase
@@ -74,7 +79,13 @@ export async function POST(request: NextRequest) {
     .select()
     .single();
 
-  if (sessionError) return NextResponse.json({ error: sessionError.message }, { status: 500 });
+  if (sessionError) {
+    // 23505 = unique_violation — DB-level race-condition backstop for the active-session index
+    if ((sessionError as { code?: string }).code === "23505") {
+      return NextResponse.json({ error: "A session is already in progress." }, { status: 409 });
+    }
+    return NextResponse.json({ error: sessionError.message }, { status: 500 });
+  }
 
   // Call Pipecat backend to create room and start pipeline
   try {

@@ -6,6 +6,32 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Lazy cleanup: delete records older than 5 min (fire-and-forget)
+  supabase.from("infer_role_calls")
+    .delete()
+    .eq("user_id", user.id)
+    .lt("called_at", new Date(Date.now() - 5 * 60 * 1000).toISOString());
+
+  // Rate limit: 10 calls per minute per user
+  const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
+  const { count: recentCalls } = await supabase
+    .from("infer_role_calls")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .gte("called_at", oneMinuteAgo);
+
+  if ((recentCalls ?? 0) >= 10) {
+    const res = NextResponse.json(
+      { error: "Rate limit exceeded. Try again in a minute." },
+      { status: 429 }
+    );
+    res.headers.set("Retry-After", "60");
+    return res;
+  }
+
+  // Record this call
+  await supabase.from("infer_role_calls").insert({ user_id: user.id });
+
   const body = await request.json();
 
   const pipecatUrl = process.env.PIPECAT_SERVICE_URL || "http://localhost:8000";
