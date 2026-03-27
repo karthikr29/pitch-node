@@ -3,6 +3,7 @@ import { DM_Sans } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "./providers";
+import { SentryInit } from "@/components/sentry-init";
 
 // Distinctive body font with personality
 const dmSans = DM_Sans({
@@ -160,6 +161,7 @@ export default function RootLayout({
         className={`${dmSans.variable} ${cabinetGrotesk.variable} font-sans antialiased`}
         suppressHydrationWarning
       >
+        <SentryInit />
         <Providers>{children}</Providers>
       </body>
     </html>
