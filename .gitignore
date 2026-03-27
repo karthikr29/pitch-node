@@ -2,6 +2,7 @@
 
 # Local spec files
 spec.md
+BACKLOG.md
 
 # dependencies
 /node_modules
