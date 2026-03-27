@@ -91,10 +91,35 @@ describe("updateSession", () => {
     expect(response.headers.get("location")).toContain("/dashboard");
   });
 
+  it("redirects authenticated users from forgot-password to dashboard", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    const { updateSession } = await import("@/lib/supabase/middleware");
+    const request = new NextRequest("http://localhost:3000/forgot-password");
+    const response = await updateSession(request);
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain("/dashboard");
+  });
+
   it("allows authenticated users on dashboard", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
     const { updateSession } = await import("@/lib/supabase/middleware");
     const request = new NextRequest("http://localhost:3000/dashboard");
+    const response = await updateSession(request);
+    expect(response.status).toBe(200);
+  });
+
+  it("allows unauthenticated users on auth reset-password", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    const { updateSession } = await import("@/lib/supabase/middleware");
+    const request = new NextRequest("http://localhost:3000/auth/reset-password");
+    const response = await updateSession(request);
+    expect(response.status).toBe(200);
+  });
+
+  it("allows authenticated users on auth reset-password", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    const { updateSession } = await import("@/lib/supabase/middleware");
+    const request = new NextRequest("http://localhost:3000/auth/reset-password");
     const response = await updateSession(request);
     expect(response.status).toBe(200);
   });

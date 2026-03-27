@@ -7,7 +7,7 @@ vi.mock("@/components/ui", () => ({
 }));
 
 vi.mock("next/image", () => ({
-  default: (props: Record<string, unknown>) => (
+  default: ({ fill, ...props }: Record<string, unknown>) => (
     // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
     <img {...props} />
   ),
@@ -45,7 +45,7 @@ describe("AuthShell", () => {
 
   it("renders the logo linking to home", () => {
     render(<AuthShell><div>content</div></AuthShell>);
-    const logoLink = screen.getByText("node").closest("a");
+    const logoLink = screen.getByText("ConvoSparr").closest("a");
     expect(logoLink).toHaveAttribute("href", "/");
   });
 
