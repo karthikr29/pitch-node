@@ -11,6 +11,11 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const pipecatApiKey = process.env.PIPECAT_SERVICE_API_KEY;
+  if (!pipecatApiKey) {
+    return NextResponse.json({ error: "Voice service misconfigured" }, { status: 500 });
+  }
+
   const { scenarioId, personaId, pitchContext, pitchBriefing, inferredRole } = await request.json();
   if (!scenarioId || !personaId) {
     return NextResponse.json({ error: "scenarioId and personaId are required" }, { status: 400 });
@@ -107,7 +112,7 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.PIPECAT_SERVICE_API_KEY}`,
+        "Authorization": `Bearer ${pipecatApiKey}`,
       },
       body: JSON.stringify({
         session_id: session.id,

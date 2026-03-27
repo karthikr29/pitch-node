@@ -30,7 +30,7 @@ Items confirmed safe are excluded. Work through these one at a time.
 
 ---
 
-### 1. Production Logging & Error Tracking
+### [x] 1. Production Logging & Error Tracking
 **Severity: High — flying blind in production**
 
 Every `catch` block in all 14 API routes either silently swallows the error or returns a generic 500 with no log. Only 1 `console.warn()` exists in the entire backend. When voice calls fail, sessions get deleted silently with zero trace of why.
@@ -69,7 +69,7 @@ No backup scripts, no GitHub Actions workflows for backups, no mention of PITR a
 
 ---
 
-### 3. Error Boundaries in the UI
+### [x] 3. Error Boundaries in the UI
 **Severity: High — one JS crash = white screen, user never comes back**
 
 Zero `error.tsx` files exist at any route level. No `global-error.tsx`. Any unhandled React error crashes the entire app with a blank screen and no recovery path.

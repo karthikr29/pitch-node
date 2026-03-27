@@ -19,6 +19,11 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const pipecatApiKey = process.env.PIPECAT_SERVICE_API_KEY;
+  if (!pipecatApiKey) {
+    return NextResponse.json({ error: "Voice service misconfigured" }, { status: 500 });
+  }
+
   const sessionId = request.nextUrl.searchParams.get("sessionId");
   if (!sessionId) {
     return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
@@ -39,7 +44,7 @@ export async function GET(request: NextRequest) {
     const pipecatUrl = process.env.PIPECAT_SERVICE_URL || "http://localhost:8000";
     const response = await fetch(`${pipecatUrl}/api/v1/sessions/${sessionId}/state`, {
       headers: {
-        "Authorization": `Bearer ${process.env.PIPECAT_SERVICE_API_KEY}`,
+        "Authorization": `Bearer ${pipecatApiKey}`,
       },
       cache: "no-store",
     });
