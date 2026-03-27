@@ -77,6 +77,41 @@ interface Persona {
   accent: string;
 }
 
+function normalizeCallTypeValue(callType: string): string {
+  return callType.replace(/-/g, "_");
+}
+
+function mapScenario(row: Record<string, unknown>): Scenario {
+  return {
+    id: row.id as string,
+    title: (row.title as string) || "",
+    description: (row.description as string) || "",
+    callType: ((row.call_type || row.callType) as string) || "",
+    difficulty: ((row.difficulty as string) || "").toLowerCase(),
+  };
+}
+
+function mapPersona(row: Record<string, unknown>): Persona {
+  return {
+    id: row.id as string,
+    name: (row.name as string) || "",
+    emoji: (row.emoji as string) || "",
+    title: (row.title as string) || "",
+    description: (row.description as string) || "",
+    persona_type: (row.persona_type as string) || "other",
+    accent: (row.accent as string) || "",
+  };
+}
+
+function getCatalogNotice(headers: Headers, itemLabel: string): string | null {
+  if (headers.get("X-Results-Truncated") !== "true") return null;
+
+  const limit = Number.parseInt(headers.get("X-Result-Limit") || "", 10);
+  if (!Number.isFinite(limit)) return null;
+
+  return `Showing the first ${limit} ${itemLabel}.`;
+}
+
 const callTypeIcons: Record<string, LucideIcon> = {
   pitch: Megaphone,
   "cold-call": Phone,
@@ -201,13 +236,6 @@ const difficultyOptions = [
   { value: "expert", label: "Expert" },
 ];
 
-const fallbackScenarios: Scenario[] = [
-  { id: "pitch-easy-1", title: "Product Pitch - Easy", description: "", callType: "pitch", difficulty: "easy" },
-  { id: "pitch-medium-1", title: "Product Pitch - Medium", description: "", callType: "pitch", difficulty: "medium" },
-  { id: "pitch-hard-1", title: "Product Pitch - Hard", description: "", callType: "pitch", difficulty: "hard" },
-  { id: "pitch-expert-1", title: "Product Pitch - Expert", description: "", callType: "pitch", difficulty: "expert" },
-];
-
 const fallbackPersonas: Persona[] = [
   { id: "persona-1", name: "The Skeptic", emoji: "🧐", title: "VP of Engineering", description: "Challenges every claim and demands proof.", persona_type: "skeptical", accent: "" },
   { id: "persona-2", name: "The Busy Exec", emoji: "⏰", title: "CEO", description: "Has limited time and low patience. Wants bottom-line value fast.", persona_type: "aggressive", accent: "" },
@@ -220,9 +248,10 @@ export default function PracticeLibraryPage() {
   const [step, setStep] = useState<"setup" | "confirm">("setup");
   const [selectedCallType, setSelectedCallType] = useState<string>("pitch");
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
-  const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [personas, setPersonas] = useState<Persona[]>([]);
+  const [personaCatalogNotice, setPersonaCatalogNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [resolvingScenario, setResolvingScenario] = useState(false);
   const [resolvedScenarioId, setResolvedScenarioId] = useState<string | null>(null);
   const [scenarioError, setScenarioError] = useState<string | null>(null);
 
@@ -284,46 +313,20 @@ export default function PracticeLibraryPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [scenariosRes, personasRes, activeSessionRes] = await Promise.all([
-          fetch("/api/scenarios"),
+        const [personasRes, activeSessionRes] = await Promise.all([
           fetch("/api/personas"),
           fetch("/api/voice/active-session"),
         ]);
 
-        if (scenariosRes.ok) {
-          const data = await scenariosRes.json();
-          const raw = data.scenarios || data;
-          setScenarios(
-            raw.map((s: Record<string, unknown>) => ({
-              id: s.id as string,
-              title: (s.title as string) || "",
-              description: (s.description as string) || "",
-              callType: ((s.call_type || s.callType) as string) || "",
-              difficulty: ((s.difficulty as string) || "").toLowerCase(),
-            }))
-          );
-        } else {
-          Sentry.logger.warn("practice: scenarios API non-OK", { status: scenariosRes.status });
-          setScenarios(fallbackScenarios);
-        }
-
         if (personasRes.ok) {
           const data = await personasRes.json();
           const raw = data.personas || data;
-          setPersonas(
-            raw.map((p: Record<string, unknown>) => ({
-              id: p.id as string,
-              name: p.name as string,
-              emoji: (p.emoji as string) || "",
-              title: (p.title as string) || "",
-              description: (p.description as string) || "",
-              persona_type: (p.persona_type as string) || "other",
-              accent: (p.accent as string) || "",
-            }))
-          );
+          setPersonas(raw.map((p: Record<string, unknown>) => mapPersona(p)));
+          setPersonaCatalogNotice(getCatalogNotice(personasRes.headers, "personas"));
         } else {
           Sentry.logger.warn("practice: personas API non-OK", { status: personasRes.status });
           setPersonas(fallbackPersonas);
+          setPersonaCatalogNotice(null);
         }
 
         if (activeSessionRes.ok) {
@@ -334,8 +337,8 @@ export default function PracticeLibraryPage() {
         }
       } catch {
         Sentry.logger.warn("practice: data fetch failed, using fallback data");
-        setScenarios(fallbackScenarios);
         setPersonas(fallbackPersonas);
+        setPersonaCatalogNotice(null);
       } finally {
         setLoading(false);
       }
@@ -495,25 +498,54 @@ export default function PracticeLibraryPage() {
     setSelectedPersonaId(personas[randomIndex].id);
   }
 
-  function handleNext() {
+  async function handleNext() {
     if (!canProceed) return;
     setScenarioError(null);
+    setResolvingScenario(true);
 
-    const scenario = scenarios.find(
-      (s) =>
-        (s.callType === selectedCallType ||
-          s.callType === selectedCallType.replace("-", "_")) &&
-        s.difficulty === selectedDifficulty
-    );
+    try {
+      const callType = normalizeCallTypeValue(selectedCallType);
+      const difficulty = selectedDifficulty ?? "";
+      const res = await fetch(
+        `/api/scenarios?call_type=${encodeURIComponent(callType)}&difficulty=${encodeURIComponent(difficulty)}`
+      );
 
-    if (!scenario) {
-      setScenarioError("No scenario found for this combination. Please try a different difficulty.");
-      return;
+      if (!res.ok) {
+        Sentry.logger.warn("practice: scenario lookup API non-OK", {
+          status: res.status,
+          callType,
+          difficulty,
+        });
+        setScenarioError("Could not load scenarios. Please try again.");
+        return;
+      }
+
+      const data = await res.json();
+      const raw = data.scenarios || data;
+      const scenario = raw
+        .map((row: Record<string, unknown>) => mapScenario(row))
+        .find((candidate: Scenario) =>
+          normalizeCallTypeValue(candidate.callType) === callType &&
+          candidate.difficulty === difficulty
+        );
+
+      if (!scenario) {
+        setScenarioError("No scenario found for this combination. Please try a different difficulty.");
+        return;
+      }
+
+      setResolvedScenarioId(scenario.id);
+      setStep("confirm");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch {
+      Sentry.logger.warn("practice: scenario lookup failed", {
+        callType: normalizeCallTypeValue(selectedCallType),
+        difficulty: selectedDifficulty,
+      });
+      setScenarioError("Could not load scenarios. Please try again.");
+    } finally {
+      setResolvingScenario(false);
     }
-
-    setResolvedScenarioId(scenario.id);
-    setStep("confirm");
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function handleStartSession() {
@@ -1271,6 +1303,13 @@ export default function PracticeLibraryPage() {
                 </div>
               </div>
             )}
+
+            {personaCatalogNotice && (
+              <p className="text-sm text-amber-600 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {personaCatalogNotice}
+              </p>
+            )}
           </div>
         </div>
 
@@ -1296,10 +1335,10 @@ export default function PracticeLibraryPage() {
           <Button
             size="lg"
             onClick={handleNext}
-            disabled={!canProceed}
+            disabled={!canProceed || resolvingScenario}
             className="ml-auto group"
           >
-            Next
+            {resolvingScenario ? "Resolving..." : "Next"}
             <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
           </Button>
         </div>

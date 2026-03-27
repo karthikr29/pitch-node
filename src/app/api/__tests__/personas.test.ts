@@ -36,7 +36,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-describe("Scenarios API Route", () => {
+describe("Personas API Route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     queryResult = { data: [], error: null, count: 0 };
@@ -45,8 +45,8 @@ describe("Scenarios API Route", () => {
   it("returns 401 for unauthenticated requests", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
 
-    const { GET } = await import("@/app/api/scenarios/route");
-    const request = new NextRequest("http://localhost:3000/api/scenarios");
+    const { GET } = await import("@/app/api/personas/route");
+    const request = new NextRequest("http://localhost:3000/api/personas");
     const response = await GET(request);
     const body = await response.json();
 
@@ -54,74 +54,70 @@ describe("Scenarios API Route", () => {
     expect(body.error).toBe("Unauthorized");
   });
 
-  it("returns mapped scenarios, applies the cap, and exposes truncation metadata", async () => {
+  it("applies the hard cap and returns catalog metadata headers", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
     queryResult = {
       data: [
         {
-          id: "1",
-          title: "Cold Call",
-          description: "desc1",
-          call_type: "cold_call",
-          difficulty: "Easy",
-        },
-        {
-          id: "2",
-          title: "Discovery",
-          description: "desc2",
-          call_type: "discovery",
-          difficulty: "Medium",
+          id: "persona-1",
+          name: "Alex",
+          title: "VP Sales",
+          description: "Friendly but firm",
+          emoji: "🙂",
+          persona_type: "friendly",
+          accent: "",
+          colors: {},
+          gender: "unknown",
+          is_active: true,
         },
       ],
       error: null,
-      count: 75,
+      count: 125,
     };
 
-    const { GET } = await import("@/app/api/scenarios/route");
-    const request = new NextRequest("http://localhost:3000/api/scenarios");
+    const { GET } = await import("@/app/api/personas/route");
+    const request = new NextRequest("http://localhost:3000/api/personas");
     const response = await GET(request);
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual([
-      { id: "1", title: "Cold Call", description: "desc1", callType: "cold_call", difficulty: "Easy" },
-      { id: "2", title: "Discovery", description: "desc2", callType: "discovery", difficulty: "Medium" },
-    ]);
-    expect(mockFrom).toHaveBeenCalledWith("scenarios");
-    expect(mockOrder).toHaveBeenCalledWith("created_at", { ascending: true });
-    expect(mockLimit).toHaveBeenCalledWith(50);
-    expect(response.headers.get("X-Total-Count")).toBe("75");
-    expect(response.headers.get("X-Result-Limit")).toBe("50");
+    expect(body).toHaveLength(1);
+    expect(mockFrom).toHaveBeenCalledWith("personas");
+    expect(mockEq).toHaveBeenCalledWith("is_active", true);
+    expect(mockOrder).toHaveBeenCalledWith("name");
+    expect(mockLimit).toHaveBeenCalledWith(100);
+    expect(response.headers.get("X-Total-Count")).toBe("125");
+    expect(response.headers.get("X-Result-Limit")).toBe("100");
     expect(response.headers.get("X-Results-Truncated")).toBe("true");
   });
 
-  it("preserves call_type and difficulty filters", async () => {
+  it("applies the type filter when provided", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
     queryResult = {
       data: [
         {
-          id: "3",
-          title: "Pitch Easy",
-          description: "desc",
-          call_type: "pitch",
-          difficulty: "easy",
+          id: "persona-2",
+          name: "Jordan",
+          title: "CTO",
+          description: "Analytical",
+          emoji: "🧠",
+          persona_type: "technical_gatekeeper",
+          accent: "",
+          colors: {},
+          gender: "unknown",
+          is_active: true,
         },
       ],
       error: null,
       count: 1,
     };
 
-    const { GET } = await import("@/app/api/scenarios/route");
-    const request = new NextRequest("http://localhost:3000/api/scenarios?call_type=pitch&difficulty=easy");
+    const { GET } = await import("@/app/api/personas/route");
+    const request = new NextRequest("http://localhost:3000/api/personas?type=technical_gatekeeper");
     const response = await GET(request);
-    const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual([
-      { id: "3", title: "Pitch Easy", description: "desc", callType: "pitch", difficulty: "easy" },
-    ]);
-    expect(mockEq).toHaveBeenCalledWith("call_type", "pitch");
-    expect(mockEq).toHaveBeenCalledWith("difficulty", "easy");
+    expect(mockEq).toHaveBeenCalledWith("persona_type", "technical_gatekeeper");
     expect(response.headers.get("X-Results-Truncated")).toBe("false");
   });
 
@@ -129,8 +125,8 @@ describe("Scenarios API Route", () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
     queryResult = { data: null, error: { message: "Database error" }, count: null };
 
-    const { GET } = await import("@/app/api/scenarios/route");
-    const request = new NextRequest("http://localhost:3000/api/scenarios");
+    const { GET } = await import("@/app/api/personas/route");
+    const request = new NextRequest("http://localhost:3000/api/personas");
     const response = await GET(request);
     const body = await response.json();
 

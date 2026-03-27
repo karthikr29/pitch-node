@@ -1,12 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 const mockGetUser = vi.fn();
-const mockSingle = vi.fn();
-const mockLimit = vi.fn();
-const mockOrder = vi.fn();
-const mockEq = vi.fn();
-const mockSelect = vi.fn();
 const mockFrom = vi.fn();
+
+type SessionRow = {
+  id: string;
+  created_at: string;
+  scenarios?: { title: string; call_type: string } | null;
+  personas?: { name: string; emoji: string } | null;
+  session_analytics?: { overall_score?: number } | { overall_score?: number }[] | null;
+};
+
+let sessionDataResult: { data: SessionRow[] | null } = { data: [] };
+let recentSessionsResult: { data: SessionRow[] | null } = { data: [] };
+let achievementsResult: { data: Record<string, unknown>[] | null } = { data: [] };
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
@@ -18,15 +25,15 @@ vi.mock("@/lib/supabase/server", () => ({
 describe("Analytics Overview API Route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.resetModules();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-27T12:00:00.000Z"));
+    sessionDataResult = { data: [] };
+    recentSessionsResult = { data: [] };
+    achievementsResult = { data: [] };
+  });
 
-    // Build different chains depending on the table queried
-    mockSingle.mockResolvedValue({ data: null });
-    mockLimit.mockResolvedValue({ data: [] });
-    mockOrder.mockReturnValue({ limit: mockLimit });
-    mockEq.mockReturnValue({ single: mockSingle, order: mockOrder });
-    mockSelect.mockReturnValue({ eq: mockEq });
-    mockFrom.mockReturnValue({ select: mockSelect });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("returns 401 for unauthenticated requests", async () => {
@@ -40,99 +47,92 @@ describe("Analytics Overview API Route", () => {
     expect(body.error).toBe("Unauthorized");
   });
 
-  it("returns camelCase overview with recentSessions and achievements", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "user-1" } },
-    });
+  it("returns computed overview data and recent sessions", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    sessionDataResult = {
+      data: [
+        {
+          id: "s1",
+          created_at: "2026-03-27T08:00:00.000Z",
+          session_analytics: { overall_score: 80 },
+        },
+        {
+          id: "s2",
+          created_at: "2026-03-26T08:00:00.000Z",
+          session_analytics: [{ overall_score: 90 }],
+        },
+        {
+          id: "s3",
+          created_at: "2026-03-26T09:00:00.000Z",
+          session_analytics: { overall_score: 0 },
+        },
+      ],
+    };
+    recentSessionsResult = {
+      data: [
+        {
+          id: "s1",
+          created_at: "2026-03-27T08:00:00.000Z",
+          scenarios: { title: "Cold Call", call_type: "cold_call" },
+          personas: { name: "Jordan", emoji: "🙂" },
+          session_analytics: { overall_score: 80 },
+        },
+      ],
+    };
+    achievementsResult = {
+      data: [{ id: "achievement-1", earned_at: "2026-03-27T09:00:00.000Z" }],
+    };
 
-    const mockProgress = { total_sessions: 10, average_score: 75, current_streak: 5, best_score: 92 };
-    const mockSessions = [
-      {
-        id: "s1",
-        created_at: "2025-01-15",
-        scenarios: { title: "Cold Call", call_type: "cold_call" },
-        personas: { name: "John", emoji: "👤" },
-        session_analytics: { overall_score: 80 },
-      },
-    ];
-    const mockAchievements = [{ id: "a1", earned_at: "2025-01-15" }];
-
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "user_progress") {
-        return {
-          select: () => ({
-            eq: () => ({
-              single: () => Promise.resolve({ data: mockProgress }),
+    mockFrom
+      .mockImplementationOnce(() => ({
+        select: () => ({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockResolvedValue(sessionDataResult),
             }),
           }),
-        };
-      }
-      if (table === "sessions") {
-        return {
-          select: () => ({
-            eq: () => ({
-              order: () => ({
-                limit: () => Promise.resolve({ data: mockSessions }),
-              }),
+        }),
+      }))
+      .mockImplementationOnce(() => ({
+        select: () => ({
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue(recentSessionsResult),
             }),
           }),
-        };
-      }
-      if (table === "user_achievements") {
-        return {
-          select: () => ({
-            eq: () => ({
-              order: () => ({
-                limit: () => Promise.resolve({ data: mockAchievements }),
-              }),
+        }),
+      }))
+      .mockImplementationOnce(() => ({
+        select: () => ({
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue(achievementsResult),
             }),
           }),
-        };
-      }
-      return { select: mockSelect };
-    });
+        }),
+      }));
 
     const { GET } = await import("@/app/api/analytics/overview/route");
     const response = await GET();
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    // Now returns camelCase top-level keys
-    expect(body.totalSessions).toBe(10);
-    expect(body.avgScore).toBe(75);
-    expect(body.currentStreak).toBe(5);
-    expect(body.bestScore).toBe(92);
-    // Recent sessions are transformed
-    expect(body.recentSessions).toHaveLength(1);
-    expect(body.recentSessions[0].scenarioName).toBe("Cold Call");
-    expect(body.achievements).toEqual(mockAchievements);
-  });
-
-  it("queries the correct tables", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "user-1" } },
-    });
-
-    const tablesQueried: string[] = [];
-    mockFrom.mockImplementation((table: string) => {
-      tablesQueried.push(table);
-      return {
-        select: () => ({
-          eq: () => ({
-            single: () => Promise.resolve({ data: null }),
-            order: () => ({
-              limit: () => Promise.resolve({ data: [] }),
-            }),
-          }),
-        }),
-      };
-    });
-
-    const { GET } = await import("@/app/api/analytics/overview/route");
-    await GET();
-
-    expect(tablesQueried).toContain("user_progress");
-    expect(tablesQueried).toContain("sessions");
-    expect(tablesQueried).toContain("user_achievements");
+    expect(body.totalSessions).toBe(3);
+    expect(body.avgScore).toBe(85);
+    expect(body.bestScore).toBe(90);
+    expect(body.currentStreak).toBe(2);
+    expect(body.recentSessions).toEqual([
+      {
+        id: "s1",
+        date: "2026-03-27T08:00:00.000Z",
+        scenarioName: "Cold Call",
+        callType: "cold_call",
+        score: 80,
+      },
+    ]);
+    expect(body.achievements).toEqual(achievementsResult.data);
+    expect(mockFrom).toHaveBeenNthCalledWith(1, "sessions");
+    expect(mockFrom).toHaveBeenNthCalledWith(2, "sessions");
+    expect(mockFrom).toHaveBeenNthCalledWith(3, "user_achievements");
   });
 });

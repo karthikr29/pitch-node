@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import * as Sentry from "@sentry/nextjs";
 
+const SCENARIOS_LIMIT = 50;
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -11,11 +13,15 @@ export async function GET(request: NextRequest) {
     const callType = request.nextUrl.searchParams.get("call_type");
     const difficulty = request.nextUrl.searchParams.get("difficulty");
 
-    let query = supabase.from("scenarios").select("*").order("created_at", { ascending: true });
+    let query = supabase
+      .from("scenarios")
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: true });
     if (callType) query = query.eq("call_type", callType);
     if (difficulty) query = query.eq("difficulty", difficulty);
+    query = query.limit(SCENARIOS_LIMIT);
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     const scenarios = (data || []).map((row: Record<string, unknown>) => ({
@@ -25,7 +31,12 @@ export async function GET(request: NextRequest) {
       callType: row.call_type,
       difficulty: row.difficulty,
     }));
-    return NextResponse.json(scenarios);
+
+    const response = NextResponse.json(scenarios);
+    response.headers.set("X-Total-Count", String(count ?? data?.length ?? 0));
+    response.headers.set("X-Result-Limit", String(SCENARIOS_LIMIT));
+    response.headers.set("X-Results-Truncated", String((count ?? data?.length ?? 0) > (data?.length ?? 0)));
+    return response;
   } catch (error) {
     Sentry.captureException(error, { tags: { route: "scenarios" } });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

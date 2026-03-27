@@ -1,12 +1,26 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const mockGetUser = vi.fn();
-const mockRange = vi.fn();
-const mockOrderFn = vi.fn();
-const mockEqFn = vi.fn();
-const mockSelectFn = vi.fn();
 const mockFrom = vi.fn();
+
+const cleanupEq = vi.fn();
+const cleanupIs = vi.fn();
+const cleanupIn = vi.fn();
+const cleanupLt = vi.fn();
+
+const selectEqUser = vi.fn();
+const selectEqStatus = vi.fn();
+const selectOrder = vi.fn();
+const selectRange = vi.fn();
+
+type SessionsResult = {
+  data: Record<string, unknown>[] | null;
+  error: { message: string } | null;
+  count: number | null;
+};
+
+let sessionsResult: SessionsResult = { data: [], error: null, count: 0 };
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
@@ -18,14 +32,25 @@ vi.mock("@/lib/supabase/server", () => ({
 describe("Sessions API Route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.resetModules();
+    sessionsResult = { data: [], error: null, count: 0 };
 
-    // Build the chain: from().select().eq().order().range()
-    mockRange.mockResolvedValue({ data: [], error: null, count: 0 });
-    mockOrderFn.mockReturnValue({ range: mockRange });
-    mockEqFn.mockReturnValue({ order: mockOrderFn, eq: mockEqFn });
-    mockSelectFn.mockReturnValue({ eq: mockEqFn });
-    mockFrom.mockReturnValue({ select: mockSelectFn });
+    cleanupLt.mockResolvedValue({ error: null });
+    cleanupIn.mockReturnValue({ lt: cleanupLt });
+    cleanupIs.mockReturnValue({ in: cleanupIn });
+    cleanupEq.mockReturnValue({ is: cleanupIs });
+
+    selectRange.mockResolvedValue(sessionsResult);
+    selectOrder.mockReturnValue({ range: selectRange });
+    selectEqStatus.mockReturnValue({ order: selectOrder });
+    selectEqUser.mockReturnValue({ eq: selectEqStatus });
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table !== "sessions") throw new Error(`Unexpected table ${table}`);
+      return {
+        delete: () => ({ eq: cleanupEq }),
+        select: () => ({ eq: selectEqUser }),
+      };
+    });
   });
 
   it("returns 401 for unauthenticated requests", async () => {
@@ -41,29 +66,30 @@ describe("Sessions API Route", () => {
   });
 
   it("returns paginated sessions with camelCase keys", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "user-1" } },
-    });
-    // Mock DB rows with nested joins
-    const mockDbRows = [
-      {
-        id: "s1",
-        created_at: "2025-01-15",
-        duration_seconds: 300,
-        scenarios: { title: "Cold Call", call_type: "cold_call", difficulty: "Easy" },
-        personas: { name: "John", emoji: "👤" },
-        session_analytics: { overall_score: 75, scores: {} },
-      },
-      {
-        id: "s2",
-        created_at: "2025-01-16",
-        duration_seconds: 450,
-        scenarios: { title: "Discovery", call_type: "discovery", difficulty: "Medium" },
-        personas: { name: "Jane", emoji: "👩" },
-        session_analytics: { overall_score: 82, scores: {} },
-      },
-    ];
-    mockRange.mockResolvedValue({ data: mockDbRows, error: null, count: 2 });
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    sessionsResult = {
+      data: [
+        {
+          id: "s1",
+          created_at: "2025-01-15",
+          duration_seconds: 300,
+          scenarios: { title: "Cold Call", call_type: "cold_call", difficulty: "Easy" },
+          personas: { name: "John", emoji: "👤" },
+          session_analytics: { overall_score: 75, scores: {} },
+        },
+        {
+          id: "s2",
+          created_at: "2025-01-16",
+          duration_seconds: 450,
+          scenarios: { title: "Discovery", call_type: "discovery", difficulty: "Medium" },
+          personas: { name: "Jane", emoji: "👩" },
+          session_analytics: { overall_score: 82, scores: {} },
+        },
+      ],
+      error: null,
+      count: 2,
+    };
+    selectRange.mockResolvedValue(sessionsResult);
 
     const { GET } = await import("@/app/api/sessions/route");
     const request = new NextRequest("http://localhost:3000/api/sessions");
@@ -71,23 +97,23 @@ describe("Sessions API Route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    // New format: { sessions, totalPages, page, limit }
     expect(body.sessions).toHaveLength(2);
-    expect(body.sessions[0].id).toBe("s1");
-    expect(body.sessions[0].scenarioName).toBe("Cold Call");
-    expect(body.sessions[0].callType).toBe("cold_call");
-    expect(body.sessions[0].score).toBe(75);
-    expect(body.sessions[0].duration).toBe(300);
+    expect(body.sessions[0]).toMatchObject({
+      id: "s1",
+      scenarioName: "Cold Call",
+      personaName: "John",
+      score: 75,
+      duration: 300,
+      callType: "cold_call",
+    });
     expect(body.totalPages).toBe(1);
     expect(body.page).toBe(1);
     expect(body.limit).toBe(10);
   });
 
   it("uses page and limit query params for pagination", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "user-1" } },
-    });
-    mockRange.mockResolvedValue({ data: [], error: null, count: 0 });
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    selectRange.mockResolvedValue({ data: [], error: null, count: 0 });
 
     const { GET } = await import("@/app/api/sessions/route");
     const request = new NextRequest("http://localhost:3000/api/sessions?page=3&limit=5");
@@ -96,29 +122,25 @@ describe("Sessions API Route", () => {
 
     expect(body.page).toBe(3);
     expect(body.limit).toBe(5);
-    // offset = (3-1)*5 = 10, range(10, 14)
-    expect(mockRange).toHaveBeenCalledWith(10, 14);
+    expect(selectRange).toHaveBeenCalledWith(10, 14);
   });
 
-  it("queries sessions filtered by user_id", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "user-123" } },
-    });
-    mockRange.mockResolvedValue({ data: [], error: null, count: 0 });
+  it("filters sessions by user and completed status", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });
+    selectRange.mockResolvedValue({ data: [], error: null, count: 0 });
 
     const { GET } = await import("@/app/api/sessions/route");
     const request = new NextRequest("http://localhost:3000/api/sessions");
     await GET(request);
 
     expect(mockFrom).toHaveBeenCalledWith("sessions");
-    expect(mockEqFn).toHaveBeenCalledWith("user_id", "user-123");
+    expect(selectEqUser).toHaveBeenCalledWith("user_id", "user-123");
+    expect(selectEqStatus).toHaveBeenCalledWith("status", "completed");
   });
 
-  it("returns 500 when database query fails", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "user-1" } },
-    });
-    mockRange.mockResolvedValue({ data: null, error: { message: "Query failed" }, count: null });
+  it("returns 500 when the database query fails", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    selectRange.mockResolvedValue({ data: null, error: { message: "Query failed" }, count: null });
 
     const { GET } = await import("@/app/api/sessions/route");
     const request = new NextRequest("http://localhost:3000/api/sessions");
