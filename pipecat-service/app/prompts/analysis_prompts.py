@@ -42,11 +42,16 @@ def get_analysis_prompt(transcript: list[dict], scenario: dict, persona: dict) -
     difficulty = scenario.get('difficulty', 'medium')
 
     formatted_transcript = "\n".join([
-        f"{'[Sales Rep]' if t['speaker'] == 'user' else f'[{persona_name}]'}: {t['content']}"
-        for t in transcript
+        f"[{i}] {'[Sales Rep]' if t['speaker'] == 'user' else f'[{persona_name}]'}: {t['content']}"
+        for i, t in enumerate(transcript)
     ])
 
     difficulty_rubric = _get_difficulty_rubric(difficulty)
+
+    total = len(transcript)
+    early_end = total // 3
+    mid_end = (total * 2) // 3
+    min_highlights = max(5, min(10, total // 4))
 
     return f"""Analyze this sales training call and provide detailed scoring and feedback.
 
@@ -61,14 +66,22 @@ Evaluation Criteria: {json.dumps(scenario.get('evaluation_criteria', []))}
 Name: {persona.get('name', 'Unknown')}
 Type: {persona.get('persona_type', 'unknown')}
 
-## Transcript
+## Transcript (each line prefixed with its index)
 {formatted_transcript}
 
 ## Scoring Calibration
 {difficulty_rubric}
 
 ## Instructions
-Score each metric from 0-100 using the calibration above. Return ONLY valid JSON:
+Score each metric from 0-100 using the calibration above. Return ONLY valid JSON.
+
+IMPORTANT — Highlight coverage rules:
+- The transcript has {total} exchanges (indices 0–{total - 1}).
+- Early section: indices 0–{early_end}. Mid section: indices {early_end + 1}–{mid_end}. Late section: indices {mid_end + 1}–{total - 1}.
+- You MUST include at least 1–2 highlights from EACH section (early, mid, late).
+- Generate {min_highlights}–10 highlights total, distributed across the FULL call.
+- Do NOT cluster all highlights in the first half. Analyze the ENTIRE transcript end to end.
+- timestamp_index must be the exact index shown in brackets at the start of the transcript line that triggered the observation.
 
 {{
   "objection_handling": <0-100>,

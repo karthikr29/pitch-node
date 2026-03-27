@@ -67,6 +67,9 @@ export async function POST(request: NextRequest) {
       pitch_context: resolvedPitchContext || null,
       pitch_briefing: resolvedPitchBriefing,
       livekit_room_name: `session-${crypto.randomUUID()}`,
+      inferred_role: typeof inferredRole === "string" && inferredRole.trim()
+        ? inferredRole.trim().slice(0, 150)
+        : null,
     })
     .select()
     .single();

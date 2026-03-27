@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabase
     .from("sessions")
-    .select("created_at, scenarios(call_type), session_analytics(overall_score, scores)")
+    .select("id, created_at, scenarios(title, call_type), session_analytics(overall_score, scores, letter_grade)")
     .eq("user_id", user.id)
     .gte("created_at", since.toISOString())
     .order("created_at", { ascending: true });
@@ -85,5 +85,45 @@ export async function GET(request: NextRequest) {
     activity.push({ date: dateStr, count: activityMap[dateStr] || 0 });
   }
 
-  return NextResponse.json({ trends, callTypePerformance, metrics, activity });
+  // Build recent sessions (last 6, newest first)
+  const recentSessions = [...(data || [])]
+    .sort((a, b) =>
+      new Date((b as Record<string, unknown>).created_at as string).getTime() -
+      new Date((a as Record<string, unknown>).created_at as string).getTime()
+    )
+    .slice(0, 6)
+    .map((row) => {
+      const r = row as Record<string, unknown>;
+      const scenario = r.scenarios as Record<string, unknown> | null;
+      const analytics = r.session_analytics as Record<string, unknown> | Record<string, unknown>[] | null;
+      const analyticsObj = Array.isArray(analytics) ? analytics[0] : analytics;
+      return {
+        id: r.id as string,
+        date: new Date(r.created_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        scenarioName: (scenario?.title as string) || "Practice Session",
+        callType: ((scenario?.call_type as string) || "unknown")
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (c: string) => c.toUpperCase()),
+        score: (analyticsObj?.overall_score as number) ?? null,
+        letterGrade: (analyticsObj?.letter_grade as string) ?? null,
+      };
+    });
+
+  // Build grade distribution
+  const gradeMap: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+  for (const row of data || []) {
+    const analytics = (row as Record<string, unknown>).session_analytics as Record<string, unknown> | Record<string, unknown>[] | null;
+    const analyticsObj = Array.isArray(analytics) ? analytics[0] : analytics;
+    const letterGrade = analyticsObj?.letter_grade as string | null;
+    if (letterGrade) {
+      const major = letterGrade.charAt(0).toUpperCase();
+      if (major in gradeMap) gradeMap[major]++;
+    }
+  }
+  const gradeDistribution = ["A", "B", "C", "D", "F"].map((grade) => ({
+    grade,
+    count: gradeMap[grade],
+  }));
+
+  return NextResponse.json({ trends, callTypePerformance, metrics, activity, recentSessions, gradeDistribution });
 }

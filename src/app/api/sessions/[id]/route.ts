@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+function formatMs(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  return `${Math.floor(totalSec / 60)}:${(totalSec % 60).toString().padStart(2, "0")}`;
+}
+
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
@@ -10,7 +15,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { data: rawData, error } = await supabase
     .from("sessions")
     .select(`
-      id, created_at, started_at, ended_at, duration_seconds, status, pitch_briefing,
+      id, created_at, started_at, ended_at, duration_seconds, status, pitch_briefing, inferred_role,
       scenarios(id, title, description, call_type, difficulty, context_briefing, objectives, evaluation_criteria),
       personas(id, name, emoji, title, description, persona_type),
       session_transcripts(id, speaker, content, timestamp_ms, confidence),
@@ -39,6 +44,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     durationSeconds: data.duration_seconds,
     status: data.status,
     pitchBriefing: data.pitch_briefing ?? null,
+    inferredRole: (data.inferred_role as string | null) ?? null,
     scenario: scenario ? {
       id: scenario.id,
       title: scenario.title,
@@ -59,11 +65,21 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     } : null,
     analytics: analyticsObj ? (() => {
       const scoresObj = analyticsObj.scores as Record<string, number> | null;
+      const rawHighlights = (analyticsObj.highlight_moments as Record<string, unknown>[] | null) ?? [];
       return {
         overallScore: analyticsObj.overall_score,
         letterGrade: analyticsObj.letter_grade,
-        aiSummary: analyticsObj.ai_summary,
-        highlightMoments: analyticsObj.highlight_moments,
+        aiSummary: (analyticsObj.ai_summary as string | null) ?? null,
+        highlightMoments: rawHighlights.map((h) => {
+          const idx = h.timestamp_index as number | undefined;
+          const tsMs = (idx !== undefined ? transcripts[idx]?.timestamp_ms : undefined) as number | undefined;
+          return {
+            type: h.type === "positive" ? "good" : "bad",
+            text: (h.description as string) || "",
+            suggestion: (h.suggestion as string) || undefined,
+            timestamp: tsMs !== undefined ? formatMs(tsMs) : undefined,
+          };
+        }),
         improvementSuggestions: analyticsObj.improvement_suggestions,
         metrics: {
           activeListening:   scoresObj?.active_listening   ?? 0,

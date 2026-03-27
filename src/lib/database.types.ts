@@ -270,6 +270,7 @@ export type Database = {
           duration_seconds: number | null
           ended_at: string | null
           id: string
+          inferred_role: string | null
           livekit_room_name: string | null
           persona_id: string
           pitch_briefing: Json | null
@@ -285,6 +286,7 @@ export type Database = {
           duration_seconds?: number | null
           ended_at?: string | null
           id?: string
+          inferred_role?: string | null
           livekit_room_name?: string | null
           persona_id: string
           pitch_briefing?: Json | null
@@ -300,6 +302,7 @@ export type Database = {
           duration_seconds?: number | null
           ended_at?: string | null
           id?: string
+          inferred_role?: string | null
           livekit_room_name?: string | null
           persona_id?: string
           pitch_briefing?: Json | null
