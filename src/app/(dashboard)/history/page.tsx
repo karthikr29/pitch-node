@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Table,
   TableBody,
@@ -30,7 +31,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { Eye, Filter, Loader2, Mic, Zap, ArrowRight, Trash2 } from "lucide-react";
+import { Eye, Filter, Loader2, Mic, Zap, ArrowRight, Trash2, Megaphone, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import {
@@ -90,6 +91,20 @@ function getLetterGrade(score: number) {
   return "F";
 }
 
+function parseDifficulty(scenarioName: string): string | null {
+  const parts = scenarioName.split(" - ");
+  return parts.length > 1 ? parts[parts.length - 1] : null;
+}
+
+function getDifficultyClass(difficulty: string | null): string {
+  switch (difficulty?.toLowerCase()) {
+    case "easy":   return "text-green-500 border-green-500/30 bg-green-500/5";
+    case "medium": return "text-yellow-500 border-yellow-500/30 bg-yellow-500/5";
+    case "hard":   return "text-red-500 border-red-500/30 bg-red-500/5";
+    default:       return "";
+  }
+}
+
 const PAGE_SIZE = 10;
 
 function getPageNumbers(current: number, total: number): (number | "ellipsis")[] {
@@ -105,6 +120,7 @@ function getPageNumbers(current: number, total: number): (number | "ellipsis")[]
 }
 
 export default function HistoryPage() {
+  const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -112,6 +128,7 @@ export default function HistoryPage() {
   const [callTypeFilter, setCallTypeFilter] = useState("pitch");
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [practicingAgainId, setPracticingAgainId] = useState<string | null>(null);
 
   const fetchSessions = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -156,6 +173,30 @@ export default function HistoryPage() {
       toast.error("Failed to delete session");
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handlePracticeAgain(sessionId: string) {
+    setPracticingAgainId(sessionId);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}`);
+      if (!res.ok) throw new Error("fetch failed");
+      const data = await res.json();
+      sessionStorage.setItem(
+        "practice-prefill",
+        JSON.stringify({
+          callType: data.scenario.callType,
+          difficulty: data.scenario.difficulty,
+          scenarioId: data.scenario.id,
+          personaId: data.persona.id,
+          pitchBriefing: data.pitchBriefing ?? null,
+          inferredRole: data.inferredRole ?? null,
+        })
+      );
+      router.push("/practice");
+    } catch {
+      toast.error("Failed to start practice session");
+      setPracticingAgainId(null);
     }
   }
 
@@ -291,14 +332,17 @@ export default function HistoryPage() {
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm text-foreground truncate group-hover:text-primary transition-colors">
-                          {session.scenarioName}
+                          {session.whatYouSell
+                            ? <>
+                                {session.whatYouSell}
+                                {session.targetAudience
+                                  ? <span className="font-normal text-muted-foreground"> → {session.targetAudience}</span>
+                                  : null}
+                              </>
+                            : session.scenarioName.split(" - ")[0]
+                          }
                         </p>
-                        {session.whatYouSell && (
-                          <p className="text-xs text-muted-foreground line-clamp-2">
-                            {session.whatYouSell}{session.targetAudience ? ` → ${session.targetAudience}` : ""}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-1.5 mt-1">
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                           <span className="text-xs text-muted-foreground">
                             {format(new Date(session.date), "MMM d, h:mm a")}
                           </span>
@@ -307,16 +351,35 @@ export default function HistoryPage() {
                             {formatDuration(session.duration)}
                           </span>
                           <span className="text-border">·</span>
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] px-1.5 py-0 capitalize"
-                          >
-                            {(session.callType || "").replace(/[-_]/g, " ")}
-                          </Badge>
+                          <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/10 border border-primary/20">
+                            <Megaphone className="w-2.5 h-2.5 text-primary" />
+                            <span className="text-[10px] font-medium text-primary capitalize">
+                              {(session.callType || "").replace(/[-_]/g, " ")}
+                            </span>
+                          </div>
+                          {(() => {
+                            const diff = parseDifficulty(session.scenarioName);
+                            return diff ? (
+                              <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", getDifficultyClass(diff))}>
+                                {diff}
+                              </Badge>
+                            ) : null;
+                          })()}
                         </div>
                       </div>
                       <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                     </Link>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handlePracticeAgain(session.id)}
+                      disabled={practicingAgainId === session.id}
+                      className="text-primary shrink-0 px-2"
+                    >
+                      {practicingAgainId === session.id
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <RotateCcw className="h-4 w-4" />}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -342,14 +405,10 @@ export default function HistoryPage() {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Scenario</TableHead>
-                    <TableHead className="hidden lg:table-cell">
-                      Persona
-                    </TableHead>
-                    <TableHead>Score</TableHead>
-                    <TableHead className="hidden lg:table-cell">
-                      Duration
-                    </TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="hidden lg:table-cell text-center">Persona</TableHead>
+                    <TableHead className="text-center">Score</TableHead>
+                    <TableHead className="hidden lg:table-cell text-center">Duration</TableHead>
+                    <TableHead className="text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -362,28 +421,40 @@ export default function HistoryPage() {
                         {format(new Date(session.date), "MMM d, yyyy 'at' h:mm a")}
                       </TableCell>
                       <TableCell>
-                        <div>
-                          <p className="font-medium text-foreground text-sm">
-                            {session.scenarioName}
+                        <div className="space-y-1.5">
+                          <p className="font-medium text-foreground text-sm leading-snug">
+                            {session.whatYouSell
+                              ? <>
+                                  {session.whatYouSell}
+                                  {session.targetAudience && (
+                                    <span className="text-muted-foreground font-normal"> → {session.targetAudience}</span>
+                                  )}
+                                </>
+                              : session.scenarioName.split(" - ")[0]
+                            }
                           </p>
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] mt-1 capitalize"
-                          >
-                            {(session.callType || "").replace(/[-_]/g, " ")}
-                          </Badge>
-                          {session.whatYouSell && (
-                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2 max-w-[240px]">
-                              Selling: {session.whatYouSell}
-                              {session.targetAudience ? ` → ${session.targetAudience}` : ""}
-                            </p>
-                          )}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/10 border border-primary/20">
+                              <Megaphone className="w-3 h-3 text-primary" />
+                              <span className="text-[10px] font-medium text-primary capitalize">
+                                {(session.callType || "").replace(/[-_]/g, " ")}
+                              </span>
+                            </div>
+                            {(() => {
+                              const diff = parseDifficulty(session.scenarioName);
+                              return diff ? (
+                                <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", getDifficultyClass(diff))}>
+                                  {diff}
+                                </Badge>
+                              ) : null;
+                            })()}
+                          </div>
                         </div>
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground text-center">
                         {session.personaName}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         {!session.analysisReady ? (
                           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted/60">
                             <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
@@ -415,11 +486,11 @@ export default function HistoryPage() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground tabular-nums">
+                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground tabular-nums text-center">
                         {formatDuration(session.duration)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -430,6 +501,18 @@ export default function HistoryPage() {
                               <Eye className="w-4 h-4 mr-1" />
                               Review
                             </Link>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handlePracticeAgain(session.id)}
+                            disabled={practicingAgainId === session.id}
+                            className="opacity-70 group-hover:opacity-100 transition-opacity text-primary hover:text-primary"
+                          >
+                            {practicingAgainId === session.id
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <><RotateCcw className="w-3.5 h-3.5 mr-1" />Again</>
+                            }
                           </Button>
                           <Button
                             variant="ghost"

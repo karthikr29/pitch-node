@@ -650,7 +650,8 @@ export default function PracticeLibraryPage() {
     const diffLabel = selectedDifficulty ? difficultyDisplayNames[selectedDifficulty] : "";
 
     return (
-      <div className="max-w-2xl mx-auto space-y-6 pb-8">
+      <div className="max-w-4xl mx-auto space-y-6 pb-8">
+        {/* Back button */}
         <button
           onClick={() => setStep("setup")}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -659,93 +660,159 @@ export default function PracticeLibraryPage() {
           Back to setup
         </button>
 
-        <div>
-          <h2 className="text-2xl font-display font-bold text-foreground tracking-tight">
-            Ready to start?
-          </h2>
-          <p className="text-muted-foreground mt-1">
-            Review your session details and start when ready.
-          </p>
+        {/* ── Header ─────────────────────────────────────────── */}
+        <div className="space-y-3">
+          {/* Status indicator */}
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            <span className="text-xs font-semibold tracking-widest uppercase text-emerald-500">
+              Mission Ready
+            </span>
+          </div>
+
+          {/* Heading + call type meta */}
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+            <div>
+              <h2 className="font-display font-extrabold text-3xl text-foreground tracking-tight leading-none">
+                Pre-Mission Briefing
+              </h2>
+              <p className="text-muted-foreground mt-1.5 text-sm">
+                Review your intel and opponent profile. Start when ready.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center shrink-0", iconBg)}>
+                <CallIcon className={cn("w-4 h-4", iconColor)} />
+              </div>
+              <span className="text-sm font-semibold text-foreground">
+                {callTypeDisplayNames[selectedCallType] || selectedCallType}
+              </span>
+              {selectedDifficulty && (
+                <Badge variant="outline" className={cn("text-xs", diffColor)}>
+                  {diffLabel}
+                </Badge>
+              )}
+            </div>
+          </div>
         </div>
 
-        <Card>
-          <CardContent className="pt-6 space-y-5">
-            {/* Call type + difficulty */}
-            <div className="flex items-center gap-3">
-              <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center shrink-0", iconBg)}>
-                <CallIcon className={cn("w-5 h-5", iconColor)} />
-              </div>
-              <div className="space-y-1">
-                <p className="font-semibold text-foreground leading-none">
-                  {callTypeDisplayNames[selectedCallType] || selectedCallType}
-                </p>
-                {selectedDifficulty && (
-                  <Badge variant="outline" className={cn("text-xs", diffColor)}>
-                    {diffLabel}
-                  </Badge>
-                )}
-              </div>
+        {/* ── Two-column grid ─────────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+
+          {/* ── LEFT: Mission Intel ────────────────────────────── */}
+          <Card className="border-border bg-card overflow-hidden">
+            {/* Header strip */}
+            <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border bg-muted/20">
+              <Lock className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground">
+                Mission Intel
+              </span>
             </div>
 
-            <div className="border-t border-border" />
-
-            {/* Pitch Briefing — all fields */}
-            {isPitchCall && (
-              <div className="space-y-3">
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Pitch Briefing</p>
-                {[
-                  { label: "What you sell", value: pitchBriefing.whatYouSell },
-                  { label: "Who you sell to", value: pitchBriefing.targetAudience },
-                  { label: "Problem solved", value: pitchBriefing.problemSolved },
-                  { label: "Key value proposition", value: pitchBriefing.valueProposition },
-                  { label: "Goal of this call", value: pitchBriefing.callGoal },
-                ].map(({ label, value }) => (
-                  <div key={label}>
-                    <p className="text-xs text-muted-foreground">{label}</p>
-                    <p className="text-sm text-foreground mt-0.5">{value || "—"}</p>
-                  </div>
-                ))}
-                {pitchBriefing.additionalNotes?.trim() && (
-                  <div>
-                    <p className="text-xs text-muted-foreground">Additional notes</p>
-                    <p className="text-sm text-foreground mt-0.5">{pitchBriefing.additionalNotes}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Non-pitch context */}
-            {!isPitchCall && pitchContext.trim() && (
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Context</p>
-                <p className="text-sm text-foreground">{pitchContext}</p>
-              </div>
-            )}
-
-            {/* Buyer Role */}
-            {selectedRole && (
-              <>
-                <div className="border-t border-border" />
+            <CardContent className="pt-0 pb-1 px-0">
+              {/* Pitch Briefing rows */}
+              {isPitchCall && (
                 <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Buyer Role</p>
-                  <p className="text-sm text-foreground">{selectedRole}</p>
-                </div>
-              </>
-            )}
-
-            <div className="border-t border-border" />
-
-            {/* Opponent / Persona */}
-            {selectedPersona && (
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Opponent</p>
-                <div>
-                  <p className="font-medium text-foreground">{selectedPersona.name}</p>
-                  {selectedPersona.title && (
-                    <p className="text-sm text-muted-foreground">{selectedPersona.title}</p>
+                  {[
+                    { label: "What you sell", value: pitchBriefing.whatYouSell },
+                    { label: "Who you sell to", value: pitchBriefing.targetAudience },
+                    { label: "Problem solved", value: pitchBriefing.problemSolved },
+                    { label: "Key value prop", value: pitchBriefing.valueProposition },
+                    { label: "Goal of this call", value: pitchBriefing.callGoal },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="relative pl-5 pr-5 py-3.5 border-b border-border/40 bg-primary/[0.015] hover:bg-primary/[0.03] transition-colors">
+                      <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-primary/60" />
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        {label}
+                      </p>
+                      <p className="text-sm text-foreground mt-0.5 leading-snug">
+                        {value || <span className="text-muted-foreground/50 italic">—</span>}
+                      </p>
+                    </div>
+                  ))}
+                  {pitchBriefing.additionalNotes?.trim() && (
+                    <div className="relative pl-5 pr-5 py-3.5 border-b border-border/40 bg-primary/[0.015]">
+                      <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-primary/40" />
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        Additional notes
+                      </p>
+                      <p className="text-sm text-foreground mt-0.5 leading-snug">
+                        {pitchBriefing.additionalNotes}
+                      </p>
+                    </div>
                   )}
-                  <div className="flex items-center gap-2 flex-wrap mt-1">
-                    <Badge variant="outline" className="text-xs">
+                </div>
+              )}
+
+              {/* Non-pitch context */}
+              {!isPitchCall && pitchContext.trim() && (
+                <div className="relative pl-5 pr-5 py-3.5 border-b border-border/40 bg-primary/[0.015]">
+                  <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-primary/60" />
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Context
+                  </p>
+                  <p className="text-sm text-foreground mt-0.5 leading-snug">
+                    {pitchContext}
+                  </p>
+                </div>
+              )}
+
+              {/* Buyer Role */}
+              {selectedRole && (
+                <div className="relative pl-5 pr-5 py-3.5 bg-primary/[0.015]">
+                  <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-primary/40" />
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Target role
+                  </p>
+                  <p className="text-sm text-foreground mt-0.5 leading-snug">
+                    {selectedRole}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── RIGHT: Adversary Profile ──────────────────────── */}
+          <Card className="border-border bg-card overflow-hidden">
+            {/* Header strip */}
+            <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border bg-muted/20">
+              <UserCheck className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground">
+                Adversary Profile
+              </span>
+            </div>
+
+            <CardContent className="pt-6 pb-5">
+              {selectedPersona ? (
+                <div className="space-y-5">
+                  {/* Avatar + name */}
+                  <div className="flex flex-col items-center text-center pb-5 border-b border-border/50">
+                    <div className="relative mb-4">
+                      <div className="w-20 h-20 rounded-full flex items-center justify-center font-display font-extrabold text-2xl text-primary-foreground bg-gradient-to-br from-primary via-primary/80 to-orange-700/60">
+                        {selectedPersona.name
+                          .split(" ")
+                          .map((w: string) => w[0] ?? "")
+                          .join("")
+                          .slice(0, 2)
+                          .toUpperCase()}
+                      </div>
+                    </div>
+                    <p className="font-display font-bold text-xl text-foreground tracking-tight leading-tight">
+                      {selectedPersona.name}
+                    </p>
+                    {selectedPersona.title && (
+                      <p className="text-sm text-muted-foreground mt-0.5">
+                        {selectedPersona.title}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Badges */}
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <Badge variant="outline" className="text-xs border-primary/30 text-primary bg-primary/5">
                       {personaTypeLabels[selectedPersona.persona_type] || selectedPersona.persona_type}
                     </Badge>
                     {selectedPersona.accent && (
@@ -754,15 +821,22 @@ export default function PracticeLibraryPage() {
                       </Badge>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
-                    {selectedPersona.description}
-                  </p>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
+                  {/* Description in blockquote */}
+                  <blockquote className="border-l-2 border-primary/40 pl-3.5 text-sm text-muted-foreground leading-relaxed italic">
+                    {selectedPersona.description}
+                  </blockquote>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic text-center py-6">
+                  No opponent selected.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ── Start Session button ────────────────────────────── */}
         <Button size="lg" onClick={handleStartSession} className="w-full group">
           Start Session
           <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
