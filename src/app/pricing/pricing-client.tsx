@@ -17,9 +17,8 @@ import { cn } from "@/lib/utils";
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
-// 3 rows each — 2 unlocked, 1 locked on Starter
 const STARTER_FEATURES = [
-  { text: "Real-time AI feedback on every call", locked: false },
+  { text: "Core AI roleplay features included", locked: false },
   { text: "600 one-time practice credits", locked: false },
   { text: "Detailed performance analytics", locked: true },
 ];
@@ -58,17 +57,19 @@ function FeatureItem({
   text,
   locked,
   delay,
+  dim,
 }: {
   text: string;
   locked: boolean;
   delay: number;
+  dim?: boolean;
 }) {
   return (
     <motion.li
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay, duration: 0.35 }}
-      className="flex items-center gap-3"
+      className={cn("flex items-center gap-3", dim && "opacity-50")}
     >
       <div
         className={cn(
@@ -87,7 +88,8 @@ function FeatureItem({
           "text-sm leading-snug flex-1",
           locked
             ? "text-text-muted line-through decoration-text-muted/40"
-            : "text-text-secondary"
+            : "text-text-secondary",
+          dim && "italic"
         )}
       >
         {text}
