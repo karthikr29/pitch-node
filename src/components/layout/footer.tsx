@@ -79,18 +79,24 @@ export function Footer() {
             </h4>
             <ul className="space-y-2.5">
               {[
-                { label: "How it Works", href: "#how-it-works" },
-                { label: "Features", href: "#features" },
-                { label: "For Teams", href: "#personas" },
+                { label: "Why It Works", href: "/#problem-solution" },
+                { label: "How it Works", href: "/#how-it-works" },
+                { label: "Features", href: "/#features" },
+                { label: "Who It's For", href: "/#personas" },
+                { label: "Pricing", href: "/pricing" },
               ].map((link) => (
                 <li key={link.label}>
-                  <a
+                  <Link
                     href={link.href}
-                    className="text-text-secondary hover:text-primary text-sm transition-colors inline-flex items-center gap-1 group"
+                    className="text-text-secondary hover:text-primary text-sm inline-flex items-center group transition-colors"
                   >
-                    <span className="w-0 h-px bg-primary transition-all group-hover:w-3" />
-                    {link.label}
-                  </a>
+                    <span className="opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all duration-300 mr-2 text-primary">
+                      →
+                    </span>
+                    <span className="transition-transform duration-300">
+                      {link.label}
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -107,13 +113,17 @@ export function Footer() {
                 { label: "Terms of Service", href: "/terms" },
               ].map((link) => (
                 <li key={link.label}>
-                  <a
+                  <Link
                     href={link.href}
-                    className="text-text-secondary hover:text-primary text-sm transition-colors inline-flex items-center gap-1 group"
+                    className="text-text-secondary hover:text-primary text-sm inline-flex items-center group transition-colors"
                   >
-                    <span className="w-0 h-px bg-primary transition-all group-hover:w-3" />
-                    {link.label}
-                  </a>
+                    <span className="opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all duration-300 mr-2 text-primary">
+                      →
+                    </span>
+                    <span className="transition-transform duration-300">
+                      {link.label}
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>

@@ -79,42 +79,42 @@ export function Header({ onOpenWaitlist }: HeaderProps) {
 
           {/* Navigation */}
           <nav className="hidden md:flex items-center gap-6">
-            <a
-              href="#problem-solution"
+            <Link
+              href="/#problem-solution"
               className={cn(
                 "font-medium text-text-secondary hover:text-text-primary transition-all duration-300",
                 isScrolled ? "text-[0.8125rem]" : "text-sm"
               )}
             >
               Why It Works
-            </a>
-            <a
-              href="#how-it-works"
+            </Link>
+            <Link
+              href="/#how-it-works"
               className={cn(
                 "font-medium text-text-secondary hover:text-text-primary transition-all duration-300",
                 isScrolled ? "text-[0.8125rem]" : "text-sm"
               )}
             >
               How it Works
-            </a>
-            <a
-              href="#features"
+            </Link>
+            <Link
+              href="/#features"
               className={cn(
                 "font-medium text-text-secondary hover:text-text-primary transition-all duration-300",
                 isScrolled ? "text-[0.8125rem]" : "text-sm"
               )}
             >
               Features
-            </a>
-            <a
-              href="#personas"
+            </Link>
+            <Link
+              href="/#personas"
               className={cn(
                 "font-medium text-text-secondary hover:text-text-primary transition-all duration-300",
                 isScrolled ? "text-[0.8125rem]" : "text-sm"
               )}
             >
               Who It&apos;s For
-            </a>
+            </Link>
           </nav>
 
           {/* Right side */}
