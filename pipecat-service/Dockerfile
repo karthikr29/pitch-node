@@ -7,6 +7,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Download NLTK data required by pipecat-ai's RTVI text processor.
+# Must run as root before USER appuser (appuser home is /nonexistent).
+# Must use explicit download_dir — a path NLTK searches at runtime.
+RUN python -c "import nltk; nltk.download('punkt_tab', download_dir='/usr/local/share/nltk_data', quiet=True)"
+
 COPY . .
 
 EXPOSE 8000

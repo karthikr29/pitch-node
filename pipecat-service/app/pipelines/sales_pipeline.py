@@ -682,6 +682,14 @@ class LowLatencyCartesiaTTSService(CartesiaTTSService):
         payload["max_buffer_delay_ms"] = self._max_buffer_delay_ms
         return json.dumps(payload)
 
+    async def push_error(self, error_msg: str, exception=None, fatal: bool = False):
+        # pipecat 0.0.104 doesn't handle Cartesia's flush_done acknowledgment
+        # message type, triggering push_error on every TTS flush. Suppress it
+        # since flush_done requires no action — it's a server-side informational event.
+        if "flush_done" in error_msg:
+            return
+        await super().push_error(error_msg=error_msg, exception=exception, fatal=fatal)
+
 
 class FluxDeepgramSTTService(STTService):
     """Minimal Deepgram Flux websocket adapter for turn-based transcription."""
