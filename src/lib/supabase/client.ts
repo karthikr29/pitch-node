@@ -8,5 +8,9 @@ export function createClient() {
     return null;
   }
 
-  return createBrowserClient(supabaseUrl, supabaseAnonKey);
+  return createBrowserClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<unknown>) => fn(),
+    },
+  });
 }
