@@ -10,7 +10,7 @@ export function createClient() {
 
   return createBrowserClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-      lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<unknown>) => fn(),
+      lock: <T>(_name: string, _acquireTimeout: number, fn: () => Promise<T>): Promise<T> => fn(),
     },
   });
 }
