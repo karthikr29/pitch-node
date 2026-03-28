@@ -2,6 +2,11 @@
 
 # Local spec files
 spec.md
+BACKLOG.md
+GDPR_COMPLIANCE.md
+SOC2_COMPLIANCE.md
+ISO27001_COMPLIANCE.md
+.env.sentry-build-plugin
 
 # dependencies
 /node_modules
