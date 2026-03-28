@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { motion, useScroll, useMotionValueEvent } from "framer-motion";
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,7 @@ interface HeaderProps {
 export function Header({ onOpenWaitlist }: HeaderProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const { scrollY } = useScroll();
+  const pathname = usePathname();
 
   useMotionValueEvent(scrollY, "change", (latest) => {
     setIsScrolled(latest > 50);
@@ -49,8 +51,10 @@ export function Header({ onOpenWaitlist }: HeaderProps) {
             href="/"
             className="flex items-center gap-2.5 group"
             onClick={(e) => {
-              e.preventDefault();
-              window.scrollTo({ top: 0, behavior: "smooth" });
+              if (pathname === "/") {
+                e.preventDefault();
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }
             }}
           >
             <div
