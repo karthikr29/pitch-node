@@ -123,8 +123,8 @@ export default function PricingClient() {
           >
             <div className="flex items-center justify-center gap-3 px-4 text-center max-w-4xl mx-auto">
               <span className="text-xl md:text-2xl animate-pulse">🚀</span>
-              <p className="text-lg md:text-xl font-bold text-orange-200/90 text-left md:text-center tracking-wide">
-                <span className="text-orange-400">Launch Pricing: </span>
+              <p className="text-lg md:text-xl font-bold text-gray-900 dark:text-orange-100 text-left md:text-center tracking-wide">
+                <span className="text-orange-600 dark:text-orange-400">Launch Pricing: </span>
                 Lock in $79/mo before the early access period ends.
               </p>
             </div>
@@ -159,8 +159,9 @@ export default function PricingClient() {
                 <div
                   className="rounded-3xl flex flex-col flex-1 px-8 py-10 transition-colors duration-300"
                   style={{
-                    border: "1px solid rgba(255,255,255,0.06)",
-                    backgroundColor: "rgba(255,255,255,0.02)",
+                    backgroundColor: 'var(--color-background-secondary)',
+                    border: '1px solid var(--color-border)',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
                   }}
                 >
                   <div className="flex items-center gap-2 mb-8">
@@ -171,7 +172,7 @@ export default function PricingClient() {
 
                   <div className="flex flex-col gap-2 mb-8">
                     <div className="flex items-baseline gap-2 h-auto md:h-[60px]">
-                      <span className="font-display text-5xl font-medium tracking-tight text-white mt-auto">
+                      <span className="font-display text-5xl font-medium tracking-tight text-text-primary mt-auto">
                         $0
                       </span>
                     </div>
@@ -180,17 +181,13 @@ export default function PricingClient() {
 
                   {/* Credits block */}
                   <div
-                    className="rounded-2xl px-5 py-4 mb-8"
-                    style={{
-                      backgroundColor: "rgba(0,0,0,0.2)",
-                      border: "1px solid rgba(255,255,255,0.03)",
-                    }}
+                    className="rounded-2xl px-5 py-4 mb-8 bg-gray-100 dark:bg-black/[0.20] border border-gray-200 dark:border-white/[0.03]"
                   >
                     <div className="flex items-baseline gap-2">
                       <AnimatedCounter
                         value={600}
                         duration={0.9}
-                        className="font-display text-[28px] font-medium text-white leading-none"
+                        className="font-display text-[28px] font-medium text-text-primary leading-none"
                       />
                       <span className="text-sm text-text-muted">credits</span>
                     </div>
@@ -206,7 +203,8 @@ export default function PricingClient() {
                     <Button
                       variant="outline"
                       size="lg"
-                      className="w-full text-[15px] font-medium tracking-wide border-white/10 hover:bg-white/5 h-12 rounded-xl"
+                      className="w-full text-[15px] font-medium tracking-wide h-12 rounded-xl"
+                      style={{ boxShadow: '0 4px 14px rgba(236,114,17,0.15)' }}
                       onClick={openModal}
                     >
                       Try for Free
@@ -247,11 +245,10 @@ export default function PricingClient() {
                 </div>
 
                 <div
-                  className="rounded-3xl flex flex-col flex-1 relative z-0 px-8 py-10 transition-colors duration-300"
+                  className="rounded-3xl flex flex-col flex-1 relative z-0 px-8 py-10 transition-colors duration-300 bg-white dark:bg-transparent"
                   style={{
-                    border: "1px solid rgba(255,153,0,0.3)",
-                    backgroundColor: "rgba(255,153,0,0.03)",
-                    boxShadow: "0 0 40px -10px rgba(255,153,0,0.1)",
+                    border: "1px solid rgba(255,153,0,0.5)",
+                    boxShadow: "0 0 40px -10px rgba(255,153,0,0.2)",
                   }}
                 >
                   {/* Subtle top ambient glow inside the card */}
@@ -279,7 +276,7 @@ export default function PricingClient() {
                         <div className="absolute top-[50%] left-[-5%] w-[110%] h-[2px] bg-red-400/80 rotate-[24deg] drop-shadow-sm pointer-events-none" />
                       </div>
                       <span
-                        className="font-display text-5xl font-medium tracking-tight mt-auto text-white"
+                        className="font-display text-5xl font-medium tracking-tight mt-auto text-text-primary"
                       >
                         $79
                       </span>
@@ -289,11 +286,7 @@ export default function PricingClient() {
 
                   {/* Credits block */}
                   <div
-                    className="rounded-2xl px-5 py-4 mb-8 relative z-10"
-                    style={{
-                      backgroundColor: "rgba(0,0,0,0.2)",
-                      border: "1px solid rgba(255,153,0,0.1)",
-                    }}
+                    className="rounded-2xl px-5 py-4 mb-8 relative z-10 bg-gray-100 dark:bg-black/[0.20] border border-orange-200 dark:border-orange-500/10"
                   >
                     <div className="flex items-baseline gap-2">
                       <AnimatedCounter
