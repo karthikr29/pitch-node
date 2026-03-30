@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 interface Star {
     id: number;
@@ -37,28 +38,33 @@ function generateStars(count: number): Star[] {
 }
 
 export function StarryBackground() {
+    const isMobile = useIsMobile();
     const [shootingStars, setShootingStars] = useState<ShootingStar[]>([]);
     const [isVisible, setIsVisible] = useState(false);
     const [stars, setStars] = useState<Star[]>([]);
     const [isMounted, setIsMounted] = useState(false);
 
     // Generate stars only on client side to avoid hydration mismatch
+    // Skip on mobile — 160 position:fixed animated nodes overwhelm iOS compositor
     useEffect(() => {
+        if (isMobile === true) return;
         setStars(generateStars(120));
         setIsMounted(true);
-    }, []);
+    }, [isMobile]);
 
     // Smooth fade-in on mount
     useEffect(() => {
+        if (isMobile === true) return;
         const fadeInTimeout = setTimeout(() => {
             setIsVisible(true);
         }, 100);
 
         return () => clearTimeout(fadeInTimeout);
-    }, []);
+    }, [isMobile]);
 
     // Generate shooting stars periodically
     useEffect(() => {
+        if (isMobile === true) return;
         const createShootingStar = () => {
             const newStar: ShootingStar = {
                 id: Date.now() + Math.random(),
@@ -91,10 +97,10 @@ export function StarryBackground() {
             clearTimeout(initialTimeout);
             clearInterval(interval);
         };
-    }, []);
+    }, [isMobile]);
 
-    // Don't render anything until client-side mount to avoid hydration mismatch
-    if (!isMounted) {
+    // Don't render anything until client-side mount OR on mobile
+    if (!isMounted || isMobile === true) {
         return null;
     }
 

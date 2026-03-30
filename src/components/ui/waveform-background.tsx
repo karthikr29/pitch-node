@@ -88,26 +88,16 @@ export function WaveformBackground({
       {/* Frequency Bars (Audio Spectrum Effect) */}
       <div className="absolute bottom-0 left-0 right-0 flex items-end justify-around h-32 px-8 gap-2">
         {BAR_HEIGHTS.map((height, i) => (
-          <motion.div
+          <div
             key={i}
             className="flex-1 bg-current rounded-t-sm"
             style={{
               color,
               height: `${height}%`,
-            }}
-            animate={
-              animated
-                ? {
-                  scaleY: [0.3, 0.8, 1, 0.6, 0.3],
-                  opacity: [0.4, 0.7, 1, 0.6, 0.4],
-                }
-                : {}
-            }
-            transition={{
-              duration: 1.2,
-              repeat: Infinity,
-              delay: i * 0.05,
-              ease: "easeInOut",
+              transformOrigin: "bottom",
+              animation: animated
+                ? `frequency-pulse 1.2s ease-in-out ${i * 0.05}s infinite`
+                : undefined,
             }}
           />
         ))}

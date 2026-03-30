@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { motion, useSpring, useTransform, useInView } from "framer-motion";
 import { Button } from "@/components/ui";
 import { ArrowRight, Sparkles, Users, Rocket, Clock } from "lucide-react";
 import { useWaitlistCount } from "@/hooks/use-waitlist-count";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 interface FinalCTAProps {
   onOpenWaitlist: () => void;
@@ -39,8 +40,11 @@ function FloatingOrb({ delay, size, position, color }: {
 // Speedometer-style gauge for the counter
 function SpeedometerGauge({ value, maxValue = 250 }: { value: number; maxValue?: number }) {
   const [hasAnimated, setHasAnimated] = useState(false);
-  const [needleRotation, setNeedleRotation] = useState(-135); // Start position
+  const isMobile = useIsMobile();
   const ref = useRef(null);
+  // Direct DOM ref for the needle <g> element — avoids setState on every animation frame.
+  // The spring listener mutates the SVG transform attribute directly, bypassing React entirely.
+  const needleGroupRef = useRef<SVGGElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
   const springValue = useSpring(0, {
@@ -52,18 +56,18 @@ function SpeedometerGauge({ value, maxValue = 250 }: { value: number; maxValue?:
     Math.round(latest)
   );
 
-  // Subscribe to spring value changes and update needle rotation
-  // Needle rotation: maps value to 270° arc
-  // Arc spans 270° from bottom-left (SVG 135°) to bottom-right (SVG 45°)
-  // The needle points UP by default (toward y=50). We rotate it around center (140,140).
-  // SVG rotate(angle, cx, cy) rotates clockwise by 'angle' degrees around point (cx, cy)
-  // At 0%: rotate(-135°) makes needle point to 135° (bottom-left, start of arc)
-  // At 100%: rotate(135°) makes needle point to 45° (bottom-right, end of arc)
+  // Drive needle rotation by directly mutating the SVG transform attribute.
+  // This avoids React setState entirely — no re-renders during the spring animation.
+  // SVG rotate(angle, cx, cy) rotates around center point (140, 140).
+  // At 0%: rotate(-135°) = bottom-left (arc start). At 100%: rotate(135°) = bottom-right (arc end).
   useEffect(() => {
     const unsubscribe = springValue.on("change", (latest) => {
       const percentage = Math.min(latest / maxValue, 1);
-      // -135° at start (0%), +135° at end (100%), spanning 270°
-      setNeedleRotation(-135 + percentage * 270);
+      const rotation = -135 + percentage * 270;
+      needleGroupRef.current?.setAttribute(
+        "transform",
+        `rotate(${rotation}, 140, 140)`
+      );
     });
     return unsubscribe;
   }, [springValue, maxValue]);
@@ -85,53 +89,48 @@ function SpeedometerGauge({ value, maxValue = 250 }: { value: number; maxValue?:
     }
   }, [value, hasAnimated, springValue, isInView]);
 
-  // Generate tick marks for speedometer (270° arc from 135° to 405°)
-  const generateTicks = () => {
-    const ticks = [];
-    const totalTicks = 50; // Total tick marks
-    const majorTickInterval = 5; // Major tick every 5th mark
-    const startAngle = 135; // Start at bottom-left
-    const endAngle = 405; // End at bottom-right (135 + 270)
+  // Memoized tick marks — pure function with all-constant inputs.
+  // Previously called generateTicks() on every render (was re-creating 51 React elements per frame).
+  const ticks = useMemo(() => {
+    const result = [];
+    const totalTicks = 50;
+    const majorTickInterval = 5;
+    const startAngle = 135;
+    const endAngle = 405;
     const angleStep = (endAngle - startAngle) / totalTicks;
-
     for (let i = 0; i <= totalTicks; i++) {
       const angle = (startAngle + i * angleStep) * (Math.PI / 180);
-      const isMajor = i % majorTickInterval === 0;
-      const innerRadius = isMajor ? 82 : 88;
-      const outerRadius = 95;
-
+      const isMajorTick = i % majorTickInterval === 0;
+      const innerRadius = isMajorTick ? 82 : 88;
       const x1 = (140 + innerRadius * Math.cos(angle)).toFixed(4);
       const y1 = (140 + innerRadius * Math.sin(angle)).toFixed(4);
-      const x2 = (140 + outerRadius * Math.cos(angle)).toFixed(4);
-      const y2 = (140 + outerRadius * Math.sin(angle)).toFixed(4);
-
-      ticks.push(
+      const x2 = (140 + 95 * Math.cos(angle)).toFixed(4);
+      const y2 = (140 + 95 * Math.sin(angle)).toFixed(4);
+      result.push(
         <line
           key={i}
-          x1={x1}
-          y1={y1}
-          x2={x2}
-          y2={y2}
-          stroke={isMajor ? "var(--text-secondary)" : "var(--text-muted)"}
-          strokeWidth={isMajor ? 3 : 1.5}
-          opacity={isMajor ? 0.7 : 0.4}
+          x1={x1} y1={y1} x2={x2} y2={y2}
+          stroke={isMajorTick ? "var(--text-secondary)" : "var(--text-muted)"}
+          strokeWidth={isMajorTick ? 3 : 1.5}
+          opacity={isMajorTick ? 0.7 : 0.4}
           strokeLinecap="round"
         />
       );
     }
-    return ticks;
-  };
+    return result;
+  }, []);
 
-  // Create arc path for 270° (from 135° to 405°)
-  const createArcPath = (radius: number) => {
-    const startAngle = 135 * (Math.PI / 180);
-    const endAngle = 405 * (Math.PI / 180);
-    const x1 = 140 + radius * Math.cos(startAngle);
-    const y1 = 140 + radius * Math.sin(startAngle);
-    const x2 = 140 + radius * Math.cos(endAngle);
-    const y2 = 140 + radius * Math.sin(endAngle);
-    return `M ${x1} ${y1} A ${radius} ${radius} 0 1 1 ${x2} ${y2}`;
-  };
+  // Memoized arc path for radius=100 (only radius ever used in this component).
+  // Previously createArcPath(100) was called 3× in the JSX body on every render.
+  const arcPath100 = useMemo(() => {
+    const s = 135 * (Math.PI / 180);
+    const e = 405 * (Math.PI / 180);
+    const x1 = 140 + 100 * Math.cos(s);
+    const y1 = 140 + 100 * Math.sin(s);
+    const x2 = 140 + 100 * Math.cos(e);
+    const y2 = 140 + 100 * Math.sin(e);
+    return `M ${x1} ${y1} A 100 100 0 1 1 ${x2} ${y2}`;
+  }, []);
 
   return (
     <div ref={ref} className="relative">
@@ -139,7 +138,7 @@ function SpeedometerGauge({ value, maxValue = 250 }: { value: number; maxValue?:
       <div className="absolute inset-0 blur-xl opacity-20">
         <svg viewBox="0 0 280 280" className="w-full h-full">
           <path
-            d={createArcPath(100)}
+            d={arcPath100}
             fill="none"
             stroke="url(#speedoGlowGradient)"
             strokeWidth="20"
@@ -186,7 +185,7 @@ function SpeedometerGauge({ value, maxValue = 250 }: { value: number; maxValue?:
 
         {/* Background track - 270° arc */}
         <path
-          d={createArcPath(100)}
+          d={arcPath100}
           fill="none"
           stroke="var(--border)"
           strokeWidth="12"
@@ -194,28 +193,28 @@ function SpeedometerGauge({ value, maxValue = 250 }: { value: number; maxValue?:
           opacity="0.3"
         />
 
-        {/* Tick marks */}
-        {generateTicks()}
+        {/* Tick marks — memoized, never re-created */}
+        {ticks}
 
         {/* Progress arc */}
         <motion.path
-          d={createArcPath(100)}
+          d={arcPath100}
           fill="none"
           stroke="url(#speedoProgressGradient)"
           strokeWidth="10"
           strokeLinecap="round"
           strokeDasharray={arcLength}
           style={{ strokeDashoffset }}
-          filter="url(#arcGlow)"
+          filter={isMobile ? undefined : "url(#arcGlow)"}
         />
 
-        {/* Needle - rotates around center point (140, 140) using SVG transform */}
-        <g transform={`rotate(${needleRotation}, 140, 140)`}>
+        {/* Needle - ref-driven DOM mutation, no React setState on animation frames */}
+        <g ref={needleGroupRef} transform="rotate(-135, 140, 140)">
           {/* Needle body - tapered triangle from center hub to tip */}
           <path
             d="M 137 140 L 140 50 L 143 140 Z"
             fill="url(#needleGradient)"
-            filter="url(#needleGlow)"
+            filter={isMobile ? undefined : "url(#needleGlow)"}
           />
           {/* Needle tip accent */}
           <circle
@@ -260,22 +259,25 @@ function SpeedometerGauge({ value, maxValue = 250 }: { value: number; maxValue?:
       </svg>
 
       {/* Animated pulse effect around the dial */}
-      <motion.div
-        className="absolute inset-0"
-        style={{
-          background: "radial-gradient(circle at center 60%, var(--primary) 0%, transparent 70%)",
-          borderRadius: "50%",
-        }}
-        animate={{
-          opacity: [0.1, 0.2, 0.1],
-          scale: [1, 1.02, 1],
-        }}
-        transition={{
-          duration: 2,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-      />
+      {/* Pulse overlay — desktop only (continuous compositor layer rasterize on mobile) */}
+      {isMobile !== true && (
+        <motion.div
+          className="absolute inset-0"
+          style={{
+            background: "radial-gradient(circle at center 60%, var(--primary) 0%, transparent 70%)",
+            borderRadius: "50%",
+          }}
+          animate={{
+            opacity: [0.1, 0.2, 0.1],
+            scale: [1, 1.02, 1],
+          }}
+          transition={{
+            duration: 2,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -317,6 +319,7 @@ function LiveIndicator() {
 }
 
 export function FinalCTA({ onOpenWaitlist }: FinalCTAProps) {
+  const isMobile = useIsMobile();
   const { count } = useWaitlistCount({
     initialCount: 18,
     pollingInterval: 5000,
@@ -327,10 +330,14 @@ export function FinalCTA({ onOpenWaitlist }: FinalCTAProps) {
       {/* Background with gradient mesh */}
       <div className="absolute inset-0 bg-gradient-to-b from-background-secondary via-background-primary/50 to-background-secondary" />
 
-      {/* Animated floating orbs */}
-      <FloatingOrb delay={0} size="w-96 h-96" position={{ top: "10%", left: "-10%" }} color="var(--primary)" />
-      <FloatingOrb delay={2} size="w-80 h-80" position={{ bottom: "20%", right: "-5%" }} color="var(--accent)" />
-      <FloatingOrb delay={4} size="w-64 h-64" position={{ top: "50%", left: "30%" }} color="var(--primary)" />
+      {/* Animated floating orbs — desktop only (blur-3xl = 1-2MB GPU texture each on iOS) */}
+      {isMobile !== true && (
+        <>
+          <FloatingOrb delay={0} size="w-96 h-96" position={{ top: "10%", left: "-10%" }} color="var(--primary)" />
+          <FloatingOrb delay={2} size="w-80 h-80" position={{ bottom: "20%", right: "-5%" }} color="var(--accent)" />
+          <FloatingOrb delay={4} size="w-64 h-64" position={{ top: "50%", left: "30%" }} color="var(--primary)" />
+        </>
+      )}
 
       {/* Grid pattern overlay */}
       <div

@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 // Simulated AI feedback data
 const feedbackMetrics = [
@@ -84,6 +85,8 @@ function HighlightMoment({ moment, index }: { moment: typeof highlightMoments[0]
 }
 
 export default function AnalysisScene() {
+  const isMobile = useIsMobile();
+
   return (
     <div className="w-full h-full flex items-center justify-center relative">
       {/* Main Analysis Card */}
@@ -93,19 +96,19 @@ export default function AnalysisScene() {
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
-        {/* Floating card effect */}
+        {/* Floating card effect — on mobile, skip 3D rotation (preserve-3d creates an
+            expensive iOS rendering context that disables tile cache for the entire subtree) */}
         <motion.div
-          animate={{
-            y: [0, -8, 0],
-            rotateX: [0, 2, 0],
-            rotateY: [-2, 2, -2],
-          }}
+          animate={isMobile
+            ? { y: [0, -8, 0] }
+            : { y: [0, -8, 0], rotateX: [0, 2, 0], rotateY: [-2, 2, -2] }
+          }
           transition={{
             duration: 5,
             repeat: Infinity,
             ease: "easeInOut",
           }}
-          style={{ transformStyle: "preserve-3d", perspective: 1000 }}
+          style={isMobile ? undefined : { transformStyle: "preserve-3d", perspective: 1000 }}
         >
           {/* Card container */}
           <div className="relative w-full max-w-[280px] sm:w-64 bg-gradient-to-br from-surface via-surface to-background-secondary rounded-2xl shadow-2xl border border-border/50 overflow-hidden">

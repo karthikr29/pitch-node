@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { motion, useScroll, useMotionValueEvent } from "framer-motion";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "@/components/ui";
@@ -17,9 +17,16 @@ export function Header({ onOpenWaitlist }: HeaderProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const { scrollY } = useScroll();
   const pathname = usePathname();
+  // Ref guard: only call setState when the boolean actually changes.
+  // Without this, setIsScrolled fires on every scroll frame (120x/sec on ProMotion iPhones).
+  const prevScrolledRef = useRef(false);
 
   useMotionValueEvent(scrollY, "change", (latest) => {
-    setIsScrolled(latest > 50);
+    const nowScrolled = latest > 50;
+    if (nowScrolled !== prevScrolledRef.current) {
+      prevScrolledRef.current = nowScrolled;
+      setIsScrolled(nowScrolled);
+    }
   });
 
   return (

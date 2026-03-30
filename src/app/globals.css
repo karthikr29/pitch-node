@@ -127,13 +127,17 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Smooth theme transitions */
-*,
-*::before,
-*::after {
-  transition-property: background-color, border-color, color, fill, stroke;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 300ms;
+/* Smooth theme transitions — scoped to hover-capable devices (desktops).
+   Touch devices don't need hover transitions and removing them reduces
+   CSS paint work on mobile significantly. */
+@media (hover: hover) {
+  *,
+  *::before,
+  *::after {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+  }
 }
 
 body {
@@ -554,4 +558,17 @@ h6 {
   content: '_' !important;
   font-weight: normal;
   vertical-align: baseline;
+}
+
+/* ─── Mobile Performance Optimizations ─────────────────────────────────────
+   All rules below are strictly mobile-only (<= 768px).
+   Desktop is completely unaffected.
+   ────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Disable grain texture: body::before is position:fixed with a feTurbulence
+     SVG filter (CPU-only on iOS) + continuous animation. Causes full fixed-layer
+     repaint on every momentum scroll frame. */
+  body::before {
+    display: none;
+  }
 }

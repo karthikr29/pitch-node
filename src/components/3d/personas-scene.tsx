@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 // Full persona library — 69 unique roles, no near-duplicates, all ≤ 14 chars
 const PERSONA_POOL = [
@@ -216,6 +217,7 @@ function ConnectionLines() {
 const INITIAL_NAMES = ["CEO", "CFO", "CTO", "VP Sales", "Founder"];
 
 export default function PersonasScene() {
+  const isMobile = useIsMobile();
   // Refs hold mutable values read inside the interval — avoids stale closure bugs
   const displayedNamesRef = useRef<string[]>(INITIAL_NAMES);
   const recentlyUsedRef   = useRef<string[]>([]);
@@ -230,6 +232,10 @@ export default function PersonasScene() {
     const initial = initDisplayed();
     displayedNamesRef.current = initial;
     setDisplayedNames(initial);
+
+    // On mobile: slow the cycle to 2000ms to reduce React re-render frequency.
+    // Each tick causes 2 setState calls → 6 component re-renders competing with animations.
+    const cycleTick = isMobile ? 2000 : CYCLE_TICK;
 
     const id = setInterval(() => {
       const orb = orbIdxRef.current;
@@ -256,10 +262,10 @@ export default function PersonasScene() {
         // Fade back in
         setFadingOut(prev => { const n = [...prev]; n[orb] = false; return n; });
       }, FADE_MS);
-    }, CYCLE_TICK);
+    }, cycleTick);
 
     return () => clearInterval(id);
-  }, []); // runs once — all mutable reads go through refs
+  }, [isMobile]); // re-run when isMobile resolves so the correct tick rate is applied
 
   return (
     <div className="w-full h-full flex items-center justify-center relative">

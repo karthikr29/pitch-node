@@ -18,6 +18,20 @@ function VoiceWaveform({
   const barCount = 12;
   const baseDelay = delay;
 
+  // Pre-compute random values once at mount using a null-check ref pattern.
+  // Math.random() in the animate prop previously generated new values on every React render,
+  // causing Framer Motion to cancel and restart all 12 bar animations on each re-render.
+  // The conversationPhase setInterval re-renders this component every 2500ms, causing churn.
+  const rndRef = useRef<Array<{ r1: number; r2: number; dur: number }> | null>(null);
+  if (rndRef.current === null) {
+    rndRef.current = Array.from({ length: barCount }, () => ({
+      r1: Math.random() * 12,
+      r2: Math.random() * 8,
+      dur: 0.8 + Math.random() * 0.4,
+    }));
+  }
+  const rnd = rndRef.current;
+
   return (
     <div className={`flex items-center gap-[3px] ${side === "right" ? "flex-row-reverse" : ""}`}>
       {Array.from({ length: barCount }).map((_, i) => {
@@ -35,9 +49,9 @@ function VoiceWaveform({
             animate={isActive ? {
               height: [
                 `${baseHeight * 8}px`,
-                `${baseHeight * 28 + Math.random() * 12}px`,
+                `${baseHeight * 28 + rnd[i].r1}px`,
                 `${baseHeight * 12}px`,
-                `${baseHeight * 32 + Math.random() * 8}px`,
+                `${baseHeight * 32 + rnd[i].r2}px`,
                 `${baseHeight * 8}px`,
               ],
               opacity: [0.6, 1, 0.8, 1, 0.6],
@@ -46,7 +60,7 @@ function VoiceWaveform({
               opacity: 0.3,
             }}
             transition={{
-              duration: 0.8 + Math.random() * 0.4,
+              duration: rnd[i].dur,
               repeat: Infinity,
               delay: baseDelay + i * 0.05,
               ease: "easeInOut",
