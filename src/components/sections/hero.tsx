@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Suspense, lazy } from "react";
 import { ArrowRight, Mic2, Activity } from "lucide-react";
 import dynamic from "next/dynamic";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 const TypeAnimation = dynamic(
   () => import("react-type-animation").then((m) => m.TypeAnimation),
@@ -21,6 +22,7 @@ interface HeroProps {
 }
 
 export function Hero({ onOpenWaitlist }: HeroProps) {
+  const isMobile = useIsMobile();
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden bg-background-primary">
       {/* Waveform Background - Voice Frequency Aesthetic */}
@@ -106,21 +108,25 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
                   cursor={true}
                   style={{ display: 'inline-block', minWidth: '200px' }}
                 />
-                {/* AWS Orange glow effect in dark mode */}
-                <motion.div
-                  className="absolute inset-0 blur-2xl opacity-0 dark:opacity-50 -z-10"
-                  style={{
-                    background: "var(--primary)",
-                  }}
-                  animate={{
-                    scale: [1, 1.2, 1],
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
-                />
+                {/* AWS Orange glow — desktop dark mode only.
+                    On mobile in dark mode (opacity-50) this creates a GPU compositor
+                    layer with a blur filter that animates continuously every frame. */}
+                {isMobile !== true && (
+                  <motion.div
+                    className="absolute inset-0 blur-2xl opacity-0 dark:opacity-50 -z-10"
+                    style={{
+                      background: "var(--primary)",
+                    }}
+                    animate={{
+                      scale: [1, 1.2, 1],
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                    }}
+                  />
+                )}
               </motion.div>
 
               <motion.span
@@ -190,18 +196,20 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
                   <Mic2 className="w-5 h-5 mr-2" />
                   Join the Waitlist
                   <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
-                  {/* Animated background shine */}
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full"
-                    animate={{
-                      translateX: ["100%", "100%", "-100%"],
-                    }}
-                    transition={{
-                      duration: 3,
-                      repeat: Infinity,
-                      repeatDelay: 2,
-                    }}
-                  />
+                  {/* Animated background shine — desktop only */}
+                  {isMobile !== true && (
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full"
+                      animate={{
+                        translateX: ["100%", "100%", "-100%"],
+                      }}
+                      transition={{
+                        duration: 3,
+                        repeat: Infinity,
+                        repeatDelay: 2,
+                      }}
+                    />
+                  )}
                 </Button>
               </motion.div>
 
@@ -237,35 +245,39 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
             transition={{ duration: 0.9, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
             className="lg:col-span-5 relative h-[400px] lg:h-[480px]"
           >
-            {/* Voice frequency rings around 3D scene */}
-            <motion.div
-              className="absolute inset-0 rounded-3xl border-2 border-primary/20"
-              animate={{
-                scale: [1, 1.05, 1],
-                opacity: [0.2, 0.4, 0.2],
-              }}
-              transition={{
-                duration: 3,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-            />
-            <motion.div
-              className="absolute inset-[-10px] rounded-3xl border border-accent/20"
-              animate={{
-                scale: [1, 1.08, 1],
-                opacity: [0.1, 0.3, 0.1],
-              }}
-              transition={{
-                duration: 3,
-                repeat: Infinity,
-                ease: "easeInOut",
-                delay: 0.5,
-              }}
-            />
+            {/* Voice frequency rings — desktop only (repeat:Infinity scale/opacity on mobile) */}
+            {isMobile !== true && (
+              <>
+                <motion.div
+                  className="absolute inset-0 rounded-3xl border-2 border-primary/20"
+                  animate={{
+                    scale: [1, 1.05, 1],
+                    opacity: [0.2, 0.4, 0.2],
+                  }}
+                  transition={{
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                />
+                <motion.div
+                  className="absolute inset-[-10px] rounded-3xl border border-accent/20"
+                  animate={{
+                    scale: [1, 1.08, 1],
+                    opacity: [0.1, 0.3, 0.1],
+                  }}
+                  transition={{
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 0.5,
+                  }}
+                />
+              </>
+            )}
 
             {/* 3D Scene Container */}
-            <div className="relative w-full h-full rounded-2xl overflow-hidden bg-surface/50 dark:bg-surface/10 backdrop-blur-sm border border-border shadow-2xl">
+            <div className={cn("relative w-full h-full rounded-2xl overflow-hidden bg-surface/50 dark:bg-surface/10 border border-border shadow-2xl", isMobile !== true && "backdrop-blur-sm")}>
               <Suspense
                 fallback={
                   <div className="w-full h-full flex items-center justify-center">
@@ -288,64 +300,68 @@ export function Hero({ onOpenWaitlist }: HeroProps) {
               </Suspense>
             </div>
 
-            {/* Floating frequency indicators */}
-            <motion.div
-              className="absolute -top-4 -right-4 bg-primary/10 dark:bg-primary/20 backdrop-blur-sm border border-primary/30 rounded-full px-4 py-2 flex items-center gap-2"
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.2 }}
-            >
-              <div className="flex gap-1">
-                {[...Array(5)].map((_, i) => (
-                  <motion.div
-                    key={i}
-                    className="w-1 bg-primary rounded-full"
-                    animate={{
-                      height: ["8px", "20px", "8px"],
-                    }}
-                    transition={{
-                      duration: 1,
-                      repeat: Infinity,
-                      delay: i * 0.1,
-                    }}
-                  />
-                ))}
-              </div>
-              <span className="text-xs font-bold text-primary">LIVE</span>
-            </motion.div>
+            {/* Floating frequency indicators — desktop only (5 repeat:Infinity height animations) */}
+            {isMobile !== true && (
+              <motion.div
+                className="absolute -top-4 -right-4 bg-primary/10 dark:bg-primary/20 backdrop-blur-sm border border-primary/30 rounded-full px-4 py-2 flex items-center gap-2"
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.2 }}
+              >
+                <div className="flex gap-1">
+                  {[...Array(5)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      className="w-1 bg-primary rounded-full"
+                      animate={{
+                        height: ["8px", "20px", "8px"],
+                      }}
+                      transition={{
+                        duration: 1,
+                        repeat: Infinity,
+                        delay: i * 0.1,
+                      }}
+                    />
+                  ))}
+                </div>
+                <span className="text-xs font-bold text-primary">LIVE</span>
+              </motion.div>
+            )}
           </motion.div>
         </div>
       </div>
 
-      {/* Scroll indicator - Voice wave style */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.5, duration: 0.5 }}
-        className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3"
-      >
-        <span className="text-xs font-medium text-text-muted uppercase tracking-wider">
-          Scroll to explore
-        </span>
-        <div className="flex gap-1">
-          {[...Array(5)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="w-1 bg-primary/50 rounded-full"
-              animate={{
-                height: ["12px", "24px", "12px"],
-                opacity: [0.5, 1, 0.5],
-              }}
-              transition={{
-                duration: 1.5,
-                repeat: Infinity,
-                ease: "easeInOut",
-                delay: i * 0.1,
-              }}
-            />
-          ))}
-        </div>
-      </motion.div>
+      {/* Scroll indicator — desktop only (5 repeat:Infinity height+opacity animations) */}
+      {isMobile !== true && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.5, duration: 0.5 }}
+          className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3"
+        >
+          <span className="text-xs font-medium text-text-muted uppercase tracking-wider">
+            Scroll to explore
+          </span>
+          <div className="flex gap-1">
+            {[...Array(5)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="w-1 bg-primary/50 rounded-full"
+                animate={{
+                  height: ["12px", "24px", "12px"],
+                  opacity: [0.5, 1, 0.5],
+                }}
+                transition={{
+                  duration: 1.5,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                  delay: i * 0.1,
+                }}
+              />
+            ))}
+          </div>
+        </motion.div>
+      )}
     </section>
   );
 }

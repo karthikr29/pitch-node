@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 // Weekly progress data
 const weeklyData = [
@@ -24,6 +25,7 @@ const achievements = [
 function ProgressChart() {
   const maxScore = 100;
   const chartHeight = 80;
+  const isMobile = useIsMobile();
 
   return (
     <div className="relative h-24 px-2">
@@ -52,17 +54,19 @@ function ProgressChart() {
                 ease: [0.25, 0.46, 0.45, 0.94]
               }}
             >
-              {/* Shimmer effect */}
-              <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
-                animate={{ x: ["-200%", "200%"] }}
-                transition={{
-                  duration: 2,
-                  delay: 1 + i * 0.2,
-                  repeat: Infinity,
-                  repeatDelay: 3,
-                }}
-              />
+              {/* Shimmer effect — desktop only (7 repeat:Infinity translateX animations on mobile) */}
+              {isMobile !== true && (
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                  animate={{ x: ["-200%", "200%"] }}
+                  transition={{
+                    duration: 2,
+                    delay: 1 + i * 0.2,
+                    repeat: Infinity,
+                    repeatDelay: 3,
+                  }}
+                />
+              )}
             </motion.div>
 
             {/* Day label */}
@@ -130,6 +134,7 @@ function AchievementBadge({ achievement, index }: { achievement: typeof achievem
 }
 
 export default function ProgressScene() {
+  const isMobile = useIsMobile();
   return (
     <div className="w-full h-full flex items-center justify-center relative">
       {/* Main Card */}
@@ -224,21 +229,23 @@ export default function ProgressScene() {
         </motion.div>
       </motion.div>
 
-      {/* Ambient glow */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <motion.div
-          className="w-72 h-72 rounded-full blur-3xl"
-          style={{ background: "radial-gradient(circle, var(--accent) 0%, transparent 70%)" }}
-          animate={{
-            opacity: [0.05, 0.1, 0.05],
-            scale: [1, 1.1, 1],
-          }}
-          transition={{
-            duration: 4,
-            repeat: Infinity,
-          }}
-        />
-      </div>
+      {/* Ambient glow — desktop only (blur-3xl = 1-2MB GPU texture + repeat:Infinity on mobile) */}
+      {isMobile !== true && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <motion.div
+            className="w-72 h-72 rounded-full blur-3xl"
+            style={{ background: "radial-gradient(circle, var(--accent) 0%, transparent 70%)" }}
+            animate={{
+              opacity: [0.05, 0.1, 0.05],
+              scale: [1, 1.1, 1],
+            }}
+            transition={{
+              duration: 4,
+              repeat: Infinity,
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

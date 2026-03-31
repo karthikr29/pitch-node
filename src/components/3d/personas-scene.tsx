@@ -300,15 +300,17 @@ export default function PersonasScene() {
         </div>
       </motion.div>
 
-      {/* Ambient background glow */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <motion.div
-          className="w-56 h-56 rounded-full blur-3xl"
-          style={{ background: "radial-gradient(circle, var(--primary) 0%, transparent 70%)" }}
-          animate={{ opacity: [0.08, 0.12, 0.08], scale: [1, 1.1, 1] }}
-          transition={{ duration: 4, repeat: Infinity }}
-        />
-      </div>
+      {/* Ambient background glow — desktop only (blur-3xl = 1-2MB GPU texture + repeat:Infinity on mobile) */}
+      {isMobile !== true && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <motion.div
+            className="w-56 h-56 rounded-full blur-3xl"
+            style={{ background: "radial-gradient(circle, var(--primary) 0%, transparent 70%)" }}
+            animate={{ opacity: [0.08, 0.12, 0.08], scale: [1, 1.1, 1] }}
+            transition={{ duration: 4, repeat: Infinity }}
+          />
+        </div>
+      )}
     </div>
   );
 }

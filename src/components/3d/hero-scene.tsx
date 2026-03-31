@@ -2,6 +2,7 @@
 
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { useEffect, useState, useRef } from "react";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 // Represents one participant in the voice conversation
 function VoiceWaveform({
@@ -304,8 +305,148 @@ function ConversationIndicator({ text, side, delay }: { text: string; side: "lef
   );
 }
 
+// Mobile-optimized hero scene — CSS-only animations, zero Framer Motion elements.
+// The full desktop scene has ~55 concurrent JS-thread Framer Motion animations that
+// flood the rAF queue on A17 Pro at 120Hz, congesting TypeAnimation's setTimeout
+// callbacks and causing the typed text to stutter during page load.
+// Uses existing @keyframes voice-pulse from globals.css (transform: scaleY — compositor-safe).
+function MobileHeroScene({
+  isUserSpeaking,
+  isAIProcessing,
+  isAIResponding,
+}: {
+  isUserSpeaking: boolean;
+  isAIProcessing: boolean;
+  isAIResponding: boolean;
+}) {
+  const barCount = 8;
+  return (
+    <div className="w-full h-full flex items-center justify-center relative overflow-hidden">
+      <div className="relative flex flex-col items-center gap-5 pt-6">
+        {/* Main interaction area */}
+        <div className="flex items-center gap-4">
+
+          {/* User side */}
+          <div className="flex flex-col items-center gap-3">
+            {/* Static avatar — no speaking ring, no Framer Motion */}
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{
+                background: "linear-gradient(135deg, var(--secondary), #1a2332)",
+                border: "2px solid var(--border)",
+                boxShadow: isUserSpeaking ? "0 0 12px var(--accent)" : undefined,
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
+              </svg>
+            </div>
+            {/* CSS-animated waveform bars — off JS thread entirely */}
+            <div className="flex items-center gap-[3px]">
+              {Array.from({ length: barCount }).map((_, i) => {
+                const baseH = (Math.sin((i / barCount) * Math.PI) * 0.7 + 0.3) * 12;
+                return (
+                  <div
+                    key={i}
+                    className="rounded-full"
+                    style={{
+                      background: "var(--accent)",
+                      width: "3px",
+                      height: `${baseH}px`,
+                      transformOrigin: "bottom",
+                      animation: isUserSpeaking
+                        ? `voice-pulse ${0.7 + (i % 4) * 0.15}s ease-in-out ${i * 0.06}s infinite`
+                        : undefined,
+                      opacity: isUserSpeaking ? undefined : 0.3,
+                    }}
+                  />
+                );
+              })}
+            </div>
+            <span
+              className="text-xs font-medium"
+              style={{ color: isUserSpeaking ? "var(--accent)" : "var(--text-muted)" }}
+            >
+              You
+            </span>
+          </div>
+
+          {/* Static connection line — no animated particles */}
+          <div className="h-1 w-14 rounded-full bg-border/30 flex-shrink-0" />
+
+          {/* AI side */}
+          <div className="flex flex-col items-center gap-3">
+            {/* Static AI core — no neural nodes, no SVG lines, no pulse ring */}
+            <div
+              className="w-12 h-12 rounded-full flex-shrink-0"
+              style={{
+                background: "linear-gradient(135deg, var(--primary), var(--accent))",
+                boxShadow: isAIResponding ? "0 0 16px var(--primary)" : undefined,
+              }}
+            />
+            {/* CSS-animated waveform bars (reversed) */}
+            <div className="flex items-center gap-[3px] flex-row-reverse">
+              {Array.from({ length: barCount }).map((_, i) => {
+                const baseH = (Math.sin((i / barCount) * Math.PI) * 0.7 + 0.3) * 12;
+                return (
+                  <div
+                    key={i}
+                    className="rounded-full"
+                    style={{
+                      background: "var(--primary)",
+                      width: "3px",
+                      height: `${baseH}px`,
+                      transformOrigin: "bottom",
+                      animation: isAIResponding
+                        ? `voice-pulse ${0.7 + (i % 4) * 0.15}s ease-in-out ${0.1 + i * 0.06}s infinite`
+                        : undefined,
+                      opacity: isAIResponding ? undefined : 0.3,
+                    }}
+                  />
+                );
+              })}
+            </div>
+            <span
+              className="text-xs font-medium"
+              style={{ color: isAIResponding ? "var(--primary)" : "var(--text-muted)" }}
+            >
+              AI Opponent
+            </span>
+          </div>
+        </div>
+
+        {/* Status — Tailwind animate-pulse (CSS) instead of Framer Motion boxShadow */}
+        <div
+          className="flex items-center gap-2 px-4 py-2 rounded-full border"
+          style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+        >
+          <div
+            className="w-2 h-2 rounded-full animate-pulse"
+            style={{
+              background: isUserSpeaking
+                ? "var(--accent)"
+                : isAIResponding
+                  ? "var(--primary)"
+                  : "var(--text-muted)",
+            }}
+          />
+          <span className="text-xs font-medium text-text-secondary">
+            {isUserSpeaking
+              ? "Listening to your pitch..."
+              : isAIProcessing
+                ? "AI analyzing response..."
+                : "AI pushing back..."}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Main Hero Scene Component
 export default function HeroScene() {
+  const isMobile = useIsMobile();
   const [conversationPhase, setConversationPhase] = useState(0);
 
   // Simulate conversation phases: 0 = user speaking, 1 = AI processing, 2 = AI responding
@@ -320,6 +461,19 @@ export default function HeroScene() {
   const isUserSpeaking = conversationPhase === 0;
   const isAIProcessing = conversationPhase === 1;
   const isAIResponding = conversationPhase === 2;
+
+  // On mobile: return CSS-only scene (zero Framer Motion).
+  // ~55 concurrent JS-thread animations at mount flood the rAF queue on A17 Pro,
+  // congesting TypeAnimation's setTimeout callbacks → visible stutter at page load.
+  if (isMobile === true) {
+    return (
+      <MobileHeroScene
+        isUserSpeaking={isUserSpeaking}
+        isAIProcessing={isAIProcessing}
+        isAIResponding={isAIResponding}
+      />
+    );
+  }
 
   return (
     <div className="w-full h-full flex items-center justify-center relative overflow-hidden">

@@ -205,21 +205,23 @@ export default function AnalysisScene() {
         </motion.div>
       </motion.div>
 
-      {/* Ambient glow */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <motion.div
-          className="w-72 h-72 rounded-full blur-3xl"
-          style={{ background: "radial-gradient(circle, var(--primary) 0%, transparent 70%)" }}
-          animate={{
-            opacity: [0.05, 0.1, 0.05],
-            scale: [1, 1.1, 1],
-          }}
-          transition={{
-            duration: 4,
-            repeat: Infinity,
-          }}
-        />
-      </div>
+      {/* Ambient glow — desktop only (blur-3xl = 1-2MB GPU texture + repeat:Infinity on mobile) */}
+      {isMobile !== true && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <motion.div
+            className="w-72 h-72 rounded-full blur-3xl"
+            style={{ background: "radial-gradient(circle, var(--primary) 0%, transparent 70%)" }}
+            animate={{
+              opacity: [0.05, 0.1, 0.05],
+              scale: [1, 1.1, 1],
+            }}
+            transition={{
+              duration: 4,
+              repeat: Infinity,
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

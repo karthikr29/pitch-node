@@ -571,4 +571,12 @@ h6 {
   body::before {
     display: none;
   }
+
+  /* Stop background-position animation on bg-clip-text gradient elements.
+     On iOS Safari, animating background-position on -webkit-background-clip:text
+     forces GPU re-rasterization of the text gradient on every animation frame. */
+  .animate-spectrum-shift {
+    animation: none;
+    background-position: 0% 50%;
+  }
 }

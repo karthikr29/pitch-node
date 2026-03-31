@@ -1,8 +1,39 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useRef } from "react";
 
 export default function FaceAiScene() {
+    // Pre-compute random values once at mount — same fix applied to VoiceWaveform in hero-scene.tsx.
+    // Math.random() inside animate props generates new keyframe values on every React render,
+    // causing Framer Motion to cancel and restart all 16 bar animations from scratch each time.
+    const aiRndRef = useRef<Array<{ height: number; dur: number }> | null>(null);
+    if (aiRndRef.current === null) {
+        aiRndRef.current = Array.from({ length: 8 }, () => ({
+            height: Math.random() * 60,
+            dur: 0.5 + Math.random() * 0.5,
+        }));
+    }
+    const aiRnd = aiRndRef.current;
+
+    const userRndRef = useRef<Array<{ height: number; dur: number }> | null>(null);
+    if (userRndRef.current === null) {
+        userRndRef.current = Array.from({ length: 8 }, () => ({
+            height: Math.random() * 40,
+            dur: 0.8 + Math.random() * 0.5,
+        }));
+    }
+    const userRnd = userRndRef.current;
+
+    const particleRndRef = useRef<Array<{ x: number; y: number }> | null>(null);
+    if (particleRndRef.current === null) {
+        particleRndRef.current = Array.from({ length: 6 }, () => ({
+            x: Math.random() * 200 - 100,
+            y: Math.random() * 100 - 50,
+        }));
+    }
+    const particleRnd = particleRndRef.current;
+
     return (
         <div className="w-full h-full flex items-center justify-center relative overflow-hidden">
             {/* AI Voice (Red/Aggressive) - Right Side */}
@@ -12,11 +43,11 @@ export default function FaceAiScene() {
                         key={`ai-${i}`}
                         className="w-2 rounded-full bg-gradient-to-t from-red-500 to-orange-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
                         animate={{
-                            height: [20, 40 + Math.random() * 60, 20],
+                            height: [20, 40 + aiRnd[i].height, 20],
                             opacity: [0.6, 1, 0.6],
                         }}
                         transition={{
-                            duration: 0.5 + Math.random() * 0.5,
+                            duration: aiRnd[i].dur,
                             repeat: Infinity,
                             repeatType: "mirror",
                             ease: "easeInOut",
@@ -33,11 +64,11 @@ export default function FaceAiScene() {
                         key={`user-${i}`}
                         className="w-2 rounded-full bg-gradient-to-t from-blue-500 to-cyan-500 shadow-[0_0_15px_rgba(59,130,246,0.4)]"
                         animate={{
-                            height: [20, 30 + Math.random() * 40, 20],
+                            height: [20, 30 + userRnd[i].height, 20],
                             opacity: [0.6, 1, 0.6],
                         }}
                         transition={{
-                            duration: 0.8 + Math.random() * 0.5,
+                            duration: userRnd[i].dur,
                             repeat: Infinity,
                             repeatType: "mirror",
                             ease: "easeInOut",
@@ -101,8 +132,8 @@ export default function FaceAiScene() {
                         key={`p-${i}`}
                         className="absolute w-1 h-1 rounded-full bg-white"
                         animate={{
-                            x: range(-100, 100),
-                            y: range(-50, 50),
+                            x: particleRnd[i].x,
+                            y: particleRnd[i].y,
                             opacity: [0, 1, 0],
                         }}
                         transition={{
@@ -115,8 +146,4 @@ export default function FaceAiScene() {
             </div>
         </div>
     );
-}
-
-function range(min: number, max: number) {
-    return Math.random() * (max - min) + min;
 }

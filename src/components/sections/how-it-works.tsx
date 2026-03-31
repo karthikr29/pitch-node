@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useInView } from "framer-motion";
 import { useRef, Suspense, lazy } from "react";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
 import { ArrowRight, Zap, Target, Mic, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui";
@@ -49,6 +50,7 @@ function StepRow({
 }) {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
+  const isMobile = useIsMobile();
 
   const isLeft = step.align === "left";
 
@@ -96,22 +98,24 @@ function StepRow({
         animate={isInView ? { opacity: 1, scale: 1 } : {}}
         transition={{ duration: 0.7, delay: 0.3 }}
       >
-        {/* Frequency rings */}
-        <motion.div
-          className="absolute inset-0 rounded-3xl border-2 border-primary/20"
-          animate={{
-            scale: [1, 1.02, 1],
-            opacity: [0.3, 0.5, 0.3],
-          }}
-          transition={{
-            duration: 3,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
+        {/* Frequency rings — desktop only (repeat:Infinity on mobile adds to JS animation load) */}
+        {isMobile !== true && (
+          <motion.div
+            className="absolute inset-0 rounded-3xl border-2 border-primary/20"
+            animate={{
+              scale: [1, 1.02, 1],
+              opacity: [0.3, 0.5, 0.3],
+            }}
+            transition={{
+              duration: 3,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
+        )}
 
         {/* Scene container with better background */}
-        <div className="relative w-full h-full rounded-2xl overflow-hidden bg-surface dark:bg-surface/50 backdrop-blur-sm border border-border shadow-xl">
+        <div className={cn("relative w-full h-full rounded-2xl overflow-hidden bg-surface dark:bg-surface/50 border border-border shadow-xl", isMobile !== true && "backdrop-blur-sm")}>
           <Suspense
             fallback={
               <div className="w-full h-full flex items-center justify-center">
