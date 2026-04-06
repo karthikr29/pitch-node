@@ -1315,10 +1315,19 @@ async def create_sales_pipeline(
     async def on_first_participant_joined(transport_ref, participant: Any):
         participant_id = getattr(participant, "identity", participant)
         logger.info(f"User {participant_id} joined room {room_name}")
-        greeting = (
-            f"Hello! I'm {persona.get('name', 'your AI prospect')}. "
-            "How can I help you today?"
-        )
+        persona_name = persona.get("name", "your prospect")
+        call_type = scenario.get("call_type", "discovery")
+        _PROSPECT_GREETINGS = {
+            "cold_call":   "Hello?",
+            "discovery":   f"Hi, this is {persona_name}.",
+            "demo":        f"Hi, {persona_name} here — I'm ready when you are.",
+            "pitch":       f"Hi, {persona_name} speaking.",
+            "objection":   f"Hi, {persona_name} here.",
+            "negotiation": f"Hi, {persona_name} here.",
+            "follow_up":   f"Hi, this is {persona_name}.",
+            "closing":     f"Hi, {persona_name} here.",
+        }
+        greeting = _PROSPECT_GREETINGS.get(call_type, f"Hi, {persona_name} speaking.")
         await task.queue_frames([TTSSpeakFrame(text=greeting)])
 
     @transport.event_handler("on_participant_left")

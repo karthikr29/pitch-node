@@ -109,11 +109,11 @@ export function validatePitchBriefing(input: unknown): PitchBriefingValidationRe
 
 export function buildPitchContextFromBriefing(briefing: PitchBriefing): string {
   const lines = [
-    `What we sell: ${briefing.whatYouSell}`,
-    `Target audience: ${briefing.targetAudience}`,
-    `Problem solved: ${briefing.problemSolved}`,
-    `Key value proposition: ${briefing.valueProposition}`,
-    `Call goal: ${briefing.callGoal}`,
+    `What the caller sells: ${briefing.whatYouSell}`,
+    `Their target audience: ${briefing.targetAudience}`,
+    `Problem their product solves: ${briefing.problemSolved}`,
+    `Their value proposition: ${briefing.valueProposition}`,
+    `Their call goal: ${briefing.callGoal}`,
   ];
 
   if (briefing.additionalNotes) {

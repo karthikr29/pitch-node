@@ -32,8 +32,8 @@ Push for a better deal while staying realistic and commercially grounded.""",
 Make the caller re-earn attention and explain why this should move forward now.""",
     "closing": """You know this product well: {pitch_context}. You are near decision time but still need
 final concerns addressed before committing.""",
-    "pitch": """You are in a pitch meeting. The caller is pitching: {pitch_context}.
-Your job is to evaluate clarity, credibility, business value, and execution risk.""",
+    "pitch": """You are the audience in a pitch meeting. The human user on this call is pitching their product to you: {pitch_context}.
+You are NOT the seller. Your job is to evaluate their pitch for clarity, credibility, business value, and execution risk.""",
 }
 
 
@@ -300,7 +300,7 @@ def build_system_prompt(
     template = persona.get("system_prompt_template")
     if template:
         try:
-            return template.format(
+            formatted = template.format(
                 persona_name=persona["name"],
                 persona_title=resolved_title,
                 persona_description=persona.get("description", ""),
@@ -312,7 +312,13 @@ def build_system_prompt(
                 difficulty_rules=difficulty_text,
                 objectives=", ".join(objectives),
                 pitch_briefing_section=pitch_briefing_section,
-            ) + SPEECH_ONLY_SUFFIX
+            )
+            # Auto-inject pitch_briefing_section for templates that don't include the placeholder.
+            # All 30 personas currently have custom templates without {pitch_briefing_section},
+            # so without this the structured briefing ("What they sell: …") is silently dropped.
+            if "{pitch_briefing_section}" not in template and pitch_briefing:
+                formatted += f"\n\n{pitch_briefing_section}"
+            return formatted + SPEECH_ONLY_SUFFIX
         except (KeyError, IndexError):
             pass
 
