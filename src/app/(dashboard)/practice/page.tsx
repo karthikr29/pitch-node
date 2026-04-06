@@ -53,6 +53,7 @@ import {
   AlertCircle,
   RefreshCw,
   ChevronLeft,
+  ChevronDown,
   ArrowRight,
   Lock,
   Radio,
@@ -280,6 +281,8 @@ export default function PracticeLibraryPage() {
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
   const [endSessionError, setEndSessionError] = useState<string | null>(null);
+  const [startingSession, setStartingSession] = useState(false);
+  const [pitchBriefingExpanded, setPitchBriefingExpanded] = useState(true);
 
   const selectedPersona = useMemo(
     () => personas.find((p) => p.id === selectedPersonaId) ?? null,
@@ -299,6 +302,8 @@ export default function PracticeLibraryPage() {
     selectedDifficulty !== null &&
     selectedPersonaId !== null &&
     (!isPitchCall || isPitchBriefingValid);
+
+  const canStartSession = !!selectedRole;
 
   useEffect(() => {
     if (comboboxOpen) {
@@ -366,7 +371,13 @@ export default function PracticeLibraryPage() {
       setResolvedScenarioId(prefill.scenarioId);
       setSelectedPersonaId(prefill.personaId);
       if (prefill.pitchBriefing) setPitchBriefing(prefill.pitchBriefing as unknown as PitchBriefing);
-      if (prefill.inferredRole) setSelectedRole(prefill.inferredRole);
+      // Don't pre-set selectedRole — let triggerRoleInference handle pre-highlighting via preferredRole.
+      // Must pass briefing values explicitly because setPitchBriefing hasn't committed to state yet.
+      triggerRoleInference({
+        whatYouSell:    (prefill.pitchBriefing as PitchBriefing | undefined)?.whatYouSell,
+        targetAudience: (prefill.pitchBriefing as PitchBriefing | undefined)?.targetAudience,
+        preferredRole:  prefill.inferredRole ?? null,
+      });
       setStep("confirm");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
@@ -386,10 +397,16 @@ export default function PracticeLibraryPage() {
     lastInferredPayloadRef.current = "";
   }
 
-  async function triggerRoleInference() {
+  async function triggerRoleInference(overrides?: {
+    whatYouSell?: string;
+    targetAudience?: string;
+    preferredRole?: string | null;
+  }) {
+    const preferredRole = overrides?.preferredRole ?? null;
+
     if (isPitchCall) {
-      const what = pitchBriefing.whatYouSell.trim();
-      const who = pitchBriefing.targetAudience.trim();
+      const what = (overrides?.whatYouSell ?? pitchBriefing.whatYouSell).trim();
+      const who = (overrides?.targetAudience ?? pitchBriefing.targetAudience).trim();
 
       if (!what || !who) {
         setInferredRoles([]);
@@ -421,7 +438,14 @@ export default function PracticeLibraryPage() {
             const data = await res.json();
             if (Array.isArray(data.roles) && data.roles.length > 0) {
               setInferredRoles(data.roles);
-              setSelectedRole(data.roles[0]);
+              if (preferredRole && data.roles.includes(preferredRole)) {
+                setSelectedRole(preferredRole);
+              } else if (preferredRole) {
+                setCustomRoleInput(preferredRole);
+                setSelectedRole(preferredRole);
+              } else {
+                setSelectedRole(data.roles[0]);
+              }
               Sentry.logger.info("practice: role inference succeeded", { rolesCount: data.roles.length });
             }
             succeeded = true;
@@ -500,6 +524,10 @@ export default function PracticeLibraryPage() {
 
   async function handleNext() {
     if (!canProceed) return;
+    if (isPitchCall && !isPitchBriefingValid) {
+      setPitchBriefingExpanded(true);
+      return;
+    }
     setScenarioError(null);
     setResolvingScenario(true);
 
@@ -535,6 +563,7 @@ export default function PracticeLibraryPage() {
       }
 
       setResolvedScenarioId(scenario.id);
+      triggerRoleInference(); // fire-and-forget; pitchBriefing is current in this closure
       setStep("confirm");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
@@ -549,11 +578,11 @@ export default function PracticeLibraryPage() {
   }
 
   function handleStartSession() {
-    if (!resolvedScenarioId || !selectedPersonaId) return;
+    if (!resolvedScenarioId || !selectedPersonaId || !selectedRole) return;
+    setStartingSession(true);
     const persona = personas.find((p) => p.id === selectedPersonaId);
     const personaName = persona?.name || "";
-    const personaTitle = persona?.title || "";
-    const roleForCall = selectedRole || personaTitle;
+    const roleForCall = selectedRole;
 
     if (isPitchCall) {
       sessionStorage.setItem(
@@ -695,6 +724,14 @@ export default function PracticeLibraryPage() {
 
     return (
       <div className="max-w-4xl mx-auto space-y-6 pb-8">
+        {/* Page-level loader: session starting */}
+        {startingSession && (
+          <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+            <p className="text-sm font-medium text-foreground">Starting your session…</p>
+          </div>
+        )}
+
         {/* Back button */}
         <button
           onClick={() => setStep("setup")}
@@ -804,18 +841,6 @@ export default function PracticeLibraryPage() {
                 </div>
               )}
 
-              {/* Buyer Role */}
-              {selectedRole && (
-                <div className="relative pl-5 pr-5 py-3.5 bg-primary/[0.015]">
-                  <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-primary/40" />
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    Target role
-                  </p>
-                  <p className="text-sm text-foreground mt-0.5 leading-snug">
-                    {selectedRole}
-                  </p>
-                </div>
-              )}
             </CardContent>
           </Card>
 
@@ -880,8 +905,120 @@ export default function PracticeLibraryPage() {
           </Card>
         </div>
 
+        {/* ── Target Buyer Role ──────────────────────────────── */}
+        <Card className="border-border bg-card overflow-hidden">
+          {/* Header strip */}
+          <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border bg-muted/20">
+            <UserCheck className="w-3.5 h-3.5 text-primary shrink-0" />
+            <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground">
+              Target Buyer Role
+            </span>
+            <span className="ml-auto text-[10px] font-semibold uppercase tracking-widest text-primary/80">
+              Required
+            </span>
+          </div>
+
+          <CardContent className="p-5">
+            {/* State 1: Loading */}
+            {inferringRole && (
+              <div className="flex items-center gap-2.5 text-sm text-muted-foreground py-1">
+                <Loader2 className="w-4 h-4 animate-spin shrink-0 text-primary" />
+                <span>Identifying your buyer…</span>
+              </div>
+            )}
+
+            {/* State 2: Error — show retry AND manual input so user is never stuck */}
+            {!inferringRole && inferRoleError && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm text-destructive">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>Couldn&apos;t identify buyer role.</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={retryInferRole}
+                    className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Try again
+                  </button>
+                  <span className="text-xs text-muted-foreground">or enter manually</span>
+                  <Input
+                    placeholder="e.g., VP of Sales, CTO…"
+                    value={customRoleInput}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomRoleInput(val);
+                      setSelectedRole(val.trim() || null);
+                    }}
+                    className="h-8 text-sm max-w-[260px]"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* State 3: Roles returned — pills + custom input */}
+            {!inferringRole && !inferRoleError && inferredRoles.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-primary shrink-0" />
+                  Who will you be pitching to? Select a role or enter your own.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {inferredRoles.map((role) => (
+                    <button
+                      key={role}
+                      type="button"
+                      onClick={() => { setSelectedRole(role); setCustomRoleInput(""); }}
+                      className={cn(
+                        "px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all",
+                        selectedRole === role && !customRoleInput
+                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                          : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground bg-background"
+                      )}
+                    >
+                      {role}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground shrink-0 font-medium">or</span>
+                  <Input
+                    placeholder="Enter your own role…"
+                    value={customRoleInput}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomRoleInput(val);
+                      setSelectedRole(val.trim() || null);
+                    }}
+                    className="h-8 text-sm max-w-[260px]"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* State 4: Fallback — no roles, no error, not loading */}
+            {!inferringRole && !inferRoleError && inferredRoles.length === 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">Enter the role of your target buyer.</p>
+                <Input
+                  placeholder="e.g., VP of Sales, CTO, Head of Marketing…"
+                  value={customRoleInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCustomRoleInput(val);
+                    setSelectedRole(val.trim() || null);
+                  }}
+                  className="h-9 text-sm max-w-[320px]"
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* ── Start Session button ────────────────────────────── */}
-        <Button size="lg" onClick={handleStartSession} className="w-full group">
+        <Button size="lg" onClick={handleStartSession} disabled={!canStartSession} className="w-full group">
           Start Session
           <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
         </Button>
@@ -892,6 +1029,14 @@ export default function PracticeLibraryPage() {
   // Setup step
   return (
     <div className="space-y-6 pb-8">
+      {/* Page-level loader: scenario resolution */}
+      {resolvingScenario && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="text-sm font-medium text-foreground">Finding your scenario…</p>
+        </div>
+      )}
+
       <div>
         <h2 className="text-2xl font-display font-bold text-foreground tracking-tight">
           Practice Library
@@ -966,7 +1111,7 @@ export default function PracticeLibraryPage() {
       {/* Section 2: Difficulty */}
       <div className="space-y-3">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          Difficulty
+          Select your difficulty
         </h3>
         <div className="flex flex-wrap gap-2">
           {difficultyOptions.map((opt) => {
@@ -989,25 +1134,37 @@ export default function PracticeLibraryPage() {
         </div>
       </div>
 
-      {/* Section 3: Questionnaire + Persona */}
+      {/* Section 3: Questionnaire + Persona — only shown after difficulty is selected */}
+      {selectedDifficulty !== null && (
       <div className="space-y-6 animate-in fade-in slide-in-from-top-1 duration-300">
         {/* Questionnaire */}
         {isPitchCall ? (
           <div className="rounded-xl border border-border bg-card/40 overflow-hidden">
             {/* Card header */}
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
+            <button
+              type="button"
+              onClick={() => setPitchBriefingExpanded((prev) => !prev)}
+              className="w-full flex items-center gap-3 px-5 py-4 border-b border-border hover:bg-muted/20 transition-colors text-left"
+            >
               <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-primary/10 shrink-0">
                 <MessageSquareText className="w-4 h-4 text-primary" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-semibold text-foreground">Pitch Briefing</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Fill all required fields so the AI can challenge your real pitch.
                 </p>
               </div>
-            </div>
+              <ChevronDown
+                className={cn(
+                  "w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200",
+                  pitchBriefingExpanded ? "rotate-0" : "-rotate-90"
+                )}
+              />
+            </button>
 
             {/* Card body */}
+            {pitchBriefingExpanded && (
             <div className="p-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -1017,7 +1174,6 @@ export default function PracticeLibraryPage() {
                   <Input
                     value={pitchBriefing.whatYouSell}
                     onChange={(e) => setPitchBriefing((prev) => ({ ...prev, whatYouSell: e.target.value.slice(0, 500) }))}
-                    onBlur={triggerRoleInference}
                     placeholder="e.g., AI outbound assistant for sales teams"
                   />
                 </div>
@@ -1028,7 +1184,6 @@ export default function PracticeLibraryPage() {
                   <Input
                     value={pitchBriefing.targetAudience}
                     onChange={(e) => setPitchBriefing((prev) => ({ ...prev, targetAudience: e.target.value.slice(0, 500) }))}
-                    onBlur={triggerRoleInference}
                     placeholder="e.g., B2B SaaS companies, 50–500 employees"
                   />
                 </div>
@@ -1086,6 +1241,7 @@ export default function PracticeLibraryPage() {
                 <p className="text-xs text-muted-foreground">Fields marked * are required.</p>
               </div>
             </div>
+            )}
           </div>
         ) : (
           <div className="rounded-xl border border-border bg-card/40 overflow-hidden">
@@ -1109,7 +1265,6 @@ export default function PracticeLibraryPage() {
                   placeholder={pitchHelperText[selectedCallType.replace("-", "_")] || pitchHelperText.discovery}
                   value={pitchContext}
                   onChange={(e) => setPitchContext(e.target.value.slice(0, 500))}
-                  onBlur={triggerRoleInference}
                   rows={3}
                   className="resize-none"
                 />
@@ -1122,73 +1277,6 @@ export default function PracticeLibraryPage() {
         )}
 
         {/* Buyer Role Inference */}
-        {(inferringRole || inferredRoles.length > 0 || inferRoleError) && (
-          <div className="space-y-2.5">
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              {inferringRole ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                  Identifying your buyer...
-                </>
-              ) : inferRoleError ? (
-                <>
-                  <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
-                  <span className="text-destructive">Couldn&apos;t identify buyer role.</span>
-                </>
-              ) : (
-                <>
-                  <UserCheck className="w-4 h-4 text-primary shrink-0" />
-                  Who will you be pitching to?
-                </>
-              )}
-            </p>
-            {!inferringRole && inferRoleError && (
-              <button
-                type="button"
-                onClick={retryInferRole}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Try again
-              </button>
-            )}
-            {!inferringRole && inferredRoles.length > 0 && (
-              <div className="space-y-2.5">
-                <div className="flex flex-wrap gap-2">
-                  {inferredRoles.map((role) => (
-                    <button
-                      key={role}
-                      type="button"
-                      onClick={() => { setSelectedRole(role); setCustomRoleInput(""); }}
-                      className={cn(
-                        "px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all",
-                        selectedRole === role && !customRoleInput
-                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                          : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground bg-background"
-                      )}
-                    >
-                      {role}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground shrink-0 font-medium">or</span>
-                  <Input
-                    placeholder="Enter your own role…"
-                    value={customRoleInput}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setCustomRoleInput(val);
-                      setSelectedRole(val.trim() || null);
-                    }}
-                    className="h-8 text-sm max-w-[260px]"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Persona Selector */}
         <div className="rounded-xl border border-border bg-card/40 overflow-hidden">
           {/* Card header */}
@@ -1338,11 +1426,12 @@ export default function PracticeLibraryPage() {
             disabled={!canProceed || resolvingScenario}
             className="ml-auto group"
           >
-            {resolvingScenario ? "Resolving..." : "Next"}
+            Next
             <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
           </Button>
         </div>
       </div>
+      )}{/* end selectedDifficulty conditional */}
         </div>{/* end right panel */}
       </div>{/* end flex wrapper */}
     </div>
