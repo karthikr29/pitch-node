@@ -54,33 +54,39 @@ export async function POST(request: NextRequest) {
     .single();
 
   const planType = profile?.plan_type ?? "free";
-  const admin = createAdminClient();
   let maxDurationSeconds: number;
 
-  if (planType === "pro") {
-    const credits = await getOrCreatePerformerMonthlyCredits(admin, user.id);
-    if (credits.creditsRemaining <= 0) {
-      return NextResponse.json(
-        {
-          error: "No credits remaining. Your credits reset at the start of next month.",
-          code: "NO_CREDITS",
-        },
-        { status: 402 }
-      );
+  try {
+    const admin = createAdminClient();
+
+    if (planType === "pro") {
+      const credits = await getOrCreatePerformerMonthlyCredits(admin, user.id);
+      if (credits.creditsRemaining <= 0) {
+        return NextResponse.json(
+          {
+            error: "No credits remaining. Your credits reset at the start of next month.",
+            code: "NO_CREDITS",
+          },
+          { status: 402 }
+        );
+      }
+      maxDurationSeconds = credits.creditsRemaining;
+    } else {
+      const credits = await getOrCreateFreeLifetimeCredits(admin, user.id);
+      if (credits.creditsRemaining <= 0) {
+        return NextResponse.json(
+          {
+            error: "No credits remaining. Upgrade to continue practising.",
+            code: "NO_CREDITS",
+          },
+          { status: 402 }
+        );
+      }
+      maxDurationSeconds = credits.creditsRemaining;
     }
-    maxDurationSeconds = credits.creditsRemaining;
-  } else {
-    const credits = await getOrCreateFreeLifetimeCredits(admin, user.id);
-    if (credits.creditsRemaining <= 0) {
-      return NextResponse.json(
-        {
-          error: "No credits remaining. Upgrade to continue practising.",
-          code: "NO_CREDITS",
-        },
-        { status: 402 }
-      );
-    }
-    maxDurationSeconds = credits.creditsRemaining;
+  } catch (error) {
+    Sentry.captureException(error, { tags: { route: "voice/create-room", phase: "credits-check" } });
+    return NextResponse.json({ error: "Service misconfigured" }, { status: 500 });
   }
 
   const { data: scenario, error: scenarioError } = await supabase

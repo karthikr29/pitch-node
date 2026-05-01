@@ -69,20 +69,25 @@ export async function POST(request: NextRequest) {
   }
 
   const endedAt = new Date().toISOString();
-  const admin = createAdminClient();
-  const completed = await completeSessionWithCredits(admin, sessionId, endedAt);
+  try {
+    const admin = createAdminClient();
+    const completed = await completeSessionWithCredits(admin, sessionId, endedAt);
 
-  Sentry.logger.info("voice/end-session: session marked completed", {
-    userId: user.id,
-    sessionId,
-    durationSeconds: completed.durationSeconds,
-    creditsChargedSeconds: completed.creditsChargedSeconds,
-    alreadyCharged: completed.alreadyCharged,
-  });
-  return NextResponse.json({
-    sessionId,
-    duration: completed.durationSeconds,
-    creditsCharged: completed.creditsChargedSeconds,
-    alreadyCharged: completed.alreadyCharged,
-  });
+    Sentry.logger.info("voice/end-session: session marked completed", {
+      userId: user.id,
+      sessionId,
+      durationSeconds: completed.durationSeconds,
+      creditsChargedSeconds: completed.creditsChargedSeconds,
+      alreadyCharged: completed.alreadyCharged,
+    });
+    return NextResponse.json({
+      sessionId,
+      duration: completed.durationSeconds,
+      creditsCharged: completed.creditsChargedSeconds,
+      alreadyCharged: completed.alreadyCharged,
+    });
+  } catch (error) {
+    Sentry.captureException(error, { tags: { route: "voice/end-session", phase: "credit-charging" } });
+    return NextResponse.json({ error: "Failed to complete session" }, { status: 500 });
+  }
 }

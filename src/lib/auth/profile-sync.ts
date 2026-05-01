@@ -25,41 +25,42 @@ export function getAvatarUrlFromAuth(user: User) {
 }
 
 export async function syncUserProfileFromAuth(user: User) {
-  const supabase = createAdminClient();
-  const fullName = getDisplayNameFromAuth(user);
-  const avatarUrl = getAvatarUrlFromAuth(user);
-  const { data: existingProfile, error: selectError } = await supabase
-    .from("profiles")
-    .select("full_name")
-    .eq("id", user.id)
-    .maybeSingle();
+  try {
+    const supabase = createAdminClient();
+    const fullName = getDisplayNameFromAuth(user);
+    const avatarUrl = getAvatarUrlFromAuth(user);
+    const { data: existingProfile, error: selectError } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .maybeSingle();
 
-  if (selectError) {
-    throw selectError;
-  }
+    if (selectError) throw selectError;
 
-  const profile: {
-    id: string;
-    email: string;
-    full_name: string | null;
-    avatar_url?: string;
-    updated_at: string;
-  } = {
-    id: user.id,
-    email: user.email ?? "",
-    full_name: existingProfile?.full_name ?? fullName,
-    updated_at: new Date().toISOString(),
-  };
+    const profile: {
+      id: string;
+      email: string;
+      full_name: string | null;
+      avatar_url?: string;
+      updated_at: string;
+    } = {
+      id: user.id,
+      email: user.email ?? "",
+      full_name: existingProfile?.full_name ?? fullName,
+      updated_at: new Date().toISOString(),
+    };
 
-  if (avatarUrl) {
-    profile.avatar_url = avatarUrl;
-  }
+    if (avatarUrl) {
+      profile.avatar_url = avatarUrl;
+    }
 
-  const { error } = await supabase
-    .from("profiles")
-    .upsert(profile, { onConflict: "id" });
+    const { error } = await supabase
+      .from("profiles")
+      .upsert(profile, { onConflict: "id" });
 
-  if (error) {
-    throw error;
+    if (error) throw error;
+  } catch {
+    // Profile sync is best-effort — a missing service key or transient DB error
+    // must not break sign-in or subscription reads that call this function.
   }
 }
