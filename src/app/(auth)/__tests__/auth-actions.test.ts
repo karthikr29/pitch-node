@@ -9,6 +9,7 @@ const mockGetUser = vi.fn();
 const mockRevalidatePath = vi.fn();
 const mockRedirect = vi.fn();
 const mockCaptureException = vi.fn();
+const mockSyncUserProfileFromAuth = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
@@ -21,6 +22,10 @@ vi.mock("@/lib/supabase/server", () => ({
       getUser: (...args: unknown[]) => mockGetUser(...args),
     },
   }),
+}));
+
+vi.mock("@/lib/auth/profile-sync", () => ({
+  syncUserProfileFromAuth: (...args: unknown[]) => mockSyncUserProfileFromAuth(...args),
 }));
 
 vi.mock("@sentry/nextjs", () => ({
@@ -43,6 +48,8 @@ describe("Auth Server Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NEXT_PUBLIC_SITE_URL = "https://staging.convosparr.com";
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    mockSyncUserProfileFromAuth.mockResolvedValue(undefined);
   });
 
   describe("signIn", () => {

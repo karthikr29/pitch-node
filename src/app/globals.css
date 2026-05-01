@@ -648,6 +648,15 @@ h6 {
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* Radix Accordion smooth height transition */
+.accordion-content {
+  height: var(--radix-accordion-content-height);
+  transition: height 200ms ease;
+}
+.accordion-content[data-state="closed"] {
+  height: 0;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -25,6 +25,7 @@ class LiveKitService:
         self._session_rooms: dict[str, str] = {}  # session_id -> room_name
         self._session_states: dict[str, dict[str, Any]] = {}
         self._auto_end_fallbacks: dict[str, asyncio.Task] = {}
+        self._time_limit_tasks: dict[str, asyncio.Task] = {}
         self._finalized_auto_end_sessions: set[str] = set()
         self._supabase_service = SupabaseService()
 
@@ -164,11 +165,54 @@ class LiveKitService:
             with suppress(asyncio.CancelledError):
                 await task
 
+    async def _cancel_time_limit(self, session_id: str):
+        task = self._time_limit_tasks.pop(session_id, None)
+        if task and not task.done():
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+
+    def schedule_connected_time_limit(self, session_id: str, max_duration_seconds: int | None):
+        """Start credit time-limit enforcement after the browser-connected signal."""
+        if not max_duration_seconds or max_duration_seconds <= 0:
+            return
+
+        existing = self._time_limit_tasks.get(session_id)
+        if existing and not existing.done():
+            return
+
+        async def enforce_after_connected_duration():
+            try:
+                await asyncio.sleep(max_duration_seconds)
+                reason = {"type": "time_limit", "max_seconds": max_duration_seconds}
+                logger.info(
+                    "Connected-call time limit reached for session {} after {}s",
+                    session_id,
+                    max_duration_seconds,
+                )
+                self._schedule_auto_end_fallback(session_id, reason)
+            except asyncio.CancelledError:
+                raise
+            finally:
+                tracked = self._time_limit_tasks.get(session_id)
+                if tracked is asyncio.current_task():
+                    self._time_limit_tasks.pop(session_id, None)
+
+        logger.info(
+            "Scheduling connected-call time limit for session {}: {}s",
+            session_id,
+            max_duration_seconds,
+        )
+        self._time_limit_tasks[session_id] = asyncio.create_task(
+            enforce_after_connected_duration()
+        )
+
     async def _finalize_auto_completed_session(self, session_id: str, end_reason: Any):
         if session_id in self._finalized_auto_end_sessions:
             return
 
         self._finalized_auto_end_sessions.add(session_id)
+        await self._cancel_time_limit(session_id)
         self._set_session_state(
             session_id,
             phase="ending",
@@ -194,6 +238,7 @@ class LiveKitService:
 
         if pipeline_task.cancelled():
             await self._cancel_auto_end_fallback(session_id)
+            await self._cancel_time_limit(session_id)
             logger.info(f"Pipeline task cancelled for session {session_id}")
             return
 
@@ -201,6 +246,7 @@ class LiveKitService:
             result = pipeline_task.result() or {}
         except Exception as e:
             await self._cancel_auto_end_fallback(session_id)
+            await self._cancel_time_limit(session_id)
             logger.error(f"Pipeline task failed for session {session_id}: {e}")
             await self._delete_room_for_session(session_id)
             self._set_session_state(
@@ -278,6 +324,7 @@ class LiveKitService:
     async def stop_pipeline(self, session_id: str):
         """Stop the pipeline for a session and delete the LiveKit room."""
         await self._cancel_auto_end_fallback(session_id)
+        await self._cancel_time_limit(session_id)
         task = self._active_pipelines.pop(session_id, None)
         if task and not task.done():
             task.cancel()

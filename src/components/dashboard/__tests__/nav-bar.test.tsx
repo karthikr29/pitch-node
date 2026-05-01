@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@/test/utils";
+import type React from "react";
+import {
+  fireEvent,
+  render,
+  screen,
+  setMockUser,
+  setMockUserPlan,
+  setMockUserProfile,
+} from "@/test/utils";
 import { NavBar } from "../nav-bar";
 
 // Override usePathname for specific tests
@@ -34,9 +42,44 @@ vi.mock("@/components/layout/theme-toggle", () => ({
   ThemeToggle: () => <button data-testid="theme-toggle">Theme</button>,
 }));
 
+vi.mock("@/components/ui/avatar", () => ({
+  Avatar: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  AvatarImage: (props: React.ImgHTMLAttributes<HTMLImageElement>) => (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img {...props} data-testid="user-avatar-image" />
+  ),
+  AvatarFallback: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+}));
+
 describe("NavBar", () => {
   beforeEach(() => {
     mockPathname.mockReturnValue("/dashboard");
+    setMockUser({
+      id: "user-1",
+      email: "test@example.com",
+      user_metadata: { full_name: "Fallback User" },
+    });
+    setMockUserProfile({
+      email: "test@example.com",
+      fullName: "Profile User",
+      avatarUrl: "https://lh3.googleusercontent.com/avatar.png",
+      age: null,
+      gender: null,
+      phone: null,
+      company: null,
+      jobTitle: null,
+      country: null,
+      timezone: null,
+      planType: "free",
+      subscriptionStatus: "active",
+    });
+    setMockUserPlan({
+      type: "free",
+      creditsRemaining: 600,
+      creditsLimit: 600,
+      creditsScope: "lifetime",
+      periodEnd: null,
+    });
   });
 
   it("renders the ConvoSparr logo text", () => {
@@ -62,9 +105,30 @@ describe("NavBar", () => {
     expect(hrefs).toContain("/analytics");
   });
 
-  it("renders theme toggle", () => {
+  it("does not render the theme toggle as a standalone header control", () => {
     render(<NavBar />);
+    expect(screen.queryByTestId("theme-toggle")).not.toBeInTheDocument();
+  });
+
+  it("renders credits beside the user menu without a plan name", () => {
+    render(<NavBar />);
+    expect(screen.getByText("600 credits")).toBeInTheDocument();
+    expect(screen.queryByText("Warm Up")).not.toBeInTheDocument();
+    expect(screen.queryByText("Performer")).not.toBeInTheDocument();
+  });
+
+  it("renders the theme toggle inside the user dropdown", async () => {
+    render(<NavBar />);
+    fireEvent.pointerDown(screen.getByRole("button", { name: /Profile User/i }));
+
+    expect((await screen.findAllByText("Theme")).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByTestId("theme-toggle")).toBeInTheDocument();
+  });
+
+  it("uses the profile-backed avatar image when available", () => {
+    render(<NavBar />);
+    const avatar = screen.getByAltText("Profile User");
+    expect(avatar).toHaveAttribute("src", "https://lh3.googleusercontent.com/avatar.png");
   });
 
   it("renders mobile hamburger button", () => {

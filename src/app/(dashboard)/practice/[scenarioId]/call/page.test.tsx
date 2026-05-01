@@ -6,6 +6,7 @@ const pushMock = vi.fn();
 const backMock = vi.fn();
 const disconnectMock = vi.fn().mockResolvedValue(undefined);
 const setMicrophoneEnabledMock = vi.fn().mockResolvedValue(undefined);
+const refreshPlanMock = vi.fn().mockResolvedValue(undefined);
 
 let mockConnectionState = "connected";
 let liveKitCallbacks: {
@@ -19,6 +20,7 @@ let sessionStatePayload = {
   endReason: null,
   requestedAt: null,
 };
+let endSessionShouldFail = false;
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -66,6 +68,19 @@ vi.mock("@/components/ui/starry-background", () => ({
 vi.mock("@/lib/validators", () => ({
   buildPitchContextFromBriefing: () => "",
   validatePitchBriefing: () => ({ valid: false, value: null }),
+}));
+
+vi.mock("@/contexts/auth-context", () => ({
+  useAuth: () => ({
+    userPlan: {
+      type: "pro",
+      creditsRemaining: 30000,
+      creditsLimit: 30000,
+      creditsScope: "monthly",
+      periodEnd: null,
+    },
+    refreshPlan: refreshPlanMock,
+  }),
 }));
 
 vi.mock("livekit-client", () => ({
@@ -124,6 +139,7 @@ describe("CallRoomPage auto-end behavior", () => {
     vi.useFakeTimers();
     mockConnectionState = "connected";
     liveKitCallbacks = {};
+    endSessionShouldFail = false;
     sessionStatePayload = {
       sessionId: "session-1",
       phase: "active",
@@ -145,6 +161,7 @@ describe("CallRoomPage auto-end behavior", () => {
                 roomName: "room-1",
                 livekitUrl: "wss://livekit.test",
                 sessionId: "session-1",
+                maxDurationSeconds: 30000,
               }),
           });
         }
@@ -169,6 +186,14 @@ describe("CallRoomPage auto-end behavior", () => {
         }
 
         if (url === "/api/voice/end-session") {
+          if (endSessionShouldFail) {
+            return Promise.resolve({
+              ok: false,
+              status: 500,
+              text: () => Promise.resolve("failed"),
+            });
+          }
+
           return Promise.resolve({
             ok: true,
             json: () => Promise.resolve({ sessionId: "session-1", duration: 30 }),
@@ -241,7 +266,16 @@ describe("CallRoomPage auto-end behavior", () => {
     expect(sessionConnectedCalls).toHaveLength(1);
   });
 
-  it("navigates once on remote disconnect after auto-end begins and skips manual end-session", async () => {
+  it("shows elapsed call duration without rendering remaining-credit minutes", async () => {
+    render(<CallRoomPage />);
+
+    await settleCallPage();
+
+    expect(screen.getByText("0:00")).toBeInTheDocument();
+    expect(screen.queryByText(/m left/i)).not.toBeInTheDocument();
+  });
+
+  it("navigates once on remote disconnect after auto-end begins and skips duplicate end-session", async () => {
     const fetchMock = vi.mocked(fetch);
     sessionStatePayload = {
       ...sessionStatePayload,
@@ -267,6 +301,7 @@ describe("CallRoomPage auto-end behavior", () => {
     await act(async () => {
       vi.advanceTimersByTime(3000);
     });
+    await settleCallPage();
 
     expect(pushMock).toHaveBeenCalledWith("/history/session-1");
     expect(pushMock).toHaveBeenCalledTimes(1);
@@ -274,9 +309,10 @@ describe("CallRoomPage auto-end behavior", () => {
       ([input]) => String(input) === "/api/voice/end-session"
     );
     expect(endSessionCalls).toHaveLength(0);
+    expect(refreshPlanMock).toHaveBeenCalledTimes(1);
   });
 
-  it("uses client fallback navigation when auto-end disconnect does not arrive", async () => {
+  it("uses client fallback completion when auto-end disconnect does not arrive", async () => {
     const fetchMock = vi.mocked(fetch);
     sessionStatePayload = {
       ...sessionStatePayload,
@@ -298,15 +334,17 @@ describe("CallRoomPage auto-end behavior", () => {
     await act(async () => {
       vi.advanceTimersByTime(2500);
     });
+    await settleCallPage();
 
     expect(pushMock).toHaveBeenCalledWith("/history/session-1");
     const endSessionCalls = fetchMock.mock.calls.filter(
       ([input]) => String(input) === "/api/voice/end-session"
     );
-    expect(endSessionCalls).toHaveLength(0);
+    expect(endSessionCalls).toHaveLength(1);
+    expect(refreshPlanMock).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps manual end-session behavior unchanged", async () => {
+  it("completes manual end-session in the background and navigates immediately", async () => {
     const fetchMock = vi.mocked(fetch);
 
     render(<CallRoomPage />);
@@ -326,5 +364,52 @@ describe("CallRoomPage auto-end behavior", () => {
       ([input]) => String(input) === "/api/voice/end-session"
     );
     expect(endSessionCalls).toHaveLength(1);
+    expect(refreshPlanMock).toHaveBeenCalledTimes(1);
+    expect(pushMock.mock.invocationCallOrder[0]).toBeLessThan(
+      refreshPlanMock.mock.invocationCallOrder[0]
+    );
+  });
+
+  it("still navigates when end-session fails and does not refresh stale credits", async () => {
+    const fetchMock = vi.mocked(fetch);
+    endSessionShouldFail = true;
+
+    render(<CallRoomPage />);
+
+    await settleCallPage();
+
+    const buttons = screen.getAllByRole("button");
+    await act(async () => {
+      fireEvent.click(buttons[1]);
+    });
+    await settleCallPage();
+
+    expect(pushMock).toHaveBeenCalledWith("/history/session-1");
+    const endSessionCalls = fetchMock.mock.calls.filter(
+      ([input]) => String(input) === "/api/voice/end-session"
+    );
+    expect(endSessionCalls).toHaveLength(1);
+    expect(refreshPlanMock).not.toHaveBeenCalled();
+  });
+
+  it("guards duplicate disconnect events from double completion", async () => {
+    const fetchMock = vi.mocked(fetch);
+
+    render(<CallRoomPage />);
+
+    await settleCallPage();
+
+    await act(async () => {
+      liveKitCallbacks.onDisconnected?.();
+      liveKitCallbacks.onDisconnected?.();
+    });
+    await settleCallPage();
+
+    expect(pushMock).toHaveBeenCalledWith("/history/session-1");
+    const endSessionCalls = fetchMock.mock.calls.filter(
+      ([input]) => String(input) === "/api/voice/end-session"
+    );
+    expect(endSessionCalls).toHaveLength(1);
+    expect(pushMock).toHaveBeenCalledTimes(1);
   });
 });

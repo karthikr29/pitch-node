@@ -69,46 +69,23 @@ class SupabaseService:
             logger.error(f"Failed to save analytics for session {session_id}: {e}")
 
     async def complete_session(self, session_id: str):
-        """Mark a session completed and compute duration from started_at."""
+        """Mark a session completed and charge credits through the database RPC."""
         try:
-            result = (
-                self.client.table("sessions")
-                .select("started_at,status")
-                .eq("id", session_id)
-                .single()
-                .execute()
-            )
-            session = result.data or {}
-
-            if session.get("status") in ("completed", "abandoned"):
-                logger.warning(f"Session {session_id} already in terminal state, skipping update")
-                return
-
-            ended_at_dt = datetime.now(timezone.utc)
-            ended_at = ended_at_dt.isoformat()
-
-            duration_seconds = 0
-            started_at = session.get("started_at")
-            if started_at:
-                try:
-                    started_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-                    duration_seconds = max(
-                        0, int((ended_at_dt - started_dt).total_seconds())
-                    )
-                except Exception:
-                    duration_seconds = 0
-
-            (
-                self.client.table("sessions")
-                .update(
-                    {
-                        "status": "completed",
-                        "ended_at": ended_at,
-                        "duration_seconds": duration_seconds,
-                    }
-                )
-                .eq("id", session_id)
-                .execute()
+            ended_at = datetime.now(timezone.utc).isoformat()
+            result = self.client.rpc(
+                "complete_session_with_credits",
+                {
+                    "p_session_id": session_id,
+                    "p_ended_at": ended_at,
+                },
+            ).execute()
+            completed = result.data[0] if result.data else {}
+            logger.info(
+                "Completed session {} duration={} charged={} already_charged={}",
+                session_id,
+                completed.get("duration_seconds"),
+                completed.get("credits_charged_seconds"),
+                completed.get("already_charged"),
             )
         except Exception as e:
             logger.error(f"Failed to mark session {session_id} completed: {e}")

@@ -216,14 +216,14 @@ class AIResponseCollector(FrameProcessor):
         self,
         session_id: str,
         buffer: list[dict],
-        start_time: float,
+        start_time: float | None = None,
         on_auto_end: Callable[[dict[str, Any]], None] | None = None,
     ):
         super().__init__()
         self._session_id = session_id
         self._buffer = buffer
         self._on_auto_end = on_auto_end
-        self._start_time = start_time
+        self._start_time = start_time if start_time is not None else asyncio.get_event_loop().time()
         self._ai_text_buffer = ""
         self._task: PipelineTask | None = None
         self._auto_end_triggered = False
@@ -1314,7 +1314,12 @@ async def create_sales_pipeline(
     @transport.event_handler("on_first_participant_joined")
     async def on_first_participant_joined(transport_ref, participant: Any):
         participant_id = getattr(participant, "identity", participant)
-        logger.info(f"User {participant_id} joined room {room_name}")
+        logger.info(
+            "first_participant_detected session={} room={} participant={}",
+            session_id,
+            room_name,
+            participant_id,
+        )
         persona_name = persona.get("name", "your prospect")
         call_type = scenario.get("call_type", "discovery")
         _PROSPECT_GREETINGS = {
@@ -1328,11 +1333,21 @@ async def create_sales_pipeline(
             "closing":     f"Hi, {persona_name} here.",
         }
         greeting = _PROSPECT_GREETINGS.get(call_type, f"Hi, {persona_name} speaking.")
+        logger.info(
+            "greeting_queued session={} room={} call_type={}",
+            session_id,
+            room_name,
+            call_type,
+        )
         await task.queue_frames([TTSSpeakFrame(text=greeting)])
 
     @transport.event_handler("on_participant_left")
     async def on_participant_left(transport_ref, participant_id: str, reason: str):
         logger.info(f"Participant {participant_id} left room {room_name}. Reason: {reason}")
+
+    @transport.event_handler("on_connected")
+    async def on_transport_connected(transport_ref):
+        logger.info("bot_connected session={} room={}", session_id, room_name)
 
     @stt.event_handler("on_connected")
     async def on_stt_connected(stt_ref, *args, **kwargs):
@@ -1351,6 +1366,7 @@ async def create_sales_pipeline(
             await _flush_buffers(session_id, transcript_buffer)
 
     flush_task = asyncio.create_task(flush_buffers())
+
     runner = PipelineRunner()
 
     try:

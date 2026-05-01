@@ -29,6 +29,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  Zap,
 } from "lucide-react";
 
 const navItems = [
@@ -50,12 +51,19 @@ function getInitials(name: string | undefined): string {
 
 export function NavBar() {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, userProfile, userPlan, planError } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const displayName =
+    userProfile?.fullName ||
     user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User";
-  const avatarUrl = user?.user_metadata?.avatar_url;
+  const avatarUrl =
+    userProfile?.avatarUrl ||
+    user?.user_metadata?.avatar_url ||
+    user?.user_metadata?.picture;
+  const email = userProfile?.email || user?.email;
+  const creditsRemaining = userPlan?.creditsRemaining ?? null;
+  const creditsLow = creditsRemaining !== null && creditsRemaining <= 60;
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -109,11 +117,30 @@ export function NavBar() {
           })}
         </nav>
 
-        {/* Right: Theme + Avatar + Mobile menu */}
+        {/* Right: Avatar + Mobile menu */}
         <div className="flex items-center gap-2">
-          <ThemeToggle />
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className={cn(
+              "h-8 gap-1.5 rounded-full px-2.5 text-xs font-semibold",
+              creditsLow && "border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+            )}
+          >
+            <Link href="/settings?section=plan">
+              <Zap className="w-3.5 h-3.5" />
+              <span>
+                {creditsRemaining !== null
+                  ? `${creditsRemaining} credits`
+                  : planError
+                    ? "Credits unavailable"
+                    : "Credits"}
+              </span>
+            </Link>
+          </Button>
 
-          {/* Avatar dropdown (desktop) */}
+          {/* Avatar dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 rounded-full px-2 py-1.5 hover:bg-muted transition-colors cursor-pointer">
@@ -133,9 +160,14 @@ export function NavBar() {
               <DropdownMenuLabel className="font-normal">
                 <p className="text-sm font-medium">{displayName}</p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {user?.email}
+                  {email}
                 </p>
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <div className="flex items-center justify-between gap-3 px-2 py-1.5 text-sm">
+                <span className="text-muted-foreground">Theme</span>
+                <ThemeToggle />
+              </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/settings" className="cursor-pointer">

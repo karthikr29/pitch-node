@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { completeSessionWithCredits } from "@/lib/credits";
 import * as Sentry from "@sentry/nextjs";
 
 export async function POST(request: NextRequest) {
@@ -25,71 +27,62 @@ export async function POST(request: NextRequest) {
 
   if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
 
-  if (session.status === "completed") {
+  if (session.status === "completed" && session.credits_charged_seconds !== null) {
     Sentry.logger.debug("voice/end-session: already completed", {
       userId: user.id,
       sessionId,
       durationSeconds: session.duration_seconds ?? 0,
+      creditsChargedSeconds: session.credits_charged_seconds ?? 0,
     });
-    return NextResponse.json({ sessionId, duration: session.duration_seconds ?? 0 });
+    return NextResponse.json({
+      sessionId,
+      duration: session.duration_seconds ?? 0,
+      creditsCharged: session.credits_charged_seconds ?? 0,
+      alreadyCharged: true,
+    });
   }
 
-  // Call Pipecat backend to end session
-  try {
-    const pipecatUrl = process.env.PIPECAT_SERVICE_URL || "http://localhost:8000";
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1500);
-
+  if (session.status !== "completed") {
+    // Call Pipecat backend to end session
     try {
-      await fetch(`${pipecatUrl}/api/v1/sessions/${sessionId}/end`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${pipecatApiKey}`,
-        },
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId);
+      const pipecatUrl = process.env.PIPECAT_SERVICE_URL || "http://localhost:8000";
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+      try {
+        await fetch(`${pipecatUrl}/api/v1/sessions/${sessionId}/end`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${pipecatApiKey}`,
+          },
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    } catch (error) {
+      // Pipeline may have already ended or timed out during shutdown.
+      console.warn("[voice/end-session] Non-fatal Pipecat shutdown issue:", error);
+      Sentry.captureException(error, { level: "warning", tags: { route: "voice/end-session" } });
     }
-  } catch (error) {
-    // Pipeline may have already ended or timed out during shutdown.
-    console.warn("[voice/end-session] Non-fatal Pipecat shutdown issue:", error);
-    Sentry.captureException(error, { level: "warning", tags: { route: "voice/end-session" } });
   }
 
   const endedAt = new Date().toISOString();
-  const fallbackStartedAt = session.started_at ? null : endedAt;
-  const effectiveStartedAt = session.started_at || fallbackStartedAt;
-  const durationSeconds = effectiveStartedAt
-    ? Math.round((new Date(endedAt).getTime() - new Date(effectiveStartedAt).getTime()) / 1000)
-    : 0;
-  const updatePayload: {
-    status: string;
-    ended_at: string;
-    duration_seconds: number;
-    started_at?: string;
-  } = {
-    status: "completed",
-    ended_at: endedAt,
-    duration_seconds: durationSeconds,
-  };
-
-  if (fallbackStartedAt) {
-    updatePayload.started_at = fallbackStartedAt;
-  }
-
-  await supabase
-    .from("sessions")
-    .update(updatePayload)
-    .eq("id", sessionId)
-    .eq("user_id", user.id);
+  const admin = createAdminClient();
+  const completed = await completeSessionWithCredits(admin, sessionId, endedAt);
 
   Sentry.logger.info("voice/end-session: session marked completed", {
     userId: user.id,
     sessionId,
-    durationSeconds,
-    usedFallbackStartedAt: !!fallbackStartedAt,
+    durationSeconds: completed.durationSeconds,
+    creditsChargedSeconds: completed.creditsChargedSeconds,
+    alreadyCharged: completed.alreadyCharged,
   });
-  return NextResponse.json({ sessionId, duration: durationSeconds });
+  return NextResponse.json({
+    sessionId,
+    duration: completed.durationSeconds,
+    creditsCharged: completed.creditsChargedSeconds,
+    alreadyCharged: completed.alreadyCharged,
+  });
 }

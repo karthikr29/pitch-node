@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
+import { syncUserProfileFromAuth } from "@/lib/auth/profile-sync";
 import { validateEmail } from "@/lib/validators";
 
 const MIN_PASSWORD_LENGTH = 6;
@@ -32,6 +33,8 @@ export async function signIn(formData: FormData) {
   };
   const { error } = await supabase.auth.signInWithPassword(data);
   if (error) return { error: error.message };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) await syncUserProfileFromAuth(user);
   revalidatePath("/", "layout");
   redirect("/dashboard");
 }
@@ -47,6 +50,8 @@ export async function signUp(formData: FormData) {
   };
   const { error } = await supabase.auth.signUp(data);
   if (error) return { error: error.message };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) await syncUserProfileFromAuth(user);
   revalidatePath("/", "layout");
   redirect("/dashboard");
 }

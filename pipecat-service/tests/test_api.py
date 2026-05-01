@@ -28,6 +28,8 @@ os.environ.setdefault("PIPECAT_SERVICE_API_KEY", "test-api-key-123")
 VALID_AUTH = "Bearer test-api-key-123"
 INVALID_AUTH = "Bearer wrong-key"
 
+from app.main import _before_send
+
 MOCK_SCENARIO = {
     "id": "scenario-1",
     "title": "Test Scenario",
@@ -428,6 +430,54 @@ class TestSessionEnd:
             headers={"Authorization": INVALID_AUTH},
         )
         assert response.status_code == 401
+
+
+class TestSessionConnected:
+    def test_connected_schedules_time_limit(self, client):
+        with patch("app.api.routes.livekit_service") as mock_lk_svc:
+            response = client.post(
+                "/api/v1/sessions/sess-connected-1/connected",
+                headers={"Authorization": VALID_AUTH},
+                json={"max_duration_seconds": 600},
+            )
+
+        assert response.status_code == 200
+        mock_lk_svc.schedule_connected_time_limit.assert_called_once_with(
+            "sess-connected-1",
+            600,
+        )
+
+    def test_connected_requires_auth(self, client):
+        response = client.post(
+            "/api/v1/sessions/sess-connected-2/connected",
+            headers={"Authorization": INVALID_AUTH},
+            json={"max_duration_seconds": 600},
+        )
+
+        assert response.status_code == 401
+
+
+class TestSentryFiltering:
+    def test_filters_expected_livekit_signal_reset(self):
+        event = {
+            "logger": "livekit",
+            "message": (
+                "livekit_api::signal_client::signal_stream:402:"
+                "livekit_api::signal_client::signal_stream - unhandled websocket "
+                "message Err(Io(Os { code: 54, kind: ConnectionReset, "
+                'message: "Connection reset by peer" }))'
+            ),
+        }
+
+        assert _before_send(event, {}) is None
+
+    def test_keeps_other_livekit_errors(self):
+        event = {
+            "logger": "livekit",
+            "message": "unexpected active call transport failure",
+        }
+
+        assert _before_send(event, {}) == event
 
 
 class TestSessionState:

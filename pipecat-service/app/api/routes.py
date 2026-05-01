@@ -39,6 +39,9 @@ class StartSessionResponse(BaseModel):
     token: str
     room_name: str
 
+class SessionConnectedRequest(BaseModel):
+    max_duration_seconds: Optional[int] = Field(default=None, ge=1, le=180000)
+
 @router.post("/infer-role")
 async def infer_role(req: InferRoleRequest, _=Depends(verify_api_key)):
     if req.what_you_sell and req.target_audience:
@@ -145,6 +148,22 @@ async def start_session(req: StartSessionRequest, _=Depends(verify_api_key)):
 
     logger.info("sessions/start: pipeline started", extra={"session_id": req.session_id, "room_name": req.room_name})
     return StartSessionResponse(token=token, room_name=req.room_name)
+
+@router.post("/sessions/{session_id}/connected")
+async def session_connected(
+    session_id: str,
+    req: SessionConnectedRequest,
+    _=Depends(verify_api_key),
+):
+    logger.info(
+        "sessions/connected: received",
+        extra={
+            "session_id": session_id,
+            "max_duration_seconds": req.max_duration_seconds,
+        },
+    )
+    livekit_service.schedule_connected_time_limit(session_id, req.max_duration_seconds)
+    return {"status": "ok", "session_id": session_id}
 
 @router.post("/sessions/{session_id}/end")
 async def end_session(session_id: str, _=Depends(verify_api_key)):

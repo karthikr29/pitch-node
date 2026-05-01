@@ -6,6 +6,11 @@ import { vi } from "vitest";
 const mockAuthContext = {
   user: null as any,
   loading: false,
+  userPlan: null as any,
+  userProfile: null as any,
+  planError: null as string | null,
+  refreshPlan: vi.fn(),
+  refreshProfile: vi.fn(),
   signUp: vi.fn(),
   signIn: vi.fn(),
   signOut: vi.fn(),
@@ -17,6 +22,14 @@ export function setMockUser(user: { id: string; email: string; user_metadata?: R
 
 export function setMockLoading(loading: boolean) {
   mockAuthContext.loading = loading;
+}
+
+export function setMockUserPlan(userPlan: typeof mockAuthContext.userPlan) {
+  mockAuthContext.userPlan = userPlan;
+}
+
+export function setMockUserProfile(userProfile: typeof mockAuthContext.userProfile) {
+  mockAuthContext.userProfile = userProfile;
 }
 
 export function getMockAuthContext() {

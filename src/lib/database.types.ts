@@ -47,6 +47,24 @@ export type Database = {
         }
         Relationships: []
       }
+      infer_role_calls: {
+        Row: {
+          called_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          called_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          called_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       personas: {
         Row: {
           accent: string
@@ -109,33 +127,60 @@ export type Database = {
       }
       profiles: {
         Row: {
+          age: number | null
           avatar_url: string | null
+          company: string | null
+          country: string | null
           created_at: string | null
           email: string
           full_name: string | null
+          gender: string | null
           id: string
+          job_title: string | null
           onboarding_completed: boolean | null
+          phone: string | null
+          plan_type: string
           preferred_theme: string | null
+          subscription_status: string
+          timezone: string | null
           updated_at: string | null
         }
         Insert: {
+          age?: number | null
           avatar_url?: string | null
+          company?: string | null
+          country?: string | null
           created_at?: string | null
           email: string
           full_name?: string | null
+          gender?: string | null
           id: string
+          job_title?: string | null
           onboarding_completed?: boolean | null
+          phone?: string | null
+          plan_type?: string
           preferred_theme?: string | null
+          subscription_status?: string
+          timezone?: string | null
           updated_at?: string | null
         }
         Update: {
+          age?: number | null
           avatar_url?: string | null
+          company?: string | null
+          country?: string | null
           created_at?: string | null
           email?: string
           full_name?: string | null
+          gender?: string | null
           id?: string
+          job_title?: string | null
           onboarding_completed?: boolean | null
+          phone?: string | null
+          plan_type?: string
           preferred_theme?: string | null
+          subscription_status?: string
+          timezone?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -226,6 +271,68 @@ export type Database = {
           },
         ]
       }
+      session_recordings: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          duration_seconds: number | null
+          error_message: string | null
+          expires_at: string | null
+          id: string
+          mime_type: string | null
+          provider: string
+          provider_recording_id: string | null
+          session_id: string
+          started_at: string | null
+          status: string
+          storage_bucket: string
+          storage_path: string
+          updated_at: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          duration_seconds?: number | null
+          error_message?: string | null
+          expires_at?: string | null
+          id?: string
+          mime_type?: string | null
+          provider: string
+          provider_recording_id?: string | null
+          session_id: string
+          started_at?: string | null
+          status: string
+          storage_bucket: string
+          storage_path: string
+          updated_at?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          duration_seconds?: number | null
+          error_message?: string | null
+          expires_at?: string | null
+          id?: string
+          mime_type?: string | null
+          provider?: string
+          provider_recording_id?: string | null
+          session_id?: string
+          started_at?: string | null
+          status?: string
+          storage_bucket?: string
+          storage_path?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_recordings_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_transcripts: {
         Row: {
           confidence: number | null
@@ -267,6 +374,7 @@ export type Database = {
       sessions: {
         Row: {
           created_at: string | null
+          credits_charged_seconds: number | null
           duration_seconds: number | null
           ended_at: string | null
           id: string
@@ -283,6 +391,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          credits_charged_seconds?: number | null
           duration_seconds?: number | null
           ended_at?: string | null
           id?: string
@@ -299,6 +408,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          credits_charged_seconds?: number | null
           duration_seconds?: number | null
           ended_at?: string | null
           id?: string
@@ -378,6 +488,50 @@ export type Database = {
             foreignKeyName: "user_achievements_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_credits: {
+        Row: {
+          created_at: string | null
+          credit_scope: string
+          credits_used_seconds: number
+          id: string
+          monthly_limit_seconds: number
+          period_end: string
+          period_start: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          credit_scope?: string
+          credits_used_seconds?: number
+          id?: string
+          monthly_limit_seconds?: number
+          period_end?: string
+          period_start?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          credit_scope?: string
+          credits_used_seconds?: number
+          id?: string
+          monthly_limit_seconds?: number
+          period_end?: string
+          period_start?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_credits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -477,7 +631,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      complete_session_with_credits: {
+        Args: { p_ended_at?: string; p_session_id: string }
+        Returns: {
+          already_charged: boolean
+          credits_charged_seconds: number
+          credits_remaining: number
+          credits_used_seconds: number
+          duration_seconds: number
+          session_id: string
+        }[]
+      }
     }
     Enums: {
       call_type:

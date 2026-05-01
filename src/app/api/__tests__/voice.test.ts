@@ -9,6 +9,9 @@ const mockUpdate = vi.fn();
 const mockDelete = vi.fn();
 const mockEq = vi.fn();
 const mockFrom = vi.fn();
+const mockGetOrCreateFreeLifetimeCredits = vi.fn();
+const mockGetOrCreatePerformerMonthlyCredits = vi.fn();
+const mockCompleteSessionWithCredits = vi.fn();
 
 // Mock fetch for pipecat service calls
 const mockFetch = vi.fn();
@@ -19,6 +22,16 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: { getUser: () => mockGetUser() },
     from: (...args: unknown[]) => mockFrom(...args),
   }),
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(() => ({})),
+}));
+
+vi.mock("@/lib/credits", () => ({
+  getOrCreateFreeLifetimeCredits: (...args: unknown[]) => mockGetOrCreateFreeLifetimeCredits(...args),
+  getOrCreatePerformerMonthlyCredits: (...args: unknown[]) => mockGetOrCreatePerformerMonthlyCredits(...args),
+  completeSessionWithCredits: (...args: unknown[]) => mockCompleteSessionWithCredits(...args),
 }));
 
 describe("Voice API - create-room", () => {
@@ -43,7 +56,50 @@ describe("Voice API - create-room", () => {
     mockUpdate.mockReturnValue({ eq: mockEq });
     mockDelete.mockReturnValue({ eq: mockEq });
     mockEq.mockResolvedValue({ data: null, error: null });
+    mockGetOrCreateFreeLifetimeCredits.mockResolvedValue({
+      creditsLimit: 600,
+      creditsUsed: 0,
+      creditsRemaining: 600,
+      creditsScope: "lifetime",
+      periodEnd: null,
+    });
+    mockGetOrCreatePerformerMonthlyCredits.mockResolvedValue({
+      creditsLimit: 30000,
+      creditsUsed: 0,
+      creditsRemaining: 30000,
+      creditsScope: "monthly",
+      periodEnd: "2026-06-01T00:00:00.000Z",
+    });
     mockFrom.mockImplementation((table: string) => {
+      if (table === "sessions") {
+        return {
+          select: () => ({
+            eq: () => ({
+              in: () => ({
+                limit: () => ({
+                  maybeSingle: () => Promise.resolve({ data: null, error: null }),
+                }),
+              }),
+            }),
+          }),
+          insert: mockInsert,
+          delete: () => mockDelete(),
+        };
+      }
+
+      if (table === "profiles") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: () => Promise.resolve({
+                data: { plan_type: "free" },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
       if (table === "scenarios") {
         return {
           select: () => ({
@@ -253,6 +309,14 @@ describe("Voice API - end-session", () => {
 
     process.env.PIPECAT_SERVICE_URL = "http://localhost:8000";
     process.env.PIPECAT_SERVICE_API_KEY = "test-key";
+    mockCompleteSessionWithCredits.mockResolvedValue({
+      sessionId: "s1",
+      durationSeconds: 300,
+      creditsChargedSeconds: 300,
+      creditsUsedSeconds: 300,
+      creditsRemaining: 300,
+      alreadyCharged: false,
+    });
   });
 
   it("returns 401 for unauthenticated requests", async () => {
@@ -318,14 +382,12 @@ describe("Voice API - end-session", () => {
 
     const startedAt = new Date(Date.now() - 300000).toISOString(); // 5 min ago
     const mockSingle = vi.fn().mockResolvedValue({
-      data: { id: "s1", user_id: "user-1", started_at: startedAt, livekit_room_name: "room-1" },
+      data: { id: "s1", user_id: "user-1", started_at: startedAt, status: "active", livekit_room_name: "room-1" },
     });
     const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle });
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 });
     const mockSel = vi.fn().mockReturnValue({ eq: mockEq1 });
-    const mockUpdateEq = vi.fn().mockResolvedValue({ data: null, error: null });
-    const mockUpdateFn = vi.fn().mockReturnValue({ eq: mockUpdateEq });
-    mockFrom.mockReturnValue({ select: mockSel, update: mockUpdateFn });
+    mockFrom.mockReturnValue({ select: mockSel });
 
     mockFetch.mockResolvedValue({ ok: true });
 
@@ -339,43 +401,49 @@ describe("Voice API - end-session", () => {
 
     expect(response.status).toBe(200);
     expect(body.sessionId).toBe("s1");
-    expect(body.duration).toBeGreaterThan(0);
+    expect(body.duration).toBe(300);
+    expect(body.creditsCharged).toBe(300);
+    expect(mockCompleteSessionWithCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      "s1",
+      expect.any(String)
+    );
   });
 
-  it("uses connectedAt fallback when the session has not started yet", async () => {
+  it("completes with the shared credit RPC when the session has not started yet", async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: "user-1" } },
     });
 
-    const connectedAt = new Date(Date.now() - 45000).toISOString();
+    mockCompleteSessionWithCredits.mockResolvedValue({
+      sessionId: "s1",
+      durationSeconds: 0,
+      creditsChargedSeconds: 0,
+      creditsUsedSeconds: 0,
+      creditsRemaining: 600,
+      alreadyCharged: false,
+    });
     const mockSingle = vi.fn().mockResolvedValue({
-      data: { id: "s1", user_id: "user-1", started_at: null, livekit_room_name: "room-1" },
+      data: { id: "s1", user_id: "user-1", started_at: null, status: "active", livekit_room_name: "room-1" },
     });
     const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle });
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 });
     const mockSel = vi.fn().mockReturnValue({ eq: mockEq1 });
-    const mockUpdateEq = vi.fn().mockResolvedValue({ data: null, error: null });
-    const mockUpdateFn = vi.fn().mockReturnValue({ eq: mockUpdateEq });
-    mockFrom.mockReturnValue({ select: mockSel, update: mockUpdateFn });
+    mockFrom.mockReturnValue({ select: mockSel });
 
     mockFetch.mockResolvedValue({ ok: true });
 
     const { POST } = await import("@/app/api/voice/end-session/route");
     const request = new NextRequest("http://localhost:3000/api/voice/end-session", {
       method: "POST",
-      body: JSON.stringify({ sessionId: "s1", connectedAt }),
+      body: JSON.stringify({ sessionId: "s1" }),
     });
     const response = await POST(request);
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.duration).toBeGreaterThan(0);
-    expect(mockUpdateFn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "completed",
-        started_at: connectedAt,
-      })
-    );
+    expect(body.duration).toBe(0);
+    expect(body.creditsCharged).toBe(0);
   });
 });
 
@@ -400,7 +468,7 @@ describe("Voice API - session-connected", () => {
     expect(body.error).toBe("Unauthorized");
   });
 
-  it("returns 400 when sessionId is missing or connectedAt is invalid", async () => {
+  it("returns 400 when sessionId is missing", async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: "user-1" } },
     });
@@ -414,7 +482,7 @@ describe("Voice API - session-connected", () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error).toContain("connectedAt");
+    expect(body.error).toContain("sessionId");
   });
 
   it("returns 404 when the session is not found", async () => {
@@ -481,7 +549,7 @@ describe("Voice API - session-connected", () => {
     });
     expect(mockUpdateFn).toHaveBeenCalledWith({
       status: "active",
-      started_at: connectedAt,
+      started_at: expect.any(String),
     });
     expect(mockIs).toHaveBeenCalledWith("started_at", null);
   });

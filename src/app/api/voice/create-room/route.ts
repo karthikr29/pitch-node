@@ -4,6 +4,11 @@ import {
   buildPitchContextFromBriefing,
   validatePitchBriefing,
 } from "@/lib/validators";
+import {
+  getOrCreateFreeLifetimeCredits,
+  getOrCreatePerformerMonthlyCredits,
+} from "@/lib/credits";
+import { createAdminClient } from "@/lib/supabase/admin";
 import * as Sentry from "@sentry/nextjs";
 
 export async function POST(request: NextRequest) {
@@ -39,6 +44,43 @@ export async function POST(request: NextRequest) {
       { error: "A session is already in progress.", sessionId: existingSession.id },
       { status: 409 }
     );
+  }
+
+  // Fetch user plan and compute time limit
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("plan_type")
+    .eq("id", user.id)
+    .single();
+
+  const planType = profile?.plan_type ?? "free";
+  const admin = createAdminClient();
+  let maxDurationSeconds: number;
+
+  if (planType === "pro") {
+    const credits = await getOrCreatePerformerMonthlyCredits(admin, user.id);
+    if (credits.creditsRemaining <= 0) {
+      return NextResponse.json(
+        {
+          error: "No credits remaining. Your credits reset at the start of next month.",
+          code: "NO_CREDITS",
+        },
+        { status: 402 }
+      );
+    }
+    maxDurationSeconds = credits.creditsRemaining;
+  } else {
+    const credits = await getOrCreateFreeLifetimeCredits(admin, user.id);
+    if (credits.creditsRemaining <= 0) {
+      return NextResponse.json(
+        {
+          error: "No credits remaining. Upgrade to continue practising.",
+          code: "NO_CREDITS",
+        },
+        { status: 402 }
+      );
+    }
+    maxDurationSeconds = credits.creditsRemaining;
   }
 
   const { data: scenario, error: scenarioError } = await supabase
@@ -103,6 +145,8 @@ export async function POST(request: NextRequest) {
     scenarioId,
     personaId,
     callType: scenario.call_type,
+    planType,
+    maxDurationSeconds,
   });
 
   // Call Pipecat backend to create room and start pipeline
@@ -148,6 +192,8 @@ export async function POST(request: NextRequest) {
       token: pipecatData.token,
       roomName: session.livekit_room_name,
       livekitUrl: process.env.NEXT_PUBLIC_LIVEKIT_URL,
+      planType,
+      maxDurationSeconds,
     });
   } catch (error) {
     Sentry.captureException(error, { tags: { route: "voice/create-room" }, extra: { sessionId: session.id } });

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { SentientPrismVisualizer } from "@/components/ui/sentient-prism-visualizer";
@@ -11,6 +12,7 @@ import {
   buildPitchContextFromBriefing,
   validatePitchBriefing,
 } from "@/lib/validators";
+import { useAuth } from "@/contexts/auth-context";
 import {
   Mic,
   MicOff,
@@ -18,6 +20,7 @@ import {
   Loader2,
   Clock,
   AlertCircle,
+  Zap,
 } from "lucide-react";
 import {
   LiveKitRoom,
@@ -40,6 +43,7 @@ interface RoomCredentials {
   roomName: string;
   livekitUrl: string;
   sessionId: string;
+  maxDurationSeconds: number | null;
 }
 
 interface SessionStatePayload {
@@ -47,9 +51,11 @@ interface SessionStatePayload {
   phase: SessionPhase;
   autoEndRequested: boolean;
   endReason: {
-    speaker: "user" | "ai";
-    reasonCode: string;
-    trigger: string;
+    speaker?: "user" | "ai";
+    reasonCode?: string;
+    trigger?: string;
+    type?: string;
+    max_seconds?: number;
   } | null;
 }
 
@@ -110,6 +116,7 @@ function CallInterface({
   onEndCall,
   onAutoEndRequested,
   onAutoEndTimeout,
+  maxDurationSeconds,
 }: {
   sessionId: string;
   personaName: string;
@@ -118,24 +125,43 @@ function CallInterface({
   onEndCall: () => void;
   onAutoEndRequested: () => void;
   onAutoEndTimeout: () => void;
+  maxDurationSeconds: number | null;
 }) {
   const { localParticipant } = useLocalParticipant();
   const room = useRoomContext();
   const connectionState = useConnectionState();
   const participants = useParticipants();
 
+  const { userPlan } = useAuth();
+
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [ending, setEnding] = useState(false);
   const [muted, setMuted] = useState(false);
   const [speakingState, setSpeakingState] = useState<SpeakingState>("idle");
   const [autoEnding, setAutoEnding] = useState(false);
+  const [timeLimitDetected, setTimeLimitDetected] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const thinkingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoEndFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+
   const isConnected = connectionState === ConnectionState.Connected;
   const aiParticipant = participants.find((p) => p.identity.startsWith("ai-"));
   const isEnding = ending || autoEnding;
+
+  // Credit countdown is enforced/logged internally; only near-exhaustion warnings are shown.
+  const maxSeconds = maxDurationSeconds ?? userPlan?.creditsRemaining ?? null;
+  const timeLeft = maxSeconds === null ? null : maxSeconds - elapsedSeconds;
+  const warningThreshold = userPlan?.type === "pro" ? 300 : 120;
+  const showWarning = isConnected && timeLeft !== null && timeLeft > 0 && timeLeft <= warningThreshold;
+
+  useEffect(() => {
+    if (!showWarning || timeLeft === null) return;
+    Sentry.logger.info("call: credit warning threshold reached", {
+      sessionId,
+      secondsRemaining: Math.max(0, timeLeft),
+    });
+  }, [sessionId, showWarning, timeLeft]);
 
   // Raw LiveKit-derived state (only "ai" | "user" | "idle")
   const rawSpeakingState =
@@ -150,6 +176,8 @@ function CallInterface({
   useEffect(() => {
     if (rawSpeakingState === "user") {
       if (thinkingTimeoutRef.current) clearTimeout(thinkingTimeoutRef.current);
+      // Existing derived speaking-state sync; keep behavior identical to staging.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSpeakingState("user");
     } else if (rawSpeakingState === "ai") {
       if (thinkingTimeoutRef.current) clearTimeout(thinkingTimeoutRef.current);
@@ -211,10 +239,13 @@ function CallInterface({
 
         if (payload.phase === "ending" || payload.phase === "ended") {
           setAutoEnding(true);
+          if (payload.endReason?.type === "time_limit") {
+            setTimeLimitDetected(true);
+          }
           Sentry.logger.info("call: AI-initiated auto-end detected", {
             sessionId,
             phase: payload.phase,
-            endReason: payload.endReason?.reasonCode ?? null,
+            endReason: payload.endReason?.reasonCode ?? payload.endReason?.type ?? null,
           });
           onAutoEndRequested();
           if (!autoEndFallbackRef.current) {
@@ -261,7 +292,7 @@ function CallInterface({
         Sentry.logger.warn("call: failed to enable microphone after connect", { sessionId });
       });
     }
-  }, [isConnected, localParticipant]);
+  }, [isConnected, localParticipant, sessionId]);
 
   const formatTime = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -307,6 +338,41 @@ function CallInterface({
       {/* Render remote audio (AI voice) */}
       <RoomAudioRenderer />
 
+      {/* Time-limit ended modal */}
+      <AnimatePresence>
+        {timeLimitDetected && autoEnding && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="bg-slate-900 rounded-2xl p-8 max-w-sm mx-4 text-center border border-primary/30 shadow-2xl shadow-primary/10"
+            >
+              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4 border border-primary/20">
+                <Clock className="w-7 h-7 text-primary" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">
+                {userPlan?.type === "free" ? "Free credits exhausted" : "Monthly credits exhausted"}
+              </h3>
+              <p className="text-slate-400 text-sm mb-6">
+                {userPlan?.type === "free"
+                  ? "You've used your free lifetime credits. Upgrade to Performer for 30,000 credits per month."
+                  : `You've used all your monthly credits. They reset at the start of next month. Upgrade or add credits to continue practising.`}
+              </p>
+              <Button asChild size="sm" className="w-full">
+                <Link href="/#pricing">
+                  {userPlan?.type === "free" ? "Upgrade to Performer" : "View Plans"}
+                </Link>
+              </Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Immersive Background */}
       <div className="absolute inset-0 z-0 opacity-60">
         <StarryBackground />
@@ -319,7 +385,7 @@ function CallInterface({
       <div className="relative z-10 h-full flex flex-col justify-between p-6">
 
         {/* Header - Minimalist */}
-        <div className="flex justify-center items-center h-16">
+        <div className="flex flex-col items-center gap-2 pt-2">
           {status === "connected" && (
             <motion.div
               initial={{ opacity: 0, y: -20 }}
@@ -337,6 +403,25 @@ function CallInterface({
               )}
             </motion.div>
           )}
+
+          {/* Warning banner */}
+          <AnimatePresence>
+            {showWarning && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/20 border border-amber-500/40 backdrop-blur-md"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-amber-300 text-xs font-medium">
+                  {userPlan?.type === "free"
+                    ? "Free call credits are almost used up"
+                    : "Monthly call credits are almost used up"}
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Center Stage - Waveform & Persona */}
@@ -476,6 +561,7 @@ export default function CallRoomPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { refreshPlan } = useAuth();
   const scenarioId = params.scenarioId as string;
   const personaId = searchParams.get("persona") || "";
   const personaNameParam = searchParams.get("name") || "";
@@ -520,7 +606,7 @@ export default function CallRoomPage() {
       .catch(() => {
         // Permissions API not supported or failed — fall through to normal prompt screen
       });
-  }, []);
+  }, [personaId, scenarioId]);
 
   const isDev = process.env.NODE_ENV === "development";
 
@@ -573,6 +659,9 @@ export default function CallRoomPage() {
         if (!response.ok) {
           const errorData = await response.json();
           console.error("[CallPage] Create room failed:", errorData);
+          if (response.status === 402) {
+            throw new Error(errorData.error || "No credits remaining. Your credits reset at the start of next month.");
+          }
           throw new Error(errorData.error || "Failed to create room");
         }
 
@@ -584,6 +673,7 @@ export default function CallRoomPage() {
           roomName: data.roomName,
           livekitUrl: data.livekitUrl,
           sessionId: data.sessionId,
+          maxDurationSeconds: typeof data.maxDurationSeconds === "number" ? data.maxDurationSeconds : null,
         });
         if (pitchBriefing) {
           sessionStorage.removeItem(`pitch-briefing:${scenarioId}`);
@@ -607,7 +697,7 @@ export default function CallRoomPage() {
     }
 
     initializeCall();
-  }, [callState, hasMicPermission, scenarioId, personaId, pitchContextParam, personaRoleParam]);
+  }, [callState, hasMicPermission, isDev, scenarioId, personaId, pitchContextParam, personaRoleParam]);
 
   const clearSessionConnectedRetry = useCallback(() => {
     if (sessionConnectedRetryRef.current) {
@@ -642,7 +732,11 @@ export default function CallRoomPage() {
       const response = await fetch("/api/voice/session-connected", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, connectedAt }),
+        body: JSON.stringify({
+          sessionId,
+          connectedAt,
+          maxDurationSeconds: credentials?.maxDurationSeconds ?? undefined,
+        }),
       });
 
       if (!response.ok) {
@@ -661,7 +755,7 @@ export default function CallRoomPage() {
     } finally {
       sessionConnectedInFlightRef.current = false;
     }
-  }, [clearSessionConnectedRetry, credentials?.sessionId]);
+  }, [clearSessionConnectedRetry, credentials?.maxDurationSeconds, credentials?.sessionId]);
 
   const handleConnectionReady = useCallback((connectedAt: string) => {
     if (connectedAtRef.current) return;
@@ -674,30 +768,41 @@ export default function CallRoomPage() {
       connectedAt,
     });
     void syncSessionConnected();
-  }, [syncSessionConnected]);
+  }, [credentials?.sessionId, syncSessionConnected]);
 
-  function endSessionInBackground(sessionId: string, connectedAt?: string | null) {
+  const finalizeSessionInBackground = useCallback((
+    sessionId: string,
+    connectedAt?: string | null
+  ) => {
     void fetch("/api/voice/end-session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId,
-        connectedAt: connectedAt || undefined,
-      }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.text();
-          console.warn("[CallPage] End session response not ok:", res.status, body);
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          connectedAt: connectedAt || undefined,
+        }),
+      })
+      .then(async (response) => {
+        if (!response.ok) {
+          const body = await response.text();
+          console.warn("[CallPage] End session response not ok:", response.status, body);
+          Sentry.logger.warn("call: end-session failed before credit refresh", {
+            sessionId,
+            status: response.status,
+          });
+          return;
         }
+
+        await refreshPlan();
       })
       .catch((err) => {
         console.error("[CallPage] End session error:", err);
-        Sentry.logger.warn("call: end-session background call failed", {
-          sessionId: credentials?.sessionId,
+        Sentry.logger.warn("call: end-session or credit refresh failed", {
+          sessionId,
+          errorMessage: err instanceof Error ? err.message : String(err),
         });
       });
-  }
+  }, [refreshPlan]);
 
   const completeSessionAndNavigate = useCallback((source: CallCompletionSource) => {
     if (sessionEndHandledRef.current) return;
@@ -718,17 +823,19 @@ export default function CallRoomPage() {
         source === "auto-end-timeout" ||
         (source === "remote-disconnect" && !autoEndRequestedRef.current);
       if (shouldFinalizeInBackground) {
-        endSessionInBackground(sessionId, connectedAtRef.current);
+        finalizeSessionInBackground(sessionId, connectedAtRef.current);
+      } else {
+        void refreshPlan();
       }
       router.push(`/history/${sessionId}`);
       return;
     }
 
     router.push("/history");
-  }, [credentials?.sessionId, router]);
+  }, [credentials?.sessionId, finalizeSessionInBackground, isDev, refreshPlan, router]);
 
   function handleEndCall() {
-    completeSessionAndNavigate("manual");
+    void completeSessionAndNavigate("manual");
   }
 
   // Mic permission request state
@@ -794,7 +901,7 @@ export default function CallRoomPage() {
         onDisconnected={() => {
           if (isDev) console.log("[CallPage] Disconnected from LiveKit");
           setCallState("disconnected");
-          completeSessionAndNavigate("remote-disconnect");
+          void completeSessionAndNavigate("remote-disconnect");
         }}
         onError={(error) => {
           const message = (error?.message || "").toLowerCase();
@@ -828,8 +935,9 @@ export default function CallRoomPage() {
             }}
             onAutoEndTimeout={() => {
               setCallState("disconnected");
-              completeSessionAndNavigate("auto-end-timeout");
+              void completeSessionAndNavigate("auto-end-timeout");
             }}
+            maxDurationSeconds={credentials.maxDurationSeconds}
           />
         ) : null}
       </LiveKitRoom>

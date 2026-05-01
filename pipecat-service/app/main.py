@@ -11,12 +11,25 @@ from app.services.supabase_service import SupabaseService
 from loguru import logger
 
 _sentry_dsn = os.getenv("SENTRY_DSN")
+
+def _before_send(event, hint):
+    message = event.get("message") or event.get("logentry", {}).get("message") or ""
+    logger_name = event.get("logger") or ""
+    if (
+        logger_name == "livekit"
+        and "livekit_api::signal_client::signal_stream" in message
+        and "Connection reset by peer" in message
+    ):
+        return None
+    return event
+
 if _sentry_dsn:
     sentry_sdk.init(
         dsn=_sentry_dsn,
         environment=os.getenv("RAILWAY_ENVIRONMENT", "development"),
         traces_sample_rate=1.0,
         send_default_pii=False,
+        before_send=_before_send,
         integrations=[
             FastApiIntegration(),
             LoguruIntegration(),

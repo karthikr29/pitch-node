@@ -116,12 +116,13 @@ const itemVariants = {
 };
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [recentSessions, setRecentSessions] = useState<RecentSession[]>([]);
   const [loading, setLoading] = useState(true);
 
   const firstName =
+    userProfile?.fullName?.split(" ")[0] ||
     user?.user_metadata?.full_name?.split(" ")[0] ||
     user?.email?.split("@")[0] ||
     "there";
@@ -169,9 +170,11 @@ export default function DashboardPage() {
 
           <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <p className="text-sm text-muted-foreground dark:text-white/50 font-medium">
-                {format(new Date(), "EEEE, MMMM d")}
-              </p>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm text-muted-foreground dark:text-white/50 font-medium">
+                  {format(new Date(), "EEEE, MMMM d")}
+                </p>
+              </div>
               <h2 className="text-2xl sm:text-3xl font-display font-bold text-foreground dark:text-white tracking-tight mt-1">
                 {getGreeting()},{" "}
                 <span className="text-primary">{firstName}</span>
@@ -180,16 +183,18 @@ export default function DashboardPage() {
                 Ready to sharpen your sales skills?
               </p>
             </div>
-            <Button
-              asChild
-              size="lg"
-              className="sm:w-auto w-full shadow-[0_4px_24px_rgba(236,114,17,0.3)] hover:shadow-[0_4px_32px_rgba(236,114,17,0.45)] transition-shadow"
-            >
-              <Link href="/practice">
-                <Mic className="w-4 h-4 mr-2" />
-                New Session
-              </Link>
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+              <Button
+                asChild
+                size="lg"
+                className="sm:w-auto w-full shadow-[0_4px_24px_rgba(236,114,17,0.3)] hover:shadow-[0_4px_32px_rgba(236,114,17,0.45)] transition-shadow"
+              >
+                <Link href="/practice">
+                  <Mic className="w-4 h-4 mr-2" />
+                  New Session
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
       </motion.div>

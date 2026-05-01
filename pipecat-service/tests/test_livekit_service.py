@@ -102,3 +102,29 @@ def test_get_session_state_returns_unknown_when_untracked():
         "endReason": None,
         "requestedAt": None,
     }
+
+
+@pytest.mark.asyncio
+async def test_connected_time_limit_starts_after_connected_signal(monkeypatch):
+    service = LiveKitService()
+    order: list[str] = []
+
+    async def delete_room(session_id: str):
+        order.append("delete")
+
+    async def complete_session(session_id: str):
+        order.append("complete")
+
+    service._delete_room_for_session = AsyncMock(side_effect=delete_room)
+    service._supabase_service.complete_session = AsyncMock(side_effect=complete_session)
+    monkeypatch.setattr("app.services.livekit_service.AUTO_END_FALLBACK_SECS", 0)
+
+    service.schedule_connected_time_limit("session-4", 0.001)
+
+    await asyncio.sleep(0.01)
+    await asyncio.sleep(0)
+
+    assert order == ["delete", "complete"]
+    state = service.get_session_state("session-4")
+    assert state["phase"] == "ended"
+    assert state["endReason"] == {"type": "time_limit", "max_seconds": 0.001}
