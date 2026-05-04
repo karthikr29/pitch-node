@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import datetime, timedelta, timezone
 
 import sentry_sdk
@@ -11,6 +12,7 @@ from app.services.supabase_service import SupabaseService
 from loguru import logger
 
 _sentry_dsn = os.getenv("SENTRY_DSN")
+_under_pytest = "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ
 
 def _before_send(event, hint):
     message = event.get("message") or event.get("logentry", {}).get("message") or ""
@@ -23,7 +25,7 @@ def _before_send(event, hint):
         return None
     return event
 
-if _sentry_dsn:
+if _sentry_dsn and not _under_pytest:
     sentry_sdk.init(
         dsn=_sentry_dsn,
         environment=os.getenv("RAILWAY_ENVIRONMENT", "development"),
