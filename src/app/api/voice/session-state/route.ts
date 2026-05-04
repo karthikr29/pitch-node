@@ -13,6 +13,7 @@ function buildUnknownState(sessionId: string) {
       noiseFilter: "none",
       calibration: "pending",
       activity: "idle",
+      warning: "none",
     },
   };
 }

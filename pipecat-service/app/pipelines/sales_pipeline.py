@@ -11,7 +11,7 @@ import re
 import sys
 from array import array
 from contextlib import suppress
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 from urllib.parse import urlencode
 
@@ -77,7 +77,10 @@ SOFT_REFUSAL_REPEAT_THRESHOLD = 2
 AUTO_END_FAREWELL = "Understood. I'll let you go now. Goodbye."
 VOICE_GUARD_STATE_THROTTLE_SECS = 0.5
 VOICE_GUARD_MIN_PROFILE_FRAMES = 12
-VOICE_GUARD_REPEATED_LOW_SNR_THRESHOLD = 10
+VOICE_GUARD_DECISION_WINDOW_SECS = 1.0
+VOICE_GUARD_LOW_SNR_SPEECH_WINDOW_SECS = 0.35
+VOICE_GUARD_LOW_SNR_WARNING_WINDOWS = 3
+VOICE_GUARD_WARNING_TTL_SECS = 6.0
 
 EXPLICIT_END_PATTERNS = [
     re.compile(r"\b(?:please\s+)?(?:end|stop)\s+(?:the\s+)?(?:call|conversation)\b"),
@@ -110,6 +113,10 @@ CLOSING_ONLY_PATTERNS = [
 
 def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _future_iso(seconds: float) -> str:
+    return (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
 
 
 def normalize_detection_text(text: str) -> str:
@@ -1031,6 +1038,10 @@ class EphemeralVoiceProfile:
             ordered = sorted(self._noise_samples)
             self._noise_rms = ordered[len(ordered) // 2]
 
+    def reset_noise(self):
+        self._noise_samples.clear()
+        self._noise_rms = 0.003
+
     def add_voice_frame(self, features: dict[str, float]):
         if features["rms"] <= 0:
             return
@@ -1072,9 +1083,13 @@ class VoiceCalibrationProcessor(FrameProcessor):
         self._profile = profile
         self._on_audio_guard_update = on_audio_guard_update
         self._on_calibration_complete = on_calibration_complete
-        self._elapsed_secs = 0.0
+        self._total_elapsed_secs = 0.0
+        self._noise_elapsed_secs = 0.0
+        self._voice_elapsed_secs = 0.0
+        self._valid_voice_secs = 0.0
         self._completed = False
         self._last_update_at = 0.0
+        self._noise_contamination_count = 0
 
     def _emit_state(self, calibration: str, activity: str, **extra: Any):
         now = asyncio.get_event_loop().time()
@@ -1085,6 +1100,7 @@ class VoiceCalibrationProcessor(FrameProcessor):
             "noiseFilter": "client",
             "calibration": calibration,
             "activity": activity,
+            "warning": "none",
             **{key: value for key, value in extra.items() if key != "force"},
         }
         self._on_audio_guard_update(payload)
@@ -1094,14 +1110,21 @@ class VoiceCalibrationProcessor(FrameProcessor):
             return
         self._completed = True
         calibration = status or ("ready" if self._profile.ready else "fallback")
-        self._emit_state(calibration, "idle", decisionReason=calibration, force=True)
+        self._emit_state(calibration, "idle", decisionReason=calibration, warning="none", force=True)
         self._on_calibration_complete(calibration)
 
     def force_complete(self, status: str = "fallback"):
         self._complete(status)
 
     async def cleanup(self):
+        if not self._completed:
+            self._complete("fallback")
         await super().cleanup()
+
+    def _noise_sample_is_contaminated(self, features: dict[str, float]) -> bool:
+        if self._noise_elapsed_secs < 0.25:
+            return False
+        return features["rms"] > max(0.02, self._profile.noise_rms * 4.0)
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
@@ -1112,24 +1135,52 @@ class VoiceCalibrationProcessor(FrameProcessor):
 
         if isinstance(frame, InputAudioRawFrame):
             features = _audio_features(frame.audio)
-            self._elapsed_secs += _audio_duration_secs(frame)
+            duration_secs = _audio_duration_secs(frame)
+            self._total_elapsed_secs += duration_secs
 
-            if self._elapsed_secs <= settings.VOICE_CALIBRATION_NOISE_SECS:
+            if self._total_elapsed_secs >= settings.VOICE_CALIBRATION_MAX_SECS:
+                self._complete("fallback")
+                return
+
+            if self._noise_elapsed_secs < settings.VOICE_CALIBRATION_NOISE_SECS:
+                if self._noise_sample_is_contaminated(features):
+                    self._noise_contamination_count += 1
+                    self._profile.reset_noise()
+                    self._noise_elapsed_secs = 0.0
+                    logger.info(
+                        "audio_guard_noise_sample_contaminated count={} rms={:.4f}",
+                        self._noise_contamination_count,
+                        features["rms"],
+                    )
+                    self._emit_state(
+                        "collecting_noise",
+                        "calibrating",
+                        decisionReason="contaminated_noise_sample",
+                        force=True,
+                    )
+                    return
                 self._profile.add_noise_frame(features)
+                self._noise_elapsed_secs += duration_secs
                 self._emit_state("collecting_noise", "calibrating")
                 return
 
+            self._voice_elapsed_secs += duration_secs
             snr = _snr_db(features["rms"], self._profile.noise_rms)
             if snr >= settings.VOICE_CALIBRATION_MIN_VOICE_SNR_DB:
                 self._profile.add_voice_frame(features)
+                self._valid_voice_secs += duration_secs
             self._emit_state(
                 "collecting_voice",
                 "calibrating",
                 snrDb=round(snr, 1),
+                decisionReason="collecting_valid_voice"
+                if self._valid_voice_secs > 0
+                else "waiting_for_voice",
             )
 
-            if self._elapsed_secs >= (
-                settings.VOICE_CALIBRATION_NOISE_SECS + settings.VOICE_CALIBRATION_VOICE_SECS
+            if (
+                self._profile.ready
+                and self._valid_voice_secs >= settings.VOICE_CALIBRATION_MIN_VALID_VOICE_SECS
             ):
                 self._complete()
             return
@@ -1154,12 +1205,18 @@ class TargetSpeakerGateProcessor(FrameProcessor):
         self._on_audio_guard_update = on_audio_guard_update
         self._last_update_at = 0.0
         self._last_activity = "idle"
-        self._low_snr_drops = 0
+        self._window_secs = 0.0
+        self._window_low_snr_speech_secs = 0.0
+        self._window_snr_sum = 0.0
+        self._window_frame_count = 0
+        self._consecutive_low_snr_speech_windows = 0
+        self._warning_active_until = 0.0
         self._stats = {
             "fan_drops": 0,
             "background_speech_drops": 0,
             "uncertain_passes": 0,
             "target_passes": 0,
+            "low_snr_speech_warnings": 0,
         }
 
     @property
@@ -1182,9 +1239,61 @@ class TargetSpeakerGateProcessor(FrameProcessor):
                 "noiseFilter": "client",
                 "calibration": "ready" if self._profile.ready else "fallback",
                 "activity": activity,
+                "warning": self._current_warning(),
                 **{key: value for key, value in extra.items() if key != "force"},
             }
         )
+
+    def _current_warning(self) -> str:
+        if asyncio.get_event_loop().time() < self._warning_active_until:
+            return "low_snr_speech"
+        return "none"
+
+    def _clear_warning(self):
+        self._warning_active_until = 0.0
+
+    @staticmethod
+    def _looks_like_rejected_speech(features: dict[str, float], snr: float) -> bool:
+        return snr >= 1.5 and features["rms"] >= 0.012 and features["crest"] >= 1.8
+
+    def _track_window(self, *, duration_secs: float, snr: float, low_snr_speech: bool):
+        self._window_secs += duration_secs
+        self._window_snr_sum += snr
+        self._window_frame_count += 1
+        if low_snr_speech:
+            self._window_low_snr_speech_secs += duration_secs
+
+        if self._window_secs < VOICE_GUARD_DECISION_WINDOW_SECS:
+            return
+
+        avg_snr = self._window_snr_sum / max(1, self._window_frame_count)
+        if self._window_low_snr_speech_secs >= VOICE_GUARD_LOW_SNR_SPEECH_WINDOW_SECS:
+            self._consecutive_low_snr_speech_windows += 1
+        else:
+            self._consecutive_low_snr_speech_windows = 0
+
+        if self._consecutive_low_snr_speech_windows >= VOICE_GUARD_LOW_SNR_WARNING_WINDOWS:
+            self._warning_active_until = asyncio.get_event_loop().time() + VOICE_GUARD_WARNING_TTL_SECS
+            self._stats["low_snr_speech_warnings"] += 1
+            logger.info(
+                "audio_guard_low_snr_speech_warning windows={} avg_snr={:.1f} rejected_speech_secs={:.2f}",
+                self._consecutive_low_snr_speech_windows,
+                avg_snr,
+                self._window_low_snr_speech_secs,
+            )
+            self._emit_state(
+                "background_noise",
+                snrDb=round(avg_snr, 1),
+                warning="low_snr_speech",
+                warningExpiresAt=_future_iso(VOICE_GUARD_WARNING_TTL_SECS),
+                decisionReason="low_snr_speech_window",
+                force=True,
+            )
+
+        self._window_secs = 0.0
+        self._window_low_snr_speech_secs = 0.0
+        self._window_snr_sum = 0.0
+        self._window_frame_count = 0
 
     def _decision_for_features(self, features: dict[str, float]) -> tuple[str, float, float | None]:
         snr = _snr_db(features["rms"], self._profile.noise_rms)
@@ -1202,11 +1311,12 @@ class TargetSpeakerGateProcessor(FrameProcessor):
 
     async def cleanup(self):
         logger.info(
-            "audio_guard_stats fan_drops={} background_speech_drops={} uncertain_passes={} target_passes={}",
+            "audio_guard_stats fan_drops={} background_speech_drops={} uncertain_passes={} target_passes={} low_snr_speech_warnings={}",
             self._stats["fan_drops"],
             self._stats["background_speech_drops"],
             self._stats["uncertain_passes"],
             self._stats["target_passes"],
+            self._stats["low_snr_speech_warnings"],
         )
         await super().cleanup()
 
@@ -1215,29 +1325,34 @@ class TargetSpeakerGateProcessor(FrameProcessor):
 
         if isinstance(frame, InputAudioRawFrame):
             features = _audio_features(frame.audio)
+            duration_secs = _audio_duration_secs(frame)
             decision, snr, speaker_score = self._decision_for_features(features)
             state_extra: dict[str, Any] = {"snrDb": round(snr, 1)}
             if speaker_score is not None:
                 state_extra["speakerScore"] = round(speaker_score, 3)
 
             if decision == "background_noise":
-                self._low_snr_drops += 1
                 self._stats["fan_drops"] += 1
-                state_extra["decisionReason"] = (
-                    "repeated_low_snr"
-                    if self._low_snr_drops >= VOICE_GUARD_REPEATED_LOW_SNR_THRESHOLD
-                    else "low_snr"
-                )
+                low_snr_speech = self._looks_like_rejected_speech(features, snr)
+                state_extra["decisionReason"] = "low_snr_speech" if low_snr_speech else "low_snr"
+                state_extra["warning"] = self._current_warning()
                 self._emit_state("background_noise", **state_extra)
+                self._track_window(
+                    duration_secs=duration_secs,
+                    snr=snr,
+                    low_snr_speech=low_snr_speech,
+                )
                 return
 
-            self._low_snr_drops = 0
+            self._track_window(duration_secs=duration_secs, snr=snr, low_snr_speech=False)
             if decision == "background_speech":
                 self._stats["background_speech_drops"] += 1
                 state_extra["decisionReason"] = "speaker_mismatch"
+                state_extra["warning"] = self._current_warning()
                 self._emit_state("background_speech", **state_extra)
                 return
 
+            self._clear_warning()
             if decision == "uncertain_speech":
                 self._stats["uncertain_passes"] += 1
                 state_extra["decisionReason"] = "readable_uncertain"
@@ -1245,6 +1360,7 @@ class TargetSpeakerGateProcessor(FrameProcessor):
                 self._stats["target_passes"] += 1
                 state_extra["decisionReason"] = "target_speaker"
 
+            state_extra["warning"] = "none"
             self._emit_state(decision, **state_extra)
             await self.push_frame(frame, direction)
             return
@@ -1607,6 +1723,7 @@ async def create_sales_pipeline(
                 "calibration": status,
                 "activity": "idle",
                 "decisionReason": status,
+                "warning": "none",
             }
         )
 
@@ -1697,11 +1814,7 @@ async def create_sales_pipeline(
         try:
             await asyncio.wait_for(
                 calibration_complete.wait(),
-                timeout=(
-                    settings.VOICE_CALIBRATION_NOISE_SECS
-                    + settings.VOICE_CALIBRATION_VOICE_SECS
-                    + 3.0
-                ),
+                timeout=settings.VOICE_CALIBRATION_MAX_SECS + 1.0,
             )
         except asyncio.TimeoutError:
             logger.warning(

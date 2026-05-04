@@ -105,6 +105,7 @@ def test_get_session_state_returns_unknown_when_untracked():
             "noiseFilter": "none",
             "calibration": "pending",
             "activity": "idle",
+            "warning": "none",
         },
     }
 

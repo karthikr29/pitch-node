@@ -53,6 +53,12 @@ class Settings:
         self.VOICE_CALIBRATION_MIN_VOICE_SNR_DB: float = float(
             os.getenv("VOICE_CALIBRATION_MIN_VOICE_SNR_DB", "3.0")
         )
+        self.VOICE_CALIBRATION_MIN_VALID_VOICE_SECS: float = float(
+            os.getenv("VOICE_CALIBRATION_MIN_VALID_VOICE_SECS", "1.0")
+        )
+        self.VOICE_CALIBRATION_MAX_SECS: float = float(
+            os.getenv("VOICE_CALIBRATION_MAX_SECS", "8.0")
+        )
         self.VOICE_AUDIO_GUARD_MIN_SNR_DB: float = float(
             os.getenv("VOICE_AUDIO_GUARD_MIN_SNR_DB", "6.0")
         )

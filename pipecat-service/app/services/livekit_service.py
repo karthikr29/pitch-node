@@ -114,6 +114,7 @@ class LiveKitService:
                 "noiseFilter": "client",
                 "calibration": "pending",
                 "activity": "calibrating",
+                "warning": "none",
             },
         )
 
@@ -135,6 +136,7 @@ class LiveKitService:
                     "noiseFilter": "client",
                     "calibration": "pending",
                     "activity": "calibrating",
+                    "warning": "none",
                 },
             )
         )
@@ -169,6 +171,7 @@ class LiveKitService:
                 "noiseFilter": "none",
                 "calibration": "pending",
                 "activity": "idle",
+                "warning": "none",
             },
         }
 
@@ -344,6 +347,7 @@ class LiveKitService:
                 "noiseFilter": "client",
                 "calibration": "pending",
                 "activity": "calibrating",
+                "warning": "none",
             },
         )
 

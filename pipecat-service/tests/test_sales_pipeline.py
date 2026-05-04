@@ -152,6 +152,8 @@ async def test_voice_calibration_consumes_initial_audio_and_marks_ready(monkeypa
     monkeypatch.setattr(settings, "VOICE_CALIBRATION_NOISE_SECS", 0.01)
     monkeypatch.setattr(settings, "VOICE_CALIBRATION_VOICE_SECS", 0.2)
     monkeypatch.setattr(settings, "VOICE_CALIBRATION_MIN_VOICE_SNR_DB", 1.0)
+    monkeypatch.setattr(settings, "VOICE_CALIBRATION_MIN_VALID_VOICE_SECS", 0.1)
+    monkeypatch.setattr(settings, "VOICE_CALIBRATION_MAX_SECS", 1.0)
 
     updates: list[dict] = []
     completed: list[str] = []
@@ -175,8 +177,62 @@ async def test_voice_calibration_consumes_initial_audio_and_marks_ready(monkeypa
 
     assert completed == ["ready"]
     assert profile.ready is True
-    processor.push_frame.assert_not_called()
     assert updates[-1]["calibration"] == "ready"
+    assert updates[-1]["warning"] == "none"
+
+
+@pytest.mark.asyncio
+async def test_voice_calibration_silence_during_prompt_falls_back(monkeypatch):
+    monkeypatch.setattr(settings, "VOICE_CALIBRATION_NOISE_SECS", 0.01)
+    monkeypatch.setattr(settings, "VOICE_CALIBRATION_MIN_VOICE_SNR_DB", 3.0)
+    monkeypatch.setattr(settings, "VOICE_CALIBRATION_MIN_VALID_VOICE_SECS", 0.1)
+    monkeypatch.setattr(settings, "VOICE_CALIBRATION_MAX_SECS", 0.08)
+
+    completed: list[str] = []
+    profile = EphemeralVoiceProfile()
+    processor = VoiceCalibrationProcessor(
+        profile=profile,
+        on_audio_guard_update=lambda update: None,
+        on_calibration_complete=lambda status: completed.append(status),
+    )
+    processor.push_frame = AsyncMock()
+
+    for _ in range(10):
+        await processor.process_frame(
+            InputAudioRawFrame(audio=(b"\x01\x00" * 160), sample_rate=16000, num_channels=1),
+            FrameDirection.DOWNSTREAM,
+        )
+
+    assert completed == ["fallback"]
+    assert profile.ready is False
+
+
+@pytest.mark.asyncio
+async def test_voice_calibration_retries_contaminated_noise_sample(monkeypatch):
+    monkeypatch.setattr(settings, "VOICE_CALIBRATION_NOISE_SECS", 0.5)
+    monkeypatch.setattr(settings, "VOICE_CALIBRATION_MAX_SECS", 2.0)
+
+    updates: list[dict] = []
+    profile = EphemeralVoiceProfile()
+    processor = VoiceCalibrationProcessor(
+        profile=profile,
+        on_audio_guard_update=lambda update: updates.append(update),
+        on_calibration_complete=lambda status: None,
+    )
+    processor.push_frame = AsyncMock()
+
+    for _ in range(26):
+        await processor.process_frame(
+            InputAudioRawFrame(audio=(b"\x01\x00" * 160), sample_rate=16000, num_channels=1),
+            FrameDirection.DOWNSTREAM,
+        )
+    await processor.process_frame(
+        InputAudioRawFrame(audio=(b"\xff\x3f" * 160), sample_rate=16000, num_channels=1),
+        FrameDirection.DOWNSTREAM,
+    )
+
+    assert updates[-1]["decisionReason"] == "contaminated_noise_sample"
+    assert profile.noise_rms == pytest.approx(0.003)
 
 
 @pytest.mark.asyncio
@@ -204,6 +260,44 @@ async def test_target_speaker_gate_drops_fan_like_low_snr_audio(monkeypatch):
     processor.push_frame.assert_not_called()
     assert processor.stats["fan_drops"] == 1
     assert updates[-1]["activity"] == "background_noise"
+    assert updates[-1]["warning"] == "none"
+
+
+@pytest.mark.asyncio
+async def test_target_speaker_gate_low_snr_speech_warning_requires_windows(monkeypatch):
+    monkeypatch.setattr(settings, "VOICE_AUDIO_GUARD_MIN_SNR_DB", 6.0)
+    profile = EphemeralVoiceProfile()
+    profile.add_noise_frame({"rms": 0.1, "peak": 0.2, "zcr": 0.02, "crest": 2.0})
+    monkeypatch.setattr(
+        "app.pipelines.sales_pipeline._audio_features",
+        lambda audio: {"rms": 0.13, "peak": 0.26, "zcr": 0.08, "crest": 2.0},
+    )
+
+    updates: list[dict] = []
+    processor = TargetSpeakerGateProcessor(
+        profile=profile,
+        on_audio_guard_update=lambda update: updates.append(update),
+    )
+    processor.push_frame = AsyncMock()
+
+    for _ in range(250):
+        await processor.process_frame(
+            InputAudioRawFrame(audio=(b"\x00\x10" * 160), sample_rate=16000, num_channels=1),
+            FrameDirection.DOWNSTREAM,
+        )
+
+    assert processor.stats["low_snr_speech_warnings"] == 0
+    assert all(update.get("warning") != "low_snr_speech" for update in updates)
+
+    for _ in range(70):
+        await processor.process_frame(
+            InputAudioRawFrame(audio=(b"\x00\x10" * 160), sample_rate=16000, num_channels=1),
+            FrameDirection.DOWNSTREAM,
+        )
+
+    assert processor.stats["low_snr_speech_warnings"] >= 1
+    assert updates[-1]["warning"] == "low_snr_speech"
+    assert updates[-1]["decisionReason"] == "low_snr_speech_window"
 
 
 @pytest.mark.asyncio
@@ -262,6 +356,7 @@ async def test_target_speaker_gate_allows_readable_uncertain_speech(monkeypatch)
     assert len(pushed) == 1
     assert processor.stats["uncertain_passes"] == 1
     assert updates[-1]["activity"] == "uncertain_speech"
+    assert updates[-1]["warning"] == "none"
 
 
 @pytest.mark.asyncio

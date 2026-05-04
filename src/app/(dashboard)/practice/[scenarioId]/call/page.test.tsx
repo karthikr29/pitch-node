@@ -17,7 +17,27 @@ let liveKitCallbacks: {
   onError?: (error: Error) => void;
 } = {};
 let liveKitRoomAudioProp: unknown = null;
-let sessionStatePayload = {
+type TestSessionStatePayload = {
+  sessionId: string;
+  phase: "calibrating" | "active" | "ending" | "ended" | "unknown";
+  autoEndRequested: boolean;
+  endReason: {
+    speaker?: "user" | "ai";
+    reasonCode?: string;
+    trigger?: string;
+    type?: string;
+  } | null;
+  requestedAt: string | null;
+  audioGuard: {
+    noiseFilter: string;
+    calibration: string;
+    activity: string;
+    decisionReason?: string;
+    warning?: string;
+    warningExpiresAt?: string;
+  };
+};
+let sessionStatePayload: TestSessionStatePayload = {
   sessionId: "session-1",
   phase: "active",
   autoEndRequested: false,
@@ -28,6 +48,7 @@ let sessionStatePayload = {
     calibration: "ready",
     activity: "idle",
     decisionReason: "ready",
+    warning: "none",
   },
 };
 let endSessionShouldFail = false;
@@ -178,6 +199,7 @@ describe("CallRoomPage auto-end behavior", () => {
         calibration: "ready",
         activity: "idle",
         decisionReason: "ready",
+        warning: "none",
       },
     };
     liveKitRoomAudioProp = null;
@@ -311,6 +333,7 @@ describe("CallRoomPage auto-end behavior", () => {
         calibration: "collecting_voice",
         activity: "calibrating",
         decisionReason: "collecting_voice",
+        warning: "none",
       },
     };
 
@@ -333,6 +356,7 @@ describe("CallRoomPage auto-end behavior", () => {
         calibration: "collecting_noise",
         activity: "calibrating",
         decisionReason: "collecting_noise",
+        warning: "none",
       },
     };
 
@@ -353,6 +377,7 @@ describe("CallRoomPage auto-end behavior", () => {
         calibration: "ready",
         activity: "idle",
         decisionReason: "ready",
+        warning: "none",
       },
     };
 
@@ -390,6 +415,7 @@ describe("CallRoomPage auto-end behavior", () => {
         calibration: "collecting_noise",
         activity: "calibrating",
         decisionReason: "collecting_noise",
+        warning: "none",
       },
     };
 
@@ -416,6 +442,7 @@ describe("CallRoomPage auto-end behavior", () => {
         calibration: "ready",
         activity: "background_noise",
         decisionReason: "low_snr",
+        warning: "none",
       },
     };
 
@@ -426,6 +453,65 @@ describe("CallRoomPage auto-end behavior", () => {
     expect(screen.getByText("Ready")).toBeInTheDocument();
     expect(screen.queryByText("Listening to you...")).not.toBeInTheDocument();
     expect(screen.queryByText("Thinking...")).not.toBeInTheDocument();
+  });
+
+  it("hides mic warning for low-snr background noise without explicit backend warning", async () => {
+    sessionStatePayload = {
+      ...sessionStatePayload,
+      audioGuard: {
+        noiseFilter: "enabled",
+        calibration: "ready",
+        activity: "background_noise",
+        decisionReason: "low_snr",
+        warning: "none",
+      },
+    };
+
+    render(<CallRoomPage />);
+
+    await settleCallPage();
+
+    expect(screen.queryByText("Move closer to the mic or reduce nearby noise")).not.toBeInTheDocument();
+  });
+
+  it("shows mic warning only for active low-snr speech warning", async () => {
+    sessionStatePayload = {
+      ...sessionStatePayload,
+      audioGuard: {
+        noiseFilter: "enabled",
+        calibration: "ready",
+        activity: "background_noise",
+        decisionReason: "low_snr_speech_window",
+        warning: "low_snr_speech",
+        warningExpiresAt: new Date(Date.now() + 5000).toISOString(),
+      },
+    };
+
+    render(<CallRoomPage />);
+
+    await settleCallPage();
+
+    expect(screen.getByText("Move closer to the mic or reduce nearby noise")).toBeInTheDocument();
+  });
+
+  it("hides expired low-snr speech warning", async () => {
+    sessionStatePayload = {
+      ...sessionStatePayload,
+      audioGuard: {
+        noiseFilter: "enabled",
+        calibration: "ready",
+        activity: "background_noise",
+        decisionReason: "low_snr_speech_window",
+        warning: "low_snr_speech",
+        warningExpiresAt: new Date(Date.now() - 1000).toISOString(),
+      },
+    };
+
+    render(<CallRoomPage />);
+
+    await settleCallPage();
+
+    expect(screen.queryByText("Move closer to the mic or reduce nearby noise")).not.toBeInTheDocument();
   });
 
   it("shows elapsed call duration without rendering remaining-credit minutes", async () => {

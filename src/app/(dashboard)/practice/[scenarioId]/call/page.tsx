@@ -41,6 +41,7 @@ type SessionPhase = "calibrating" | "active" | "ending" | "ended" | "unknown";
 type CalibrationStatus = "pending" | "collecting_noise" | "collecting_voice" | "ready" | "fallback";
 type AudioGuardActivity = "calibrating" | "idle" | "target_speech" | "uncertain_speech" | "background_noise" | "background_speech";
 type NoiseFilterStatus = "pending" | "enabled" | "unsupported" | "error";
+type AudioGuardWarning = "none" | "low_snr_speech";
 
 interface RoomCredentials {
   token: string;
@@ -70,6 +71,8 @@ interface AudioGuardState {
   activity?: AudioGuardActivity;
   snrDb?: number;
   decisionReason?: string;
+  warning?: AudioGuardWarning;
+  warningExpiresAt?: string;
 }
 
 const CALIBRATION_PHRASE = "My voice is the only voice for this practice call.";
@@ -191,6 +194,7 @@ function CallInterface({
     calibration: "pending",
     activity: "calibrating",
     noiseFilter: "pending",
+    warning: "none",
   });
   const [noiseFilterStatus, setNoiseFilterStatus] = useState<NoiseFilterStatus>("pending");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -217,7 +221,7 @@ function CallInterface({
   const showAudioQualityWarning =
     isConnected &&
     !showCalibration &&
-    effectiveAudioGuard.decisionReason === "repeated_low_snr";
+    effectiveAudioGuard.warning === "low_snr_speech";
 
   // Credit countdown is enforced/logged internally; only near-exhaustion warnings are shown.
   const maxSeconds = maxDurationSeconds ?? userPlan?.creditsRemaining ?? null;
@@ -374,15 +378,24 @@ function CallInterface({
 
         setSessionPhase(payload.phase);
         if (payload.audioGuard) {
+          const nextAudioGuard = { ...payload.audioGuard };
+          if (
+            nextAudioGuard.warning === "low_snr_speech" &&
+            nextAudioGuard.warningExpiresAt &&
+            Date.parse(nextAudioGuard.warningExpiresAt) <= Date.now()
+          ) {
+            nextAudioGuard.warning = "none";
+          }
           setAudioGuard((prev) => ({
             ...prev,
-            ...payload.audioGuard,
+            ...nextAudioGuard,
           }));
         } else if (payload.phase === "active") {
           setAudioGuard((prev) => ({
             ...prev,
             calibration: "ready",
             activity: "idle",
+            warning: "none",
           }));
         }
 
