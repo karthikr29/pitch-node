@@ -101,7 +101,35 @@ def test_get_session_state_returns_unknown_when_untracked():
         "autoEndRequested": False,
         "endReason": None,
         "requestedAt": None,
+        "audioGuard": {
+            "noiseFilter": "none",
+            "calibration": "pending",
+            "activity": "idle",
+        },
     }
+
+
+def test_audio_guard_ready_moves_calibrating_session_active():
+    service = LiveKitService()
+    service._set_session_state(
+        "session-audio",
+        phase="calibrating",
+        auto_end_requested=False,
+        end_reason=None,
+    )
+
+    service._set_audio_guard_state(
+        "session-audio",
+        {
+            "calibration": "ready",
+            "activity": "idle",
+            "noiseFilter": "client",
+        },
+    )
+
+    state = service.get_session_state("session-audio")
+    assert state["phase"] == "active"
+    assert state["audioGuard"]["calibration"] == "ready"
 
 
 @pytest.mark.asyncio

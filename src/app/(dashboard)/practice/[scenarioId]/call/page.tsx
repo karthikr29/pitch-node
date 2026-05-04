@@ -30,13 +30,17 @@ import {
   useConnectionState,
   useParticipants,
 } from "@livekit/components-react";
+import { useKrispNoiseFilter } from "@livekit/components-react/krisp";
 import { ConnectionState } from "livekit-client";
 import * as Sentry from "@sentry/nextjs";
 
 type CallState = "requesting-mic" | "initializing" | "connecting" | "connected" | "disconnected" | "error";
 type SpeakingState = "ai" | "user" | "idle" | "thinking";
 type CallCompletionSource = "manual" | "remote-disconnect" | "auto-end-timeout";
-type SessionPhase = "active" | "ending" | "ended" | "unknown";
+type SessionPhase = "calibrating" | "active" | "ending" | "ended" | "unknown";
+type CalibrationStatus = "pending" | "collecting_noise" | "collecting_voice" | "ready" | "fallback";
+type AudioGuardActivity = "calibrating" | "idle" | "target_speech" | "uncertain_speech" | "background_noise" | "background_speech";
+type NoiseFilterStatus = "pending" | "enabled" | "unsupported" | "error";
 
 interface RoomCredentials {
   token: string;
@@ -57,6 +61,45 @@ interface SessionStatePayload {
     type?: string;
     max_seconds?: number;
   } | null;
+  audioGuard?: AudioGuardState;
+}
+
+interface AudioGuardState {
+  noiseFilter?: NoiseFilterStatus | "client" | "none";
+  calibration?: CalibrationStatus;
+  activity?: AudioGuardActivity;
+  snrDb?: number;
+  decisionReason?: string;
+}
+
+const CALIBRATION_PHRASE = "My voice is the only voice for this practice call.";
+const LIVEKIT_AUDIO_CAPTURE_OPTIONS = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+  channelCount: 1,
+} as const;
+
+function isAcceptedUserActivity(activity?: AudioGuardActivity) {
+  return activity === "target_speech" || activity === "uncertain_speech";
+}
+
+function isCalibrationInProgress(phase: SessionPhase, calibration?: CalibrationStatus) {
+  return (
+    phase === "calibrating" ||
+    calibration === "pending" ||
+    calibration === "collecting_noise" ||
+    calibration === "collecting_voice"
+  );
+}
+
+async function prewarmKrispNoiseFilter(): Promise<NoiseFilterStatus> {
+  try {
+    const mod = await import("@livekit/krisp-noise-filter");
+    return mod.isKrispNoiseFilterSupported() ? "pending" : "unsupported";
+  } catch {
+    return "unsupported";
+  }
 }
 
 function readPitchBriefingFromStorage(scenarioId: string) {
@@ -112,6 +155,7 @@ function CallInterface({
   sessionId,
   personaName,
   personaRole,
+  onConversationActive,
   onBeforeDisconnect,
   onEndCall,
   onAutoEndRequested,
@@ -121,6 +165,7 @@ function CallInterface({
   sessionId: string;
   personaName: string;
   personaRole: string;
+  onConversationActive: () => void;
   onBeforeDisconnect: () => void;
   onEndCall: () => void;
   onAutoEndRequested: () => void;
@@ -131,6 +176,7 @@ function CallInterface({
   const room = useRoomContext();
   const connectionState = useConnectionState();
   const participants = useParticipants();
+  const krisp = useKrispNoiseFilter();
 
   const { userPlan } = useAuth();
 
@@ -140,14 +186,38 @@ function CallInterface({
   const [speakingState, setSpeakingState] = useState<SpeakingState>("idle");
   const [autoEnding, setAutoEnding] = useState(false);
   const [timeLimitDetected, setTimeLimitDetected] = useState(false);
+  const [sessionPhase, setSessionPhase] = useState<SessionPhase>("calibrating");
+  const [audioGuard, setAudioGuard] = useState<AudioGuardState>({
+    calibration: "pending",
+    activity: "calibrating",
+    noiseFilter: "pending",
+  });
+  const [noiseFilterStatus, setNoiseFilterStatus] = useState<NoiseFilterStatus>("pending");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const thinkingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoEndFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noiseFilterStartedRef = useRef(false);
 
 
   const isConnected = connectionState === ConnectionState.Connected;
   const aiParticipant = participants.find((p) => p.identity.startsWith("ai-"));
   const isEnding = ending || autoEnding;
+  const effectiveNoiseFilterStatus: NoiseFilterStatus =
+    krisp.isNoiseFilterEnabled ? "enabled" : noiseFilterStatus;
+  const effectiveAudioGuard: AudioGuardState = {
+    ...audioGuard,
+    noiseFilter: effectiveNoiseFilterStatus,
+  };
+  const calibrationStatus = effectiveAudioGuard.calibration ?? "pending";
+  const showCalibration = isConnected && isCalibrationInProgress(sessionPhase, calibrationStatus);
+  const conversationActive =
+    isConnected &&
+    !showCalibration &&
+    (sessionPhase === "active" || sessionPhase === "ending" || sessionPhase === "ended");
+  const showAudioQualityWarning =
+    isConnected &&
+    !showCalibration &&
+    effectiveAudioGuard.decisionReason === "repeated_low_snr";
 
   // Credit countdown is enforced/logged internally; only near-exhaustion warnings are shown.
   const maxSeconds = maxDurationSeconds ?? userPlan?.creditsRemaining ?? null;
@@ -163,13 +233,78 @@ function CallInterface({
     });
   }, [sessionId, showWarning, timeLeft]);
 
-  // Raw LiveKit-derived state (only "ai" | "user" | "idle")
+  useEffect(() => {
+    if (!conversationActive) return;
+    onConversationActive();
+  }, [conversationActive, onConversationActive]);
+
+  useEffect(() => {
+    Sentry.setTag("audio_guard_mode", "client_calibration_backend_gate");
+    Sentry.setTag("noise_filter", effectiveNoiseFilterStatus);
+    Sentry.setTag("calibration_status", calibrationStatus);
+    Sentry.setTag("stt_turn_mode", "flux_reliability_speculation");
+  }, [calibrationStatus, effectiveNoiseFilterStatus]);
+
+  useEffect(() => {
+    if (!isConnected || noiseFilterStartedRef.current) return;
+
+    noiseFilterStartedRef.current = true;
+    let cancelled = false;
+
+    const enableNoiseFilter = async () => {
+      setNoiseFilterStatus("pending");
+      const support = await prewarmKrispNoiseFilter();
+      if (cancelled) return;
+      if (support === "unsupported") {
+        setNoiseFilterStatus("unsupported");
+        Sentry.logger.info("call: Krisp noise filter unsupported, using WebRTC guard", {
+          sessionId,
+        });
+        return;
+      }
+
+      try {
+        await krisp.setNoiseFilterEnabled(true);
+        if (!cancelled) {
+          setNoiseFilterStatus("enabled");
+          Sentry.logger.info("call: Krisp noise filter enabled", { sessionId });
+        }
+      } catch (error) {
+        if (cancelled) return;
+        setNoiseFilterStatus("error");
+        Sentry.logger.warn("call: Krisp noise filter failed, using WebRTC guard", {
+          sessionId,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      }
+    };
+
+    void enableNoiseFilter();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isConnected, krisp, sessionId]);
+
+  useEffect(() => {
+    if (!isConnected || noiseFilterStatus !== "pending") return;
+
+    const timeout = setTimeout(() => {
+      if (!krisp.isNoiseFilterEnabled) {
+        setNoiseFilterStatus("unsupported");
+      }
+    }, 4000);
+
+    return () => clearTimeout(timeout);
+  }, [isConnected, krisp.isNoiseFilterEnabled, noiseFilterStatus]);
+
+  // Backend audio-guard-derived state (only "ai" | "user" | "idle")
   const rawSpeakingState =
     !isConnected
       ? "idle"
       : aiParticipant?.isSpeaking
         ? "ai"
-        : localParticipant?.isSpeaking && !muted
+        : isAcceptedUserActivity(effectiveAudioGuard.activity) && !muted
           ? "user"
           : "idle";
 
@@ -237,6 +372,20 @@ function CallInterface({
         const payload = (await response.json()) as SessionStatePayload;
         if (!isMounted) return;
 
+        setSessionPhase(payload.phase);
+        if (payload.audioGuard) {
+          setAudioGuard((prev) => ({
+            ...prev,
+            ...payload.audioGuard,
+          }));
+        } else if (payload.phase === "active") {
+          setAudioGuard((prev) => ({
+            ...prev,
+            calibration: "ready",
+            activity: "idle",
+          }));
+        }
+
         if (payload.phase === "ending" || payload.phase === "ended") {
           setAutoEnding(true);
           if (payload.endReason?.type === "time_limit") {
@@ -273,7 +422,7 @@ function CallInterface({
 
   // Timer
   useEffect(() => {
-    if (isConnected) {
+    if (conversationActive) {
       timerRef.current = setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
       }, 1000);
@@ -282,7 +431,7 @@ function CallInterface({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isConnected]);
+  }, [conversationActive]);
 
   // Enable microphone when connected
   useEffect(() => {
@@ -422,6 +571,22 @@ function CallInterface({
               </motion.div>
             )}
           </AnimatePresence>
+
+          <AnimatePresence>
+            {showAudioQualityWarning && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-sky-500/15 border border-sky-500/30 backdrop-blur-md"
+              >
+                <Mic className="w-3.5 h-3.5 text-sky-300 shrink-0" />
+                <span className="text-sky-200 text-xs font-medium">
+                  Move closer to the mic or reduce nearby noise
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Center Stage - Waveform & Persona */}
@@ -442,6 +607,49 @@ function CallInterface({
                 <p className="text-slate-400 font-light tracking-wide animate-pulse">
                   Connecting to AI assistant...
                 </p>
+              </motion.div>
+            ) : status === "connected" && showCalibration ? (
+              <motion.div
+                key="calibrating"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.6 }}
+                className="flex flex-col items-center w-full max-w-xl text-center"
+              >
+                <div className="h-40 flex items-center justify-center w-full mb-8 relative">
+                  <SentientPrismVisualizer
+                    mode="thinking"
+                    className="w-full h-full"
+                  />
+                </div>
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <h2 className="text-3xl md:text-4xl font-display font-bold text-white tracking-tight">
+                      Calibrating your voice
+                    </h2>
+                    <p className="text-slate-400 text-base">
+                      {calibrationStatus === "collecting_voice"
+                        ? "Read the phrase below in your normal speaking voice."
+                        : "Stay quiet for a moment so we can learn the room noise."}
+                    </p>
+                  </div>
+
+                  {calibrationStatus === "collecting_voice" && (
+                    <div className="text-2xl md:text-3xl font-display font-semibold leading-tight text-sky-100">
+                      {`"${CALIBRATION_PHRASE}"`}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-widest font-semibold text-slate-500">
+                    <span>
+                      {effectiveNoiseFilterStatus === "enabled"
+                        ? "Enhanced noise filter active"
+                        : effectiveNoiseFilterStatus === "pending"
+                          ? "Preparing noise filter"
+                          : "Guarded WebRTC audio"}
+                    </span>
+                  </div>
+                </div>
               </motion.div>
             ) : status === "connected" ? (
               <motion.div
@@ -593,6 +801,7 @@ export default function CallRoomPage() {
       .query({ name: "microphone" as PermissionName })
       .then((result) => {
         if (result.state === "granted") {
+          void prewarmKrispNoiseFilter();
           setHasMicPermission(true);
           setCallState("initializing");
         } else if (result.state === "denied") {
@@ -617,6 +826,7 @@ export default function CallRoomPage() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       // Stop the tracks immediately - we just needed to get permission
       stream.getTracks().forEach(track => track.stop());
+      void prewarmKrispNoiseFilter();
       if (isDev) console.log("[CallPage] Microphone permission granted");
       setHasMicPermission(true);
       setCallState("initializing");
@@ -757,6 +967,10 @@ export default function CallRoomPage() {
     }
   }, [clearSessionConnectedRetry, credentials?.maxDurationSeconds, credentials?.sessionId]);
 
+  const handleConversationActive = useCallback(() => {
+    void syncSessionConnected();
+  }, [syncSessionConnected]);
+
   const handleConnectionReady = useCallback((connectedAt: string) => {
     if (connectedAtRef.current) return;
 
@@ -767,8 +981,7 @@ export default function CallRoomPage() {
       sessionId: credentials?.sessionId,
       connectedAt,
     });
-    void syncSessionConnected();
-  }, [credentials?.sessionId, syncSessionConnected]);
+  }, [credentials?.sessionId]);
 
   const finalizeSessionInBackground = useCallback((
     sessionId: string,
@@ -896,7 +1109,7 @@ export default function CallRoomPage() {
         serverUrl={credentials.livekitUrl}
         token={credentials.token}
         connect={true}
-        audio={true}
+        audio={LIVEKIT_AUDIO_CAPTURE_OPTIONS}
         video={false}
         onDisconnected={() => {
           if (isDev) console.log("[CallPage] Disconnected from LiveKit");
@@ -926,6 +1139,7 @@ export default function CallRoomPage() {
             sessionId={credentials.sessionId}
             personaName={personaName}
             personaRole={personaRole}
+            onConversationActive={handleConversationActive}
             onBeforeDisconnect={() => {
               intentionalDisconnectRef.current = true;
             }}

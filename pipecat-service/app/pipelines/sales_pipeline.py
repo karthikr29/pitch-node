@@ -5,8 +5,11 @@ Pipeline: LiveKit -> Deepgram Flux -> Grok 4.1 Fast -> Cartesia -> LiveKit
 """
 
 import asyncio
+import math
 import json
 import re
+import sys
+from array import array
 from contextlib import suppress
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -19,6 +22,7 @@ from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
     EndFrame,
     Frame,
+    InputAudioRawFrame,
     InterimTranscriptionFrame,
     InterruptionFrame,
     LLMFullResponseEndFrame,
@@ -68,8 +72,12 @@ TOKEN_RE = re.compile(r"\S+")
 CLAUSE_BOUNDARY_RE = re.compile(r"[,:;?!.]")
 USER_TURN_COMMIT_SILENCE_MS = 0
 USER_TURN_FALLBACK_COMMIT_MS = 280
+USER_TURN_EAGER_COMMIT_DELAY_MS = 120
 SOFT_REFUSAL_REPEAT_THRESHOLD = 2
 AUTO_END_FAREWELL = "Understood. I'll let you go now. Goodbye."
+VOICE_GUARD_STATE_THROTTLE_SECS = 0.5
+VOICE_GUARD_MIN_PROFILE_FRAMES = 12
+VOICE_GUARD_REPEATED_LOW_SNR_THRESHOLD = 10
 
 EXPLICIT_END_PATTERNS = [
     re.compile(r"\b(?:please\s+)?(?:end|stop)\s+(?:the\s+)?(?:call|conversation)\b"),
@@ -701,9 +709,9 @@ class FluxDeepgramSTTService(STTService):
         model: str,
         sample_rate: int = 16000,
         use_eager_eot: bool = True,
-        eager_eot_threshold: float = 0.35,
-        eot_threshold: float = 0.5,
-        eot_timeout_ms: int = 700,
+        eager_eot_threshold: float = 0.6,
+        eot_threshold: float = 0.8,
+        eot_timeout_ms: int = 1500,
         **kwargs,
     ):
         super().__init__(
@@ -723,6 +731,7 @@ class FluxDeepgramSTTService(STTService):
         self._receive_task: asyncio.Task | None = None
         self._flux_user_speaking = False
         self._last_interim_text = ""
+        self._last_eager_transcript = ""
         self._startup_error: Exception | None = None
 
     def _effective_sample_rate(self) -> int:
@@ -872,10 +881,25 @@ class FluxDeepgramSTTService(STTService):
         if event == "EagerEndOfTurn":
             if self._use_eager_eot:
                 await self._emit_stopped_speaking(force=True)
+                if transcript and transcript != self._last_eager_transcript:
+                    eager_payload = {**payload, "eager": True}
+                    self._last_eager_transcript = transcript
+                    await self.push_frame(
+                        TranscriptionFrame(
+                            transcript,
+                            self._user_id,
+                            _utcnow_iso(),
+                            None,
+                            result=eager_payload,
+                            finalized=False,
+                        )
+                    )
             return
 
         if event == "TurnResumed":
+            self._last_eager_transcript = ""
             await self._emit_started_speaking()
+            await self.push_frame(InterruptionFrame())
             return
 
         if event == "Update":
@@ -896,6 +920,11 @@ class FluxDeepgramSTTService(STTService):
             await self._emit_stopped_speaking(force=True)
             self._last_interim_text = ""
             if transcript:
+                if transcript == self._last_eager_transcript:
+                    self._last_eager_transcript = ""
+                    await self.stop_processing_metrics()
+                    return
+                self._last_eager_transcript = ""
                 await self.push_frame(
                     TranscriptionFrame(
                         transcript,
@@ -928,6 +957,299 @@ class FluxDeepgramSTTService(STTService):
         except Exception as e:
             logger.error(f"Deepgram Flux receive loop failed: {e}")
             await self._call_event_handler("on_connection_error", e)
+
+
+def _audio_duration_secs(frame: InputAudioRawFrame) -> float:
+    sample_rate = frame.sample_rate or 16000
+    channels = frame.num_channels or 1
+    bytes_per_sample = 2
+    frame_bytes_per_second = sample_rate * channels * bytes_per_sample
+    if frame_bytes_per_second <= 0:
+        return 0.0
+    return len(frame.audio) / frame_bytes_per_second
+
+
+def _pcm16_samples(audio: bytes) -> array:
+    samples = array("h")
+    if not audio:
+        return samples
+    samples.frombytes(audio[: len(audio) - (len(audio) % 2)])
+    if sys.byteorder == "big":
+        samples.byteswap()
+    return samples
+
+
+def _audio_features(audio: bytes) -> dict[str, float]:
+    samples = _pcm16_samples(audio)
+    if not samples:
+        return {"rms": 0.0, "peak": 0.0, "zcr": 0.0, "crest": 0.0}
+
+    square_sum = 0.0
+    peak = 0
+    zero_crossings = 0
+    previous = samples[0]
+
+    for sample in samples:
+        abs_sample = abs(sample)
+        peak = max(peak, abs_sample)
+        square_sum += sample * sample
+        if (previous < 0 <= sample) or (previous >= 0 > sample):
+            zero_crossings += 1
+        previous = sample
+
+    rms = math.sqrt(square_sum / len(samples)) / 32768.0
+    peak_ratio = peak / 32768.0
+    zcr = zero_crossings / max(1, len(samples) - 1)
+    crest = peak_ratio / max(rms, 1e-6)
+    return {"rms": rms, "peak": peak_ratio, "zcr": zcr, "crest": crest}
+
+
+def _snr_db(rms: float, noise_rms: float) -> float:
+    return 20.0 * math.log10(max(rms, 1e-6) / max(noise_rms, 1e-6))
+
+
+class EphemeralVoiceProfile:
+    """Session-local voice/noise profile. It is never persisted."""
+
+    def __init__(self):
+        self._noise_rms = 0.003
+        self._noise_samples: list[float] = []
+        self._voice_features: list[dict[str, float]] = []
+        self._reference: dict[str, float] | None = None
+
+    @property
+    def noise_rms(self) -> float:
+        return self._noise_rms
+
+    @property
+    def ready(self) -> bool:
+        return self._reference is not None
+
+    def add_noise_frame(self, features: dict[str, float]):
+        if features["rms"] > 0:
+            self._noise_samples.append(features["rms"])
+            ordered = sorted(self._noise_samples)
+            self._noise_rms = ordered[len(ordered) // 2]
+
+    def add_voice_frame(self, features: dict[str, float]):
+        if features["rms"] <= 0:
+            return
+        self._voice_features.append(features)
+        if len(self._voice_features) >= VOICE_GUARD_MIN_PROFILE_FRAMES:
+            self._reference = {
+                key: sum(frame[key] for frame in self._voice_features) / len(self._voice_features)
+                for key in ("rms", "peak", "zcr", "crest")
+            }
+
+    def score(self, features: dict[str, float]) -> float | None:
+        if not self._reference:
+            return None
+
+        ref = self._reference
+        rms_delta = abs(math.log10(max(features["rms"], 1e-6)) - math.log10(max(ref["rms"], 1e-6)))
+        zcr_delta = abs(features["zcr"] - ref["zcr"])
+        crest_delta = abs(features["crest"] - ref["crest"])
+        penalty = min(1.0, (rms_delta / 1.0) * 0.25 + (zcr_delta / 0.20) * 0.55 + (crest_delta / 8.0) * 0.20)
+        return max(0.0, 1.0 - penalty)
+
+    def clear(self):
+        self._noise_samples.clear()
+        self._voice_features.clear()
+        self._reference = None
+
+
+class VoiceCalibrationProcessor(FrameProcessor):
+    """Consumes initial audio to learn room noise and a session-local voice profile."""
+
+    def __init__(
+        self,
+        *,
+        profile: EphemeralVoiceProfile,
+        on_audio_guard_update: Callable[[dict[str, Any]], None],
+        on_calibration_complete: Callable[[str], None],
+    ):
+        super().__init__()
+        self._profile = profile
+        self._on_audio_guard_update = on_audio_guard_update
+        self._on_calibration_complete = on_calibration_complete
+        self._elapsed_secs = 0.0
+        self._completed = False
+        self._last_update_at = 0.0
+
+    def _emit_state(self, calibration: str, activity: str, **extra: Any):
+        now = asyncio.get_event_loop().time()
+        if now - self._last_update_at < VOICE_GUARD_STATE_THROTTLE_SECS and not extra.get("force"):
+            return
+        self._last_update_at = now
+        payload = {
+            "noiseFilter": "client",
+            "calibration": calibration,
+            "activity": activity,
+            **{key: value for key, value in extra.items() if key != "force"},
+        }
+        self._on_audio_guard_update(payload)
+
+    def _complete(self, status: str | None = None):
+        if self._completed:
+            return
+        self._completed = True
+        calibration = status or ("ready" if self._profile.ready else "fallback")
+        self._emit_state(calibration, "idle", decisionReason=calibration, force=True)
+        self._on_calibration_complete(calibration)
+
+    def force_complete(self, status: str = "fallback"):
+        self._complete(status)
+
+    async def cleanup(self):
+        await super().cleanup()
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+
+        if self._completed:
+            await self.push_frame(frame, direction)
+            return
+
+        if isinstance(frame, InputAudioRawFrame):
+            features = _audio_features(frame.audio)
+            self._elapsed_secs += _audio_duration_secs(frame)
+
+            if self._elapsed_secs <= settings.VOICE_CALIBRATION_NOISE_SECS:
+                self._profile.add_noise_frame(features)
+                self._emit_state("collecting_noise", "calibrating")
+                return
+
+            snr = _snr_db(features["rms"], self._profile.noise_rms)
+            if snr >= settings.VOICE_CALIBRATION_MIN_VOICE_SNR_DB:
+                self._profile.add_voice_frame(features)
+            self._emit_state(
+                "collecting_voice",
+                "calibrating",
+                snrDb=round(snr, 1),
+            )
+
+            if self._elapsed_secs >= (
+                settings.VOICE_CALIBRATION_NOISE_SECS + settings.VOICE_CALIBRATION_VOICE_SECS
+            ):
+                self._complete()
+            return
+
+        if isinstance(frame, (VADUserStartedSpeakingFrame, VADUserStoppedSpeakingFrame)):
+            return
+
+        await self.push_frame(frame, direction)
+
+
+class TargetSpeakerGateProcessor(FrameProcessor):
+    """Drops fan-like audio and clear non-target speech before STT sees it."""
+
+    def __init__(
+        self,
+        *,
+        profile: EphemeralVoiceProfile,
+        on_audio_guard_update: Callable[[dict[str, Any]], None],
+    ):
+        super().__init__()
+        self._profile = profile
+        self._on_audio_guard_update = on_audio_guard_update
+        self._last_update_at = 0.0
+        self._last_activity = "idle"
+        self._low_snr_drops = 0
+        self._stats = {
+            "fan_drops": 0,
+            "background_speech_drops": 0,
+            "uncertain_passes": 0,
+            "target_passes": 0,
+        }
+
+    @property
+    def stats(self) -> dict[str, int]:
+        return self._stats.copy()
+
+    def _emit_state(self, activity: str, **extra: Any):
+        now = asyncio.get_event_loop().time()
+        should_emit = (
+            activity != self._last_activity
+            or now - self._last_update_at >= VOICE_GUARD_STATE_THROTTLE_SECS
+            or extra.get("force")
+        )
+        if not should_emit:
+            return
+        self._last_activity = activity
+        self._last_update_at = now
+        self._on_audio_guard_update(
+            {
+                "noiseFilter": "client",
+                "calibration": "ready" if self._profile.ready else "fallback",
+                "activity": activity,
+                **{key: value for key, value in extra.items() if key != "force"},
+            }
+        )
+
+    def _decision_for_features(self, features: dict[str, float]) -> tuple[str, float, float | None]:
+        snr = _snr_db(features["rms"], self._profile.noise_rms)
+        if snr < settings.VOICE_AUDIO_GUARD_MIN_SNR_DB:
+            return "background_noise", snr, None
+
+        speaker_score = self._profile.score(features)
+        if speaker_score is None:
+            return "uncertain_speech", snr, None
+        if speaker_score < settings.VOICE_AUDIO_GUARD_REJECT_THRESHOLD:
+            return "background_speech", snr, speaker_score
+        if speaker_score < settings.VOICE_AUDIO_GUARD_TARGET_THRESHOLD:
+            return "uncertain_speech", snr, speaker_score
+        return "target_speech", snr, speaker_score
+
+    async def cleanup(self):
+        logger.info(
+            "audio_guard_stats fan_drops={} background_speech_drops={} uncertain_passes={} target_passes={}",
+            self._stats["fan_drops"],
+            self._stats["background_speech_drops"],
+            self._stats["uncertain_passes"],
+            self._stats["target_passes"],
+        )
+        await super().cleanup()
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+
+        if isinstance(frame, InputAudioRawFrame):
+            features = _audio_features(frame.audio)
+            decision, snr, speaker_score = self._decision_for_features(features)
+            state_extra: dict[str, Any] = {"snrDb": round(snr, 1)}
+            if speaker_score is not None:
+                state_extra["speakerScore"] = round(speaker_score, 3)
+
+            if decision == "background_noise":
+                self._low_snr_drops += 1
+                self._stats["fan_drops"] += 1
+                state_extra["decisionReason"] = (
+                    "repeated_low_snr"
+                    if self._low_snr_drops >= VOICE_GUARD_REPEATED_LOW_SNR_THRESHOLD
+                    else "low_snr"
+                )
+                self._emit_state("background_noise", **state_extra)
+                return
+
+            self._low_snr_drops = 0
+            if decision == "background_speech":
+                self._stats["background_speech_drops"] += 1
+                state_extra["decisionReason"] = "speaker_mismatch"
+                self._emit_state("background_speech", **state_extra)
+                return
+
+            if decision == "uncertain_speech":
+                self._stats["uncertain_passes"] += 1
+                state_extra["decisionReason"] = "readable_uncertain"
+            else:
+                self._stats["target_passes"] += 1
+                state_extra["decisionReason"] = "target_speaker"
+
+            self._emit_state(decision, **state_extra)
+            await self.push_frame(frame, direction)
+            return
+
+        await self.push_frame(frame, direction)
 
 
 class UserTurnGateProcessor(FrameProcessor):
@@ -1068,6 +1390,7 @@ class UserTurnGateProcessor(FrameProcessor):
 
         if isinstance(frame, InterruptionFrame):
             await self._cancel_commit_task()
+            self._pending_segments.clear()
             await self.push_frame(frame, direction)
             return
 
@@ -1082,7 +1405,11 @@ class UserTurnGateProcessor(FrameProcessor):
             self._pending_direction = direction
             if frame.text.strip():
                 self._pending_segments.append(frame)
-                self._schedule_commit(self._commit_silence_ms, "transcription_frame")
+                is_eager = isinstance(frame.result, dict) and bool(frame.result.get("eager"))
+                self._schedule_commit(
+                    USER_TURN_EAGER_COMMIT_DELAY_MS if is_eager else self._commit_silence_ms,
+                    "eager_transcription_frame" if is_eager else "transcription_frame",
+                )
             return
 
         if isinstance(frame, InterimTranscriptionFrame):
@@ -1174,10 +1501,10 @@ def _build_transport(
     params.vad_analyzer = SileroVADAnalyzer(
         sample_rate=16000,
         params=VADParams(
-            confidence=0.7,
-            start_secs=0.2,
-            stop_secs=0.2,
-            min_volume=0.6,
+            confidence=0.82,
+            start_secs=0.25,
+            stop_secs=0.35,
+            min_volume=0.65,
         ),
     )
 
@@ -1213,6 +1540,7 @@ async def create_sales_pipeline(
     pitch_briefing: dict | None = None,
     inferred_role: str | None = None,
     on_auto_end_requested: Callable[[dict[str, Any]], None] | None = None,
+    on_audio_guard_update: Callable[[dict[str, Any]], None] | None = None,
 ):
     """Create and run the voice AI pipeline for a sales training session."""
 
@@ -1234,6 +1562,7 @@ async def create_sales_pipeline(
     )
     conversation_model = await resolve_conversation_model()
     transcript_buffer: list[dict] = []
+    calibration_complete = asyncio.Event()
 
     transport = _build_transport(
         livekit_url=livekit_url,
@@ -1261,6 +1590,26 @@ async def create_sales_pipeline(
     session_start_time = asyncio.get_event_loop().time()
     user_transcript_collector = UserTranscriptCollector(session_id, transcript_buffer, session_start_time)
 
+    def handle_audio_guard_update(update: dict[str, Any]):
+        if on_audio_guard_update is not None:
+            on_audio_guard_update(update)
+
+    def handle_calibration_complete(status: str):
+        logger.info(
+            "audio_guard_calibration_complete session={} status={}",
+            session_id,
+            status,
+        )
+        calibration_complete.set()
+        handle_audio_guard_update(
+            {
+                "noiseFilter": "client",
+                "calibration": status,
+                "activity": "idle",
+                "decisionReason": status,
+            }
+        )
+
     def handle_auto_end(reason: dict[str, Any]):
         already_triggered = bool(pipeline_result["auto_complete_session"])
         pipeline_result.update({"auto_complete_session": True, "end_reason": reason})
@@ -1277,6 +1626,16 @@ async def create_sales_pipeline(
     clause_chunker = ClauseChunkingProcessor()
     number_normalizer = NumberNormalizerProcessor()
     context_manager = ConversationContextManager(context=context)
+    voice_profile = EphemeralVoiceProfile()
+    voice_calibration = VoiceCalibrationProcessor(
+        profile=voice_profile,
+        on_audio_guard_update=handle_audio_guard_update,
+        on_calibration_complete=handle_calibration_complete,
+    )
+    target_speaker_gate = TargetSpeakerGateProcessor(
+        profile=voice_profile,
+        on_audio_guard_update=handle_audio_guard_update,
+    )
     turn_gate = UserTurnGateProcessor(
         session_id=session_id,
         on_auto_end=handle_auto_end,
@@ -1285,6 +1644,8 @@ async def create_sales_pipeline(
     pipeline = Pipeline(
         [
             transport.input(),
+            voice_calibration,
+            target_speaker_gate,
             stt,
             turn_gate,
             user_transcript_collector,
@@ -1333,6 +1694,22 @@ async def create_sales_pipeline(
             "closing":     f"Hi, {persona_name} here.",
         }
         greeting = _PROSPECT_GREETINGS.get(call_type, f"Hi, {persona_name} speaking.")
+        try:
+            await asyncio.wait_for(
+                calibration_complete.wait(),
+                timeout=(
+                    settings.VOICE_CALIBRATION_NOISE_SECS
+                    + settings.VOICE_CALIBRATION_VOICE_SECS
+                    + 3.0
+                ),
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "audio_guard_calibration_timeout session={} room={}",
+                session_id,
+                room_name,
+            )
+            voice_calibration.force_complete("fallback")
         logger.info(
             "greeting_queued session={} room={} call_type={}",
             session_id,
@@ -1379,6 +1756,7 @@ async def create_sales_pipeline(
         logger.error(f"Pipeline error for session {session_id}: {e}")
         raise
     finally:
+        voice_profile.clear()
         flush_task.cancel()
         with suppress(asyncio.CancelledError):
             await flush_task

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from pipecat.frames.frames import EndFrame, TranscriptionFrame
+from pipecat.frames.frames import EndFrame, InputAudioRawFrame, TranscriptionFrame
 from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 from pipecat.processors.frame_processor import FrameDirection
 from pipecat.frames.frames import InterruptionFrame, LLMFullResponseEndFrame, LLMTextFrame, TextFrame
@@ -13,10 +13,13 @@ from app.config import Settings
 from app.pipelines.sales_pipeline import (
     ClauseChunkingProcessor,
     ConversationContextManager,
+    EphemeralVoiceProfile,
     FluxDeepgramSTTService,
     LowLatencyCartesiaTTSService,
     AIResponseCollector,
+    TargetSpeakerGateProcessor,
     UserTurnGateProcessor,
+    VoiceCalibrationProcessor,
     create_session_stt_service,
     detect_closing_intent,
     settings,
@@ -142,6 +145,172 @@ async def test_create_session_stt_service_raises_when_flux_required(monkeypatch)
 
     with pytest.raises(RuntimeError, match="required"):
         await create_session_stt_service("session-2")
+
+
+@pytest.mark.asyncio
+async def test_voice_calibration_consumes_initial_audio_and_marks_ready(monkeypatch):
+    monkeypatch.setattr(settings, "VOICE_CALIBRATION_NOISE_SECS", 0.01)
+    monkeypatch.setattr(settings, "VOICE_CALIBRATION_VOICE_SECS", 0.2)
+    monkeypatch.setattr(settings, "VOICE_CALIBRATION_MIN_VOICE_SNR_DB", 1.0)
+
+    updates: list[dict] = []
+    completed: list[str] = []
+    profile = EphemeralVoiceProfile()
+    processor = VoiceCalibrationProcessor(
+        profile=profile,
+        on_audio_guard_update=lambda update: updates.append(update),
+        on_calibration_complete=lambda status: completed.append(status),
+    )
+    processor.push_frame = AsyncMock()
+
+    await processor.process_frame(
+        InputAudioRawFrame(audio=(b"\x01\x00" * 160), sample_rate=16000, num_channels=1),
+        FrameDirection.DOWNSTREAM,
+    )
+    for _ in range(20):
+        await processor.process_frame(
+            InputAudioRawFrame(audio=(b"\xff\x3f" * 160), sample_rate=16000, num_channels=1),
+            FrameDirection.DOWNSTREAM,
+        )
+
+    assert completed == ["ready"]
+    assert profile.ready is True
+    processor.push_frame.assert_not_called()
+    assert updates[-1]["calibration"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_target_speaker_gate_drops_fan_like_low_snr_audio(monkeypatch):
+    monkeypatch.setattr(settings, "VOICE_AUDIO_GUARD_MIN_SNR_DB", 6.0)
+    profile = EphemeralVoiceProfile()
+    profile.add_noise_frame({"rms": 0.1, "peak": 0.1, "zcr": 0.02, "crest": 1.0})
+    monkeypatch.setattr(
+        "app.pipelines.sales_pipeline._audio_features",
+        lambda audio: {"rms": 0.1, "peak": 0.1, "zcr": 0.02, "crest": 1.0},
+    )
+
+    updates: list[dict] = []
+    processor = TargetSpeakerGateProcessor(
+        profile=profile,
+        on_audio_guard_update=lambda update: updates.append(update),
+    )
+    processor.push_frame = AsyncMock()
+
+    await processor.process_frame(
+        InputAudioRawFrame(audio=b"fan", sample_rate=16000, num_channels=1),
+        FrameDirection.DOWNSTREAM,
+    )
+
+    processor.push_frame.assert_not_called()
+    assert processor.stats["fan_drops"] == 1
+    assert updates[-1]["activity"] == "background_noise"
+
+
+@pytest.mark.asyncio
+async def test_target_speaker_gate_drops_clear_background_speaker(monkeypatch):
+    monkeypatch.setattr(settings, "VOICE_AUDIO_GUARD_MIN_SNR_DB", 6.0)
+    monkeypatch.setattr(settings, "VOICE_AUDIO_GUARD_REJECT_THRESHOLD", 0.8)
+    profile = EphemeralVoiceProfile()
+    profile.add_noise_frame({"rms": 0.01, "peak": 0.02, "zcr": 0.01, "crest": 2.0})
+    for _ in range(12):
+        profile.add_voice_frame({"rms": 0.2, "peak": 0.5, "zcr": 0.02, "crest": 2.5})
+    monkeypatch.setattr(
+        "app.pipelines.sales_pipeline._audio_features",
+        lambda audio: {"rms": 0.2, "peak": 0.5, "zcr": 0.35, "crest": 2.5},
+    )
+
+    updates: list[dict] = []
+    processor = TargetSpeakerGateProcessor(
+        profile=profile,
+        on_audio_guard_update=lambda update: updates.append(update),
+    )
+    processor.push_frame = AsyncMock()
+
+    await processor.process_frame(
+        InputAudioRawFrame(audio=b"other-speaker", sample_rate=16000, num_channels=1),
+        FrameDirection.DOWNSTREAM,
+    )
+
+    processor.push_frame.assert_not_called()
+    assert processor.stats["background_speech_drops"] == 1
+    assert updates[-1]["activity"] == "background_speech"
+
+
+@pytest.mark.asyncio
+async def test_target_speaker_gate_allows_readable_uncertain_speech(monkeypatch):
+    monkeypatch.setattr(settings, "VOICE_AUDIO_GUARD_MIN_SNR_DB", 6.0)
+    profile = EphemeralVoiceProfile()
+    profile.add_noise_frame({"rms": 0.01, "peak": 0.02, "zcr": 0.01, "crest": 2.0})
+    monkeypatch.setattr(
+        "app.pipelines.sales_pipeline._audio_features",
+        lambda audio: {"rms": 0.2, "peak": 0.4, "zcr": 0.08, "crest": 2.0},
+    )
+
+    updates: list[dict] = []
+    pushed: list[object] = []
+    processor = TargetSpeakerGateProcessor(
+        profile=profile,
+        on_audio_guard_update=lambda update: updates.append(update),
+    )
+    processor.push_frame = AsyncMock(side_effect=lambda frame, direction=None: pushed.append(frame))
+
+    await processor.process_frame(
+        InputAudioRawFrame(audio=b"speech", sample_rate=16000, num_channels=1),
+        FrameDirection.DOWNSTREAM,
+    )
+
+    assert len(pushed) == 1
+    assert processor.stats["uncertain_passes"] == 1
+    assert updates[-1]["activity"] == "uncertain_speech"
+
+
+@pytest.mark.asyncio
+async def test_flux_eager_end_of_turn_is_deduped_against_final():
+    service = FluxDeepgramSTTService(
+        api_key="test-deepgram",
+        model="flux-general-en",
+        sample_rate=16000,
+    )
+    service._emit_stopped_speaking = AsyncMock()
+    service.stop_processing_metrics = AsyncMock()
+    pushed: list[object] = []
+    service.push_frame = AsyncMock(side_effect=lambda frame, direction=None: pushed.append(frame))
+
+    await service._handle_turn_info({"event": "EagerEndOfTurn", "transcript": "hello"})
+    await service._handle_turn_info({"event": "EndOfTurn", "transcript": "hello"})
+
+    transcriptions = [frame for frame in pushed if isinstance(frame, TranscriptionFrame)]
+    assert len(transcriptions) == 1
+    assert transcriptions[0].text == "hello"
+    assert transcriptions[0].result["eager"] is True
+
+
+@pytest.mark.asyncio
+async def test_user_turn_gate_cancels_eager_transcript_on_interruption():
+    processor = UserTurnGateProcessor("session-eager", on_auto_end=lambda reason: None)
+    processor.push_frame = AsyncMock()
+
+    await processor.process_frame(
+        TranscriptionFrame(
+            text="partial thought",
+            user_id="user-1",
+            timestamp="2026-03-09T00:00:00Z",
+            language=None,
+            result={"eager": True},
+            finalized=False,
+        ),
+        FrameDirection.DOWNSTREAM,
+    )
+    await processor.process_frame(InterruptionFrame(), FrameDirection.DOWNSTREAM)
+    await asyncio.sleep(0.2)
+
+    pushed_transcriptions = [
+        call.args[0]
+        for call in processor.push_frame.await_args_list
+        if isinstance(call.args[0], TranscriptionFrame)
+    ]
+    assert pushed_transcriptions == []
+    await processor.cleanup()
 
 @pytest.mark.asyncio
 async def test_clause_chunker_flushes_on_punctuation():

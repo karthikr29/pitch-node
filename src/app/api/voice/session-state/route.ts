@@ -9,6 +9,11 @@ function buildUnknownState(sessionId: string) {
     autoEndRequested: false,
     endReason: null,
     requestedAt: null,
+    audioGuard: {
+      noiseFilter: "none",
+      calibration: "pending",
+      activity: "idle",
+    },
   };
 }
 

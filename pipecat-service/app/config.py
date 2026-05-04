@@ -40,10 +40,28 @@ class Settings:
             os.getenv("VOICE_USE_EAGER_EOT", "true").lower() == "true"
         )
         self.VOICE_EAGER_EOT_THRESHOLD: float = float(
-            os.getenv("VOICE_EAGER_EOT_THRESHOLD", "0.35")
+            os.getenv("VOICE_EAGER_EOT_THRESHOLD", "0.6")
         )
-        self.VOICE_EOT_THRESHOLD: float = float(os.getenv("VOICE_EOT_THRESHOLD", "0.5"))
-        self.VOICE_EOT_TIMEOUT_MS: int = int(os.getenv("VOICE_EOT_TIMEOUT_MS", "700"))
+        self.VOICE_EOT_THRESHOLD: float = float(os.getenv("VOICE_EOT_THRESHOLD", "0.8"))
+        self.VOICE_EOT_TIMEOUT_MS: int = int(os.getenv("VOICE_EOT_TIMEOUT_MS", "1500"))
+        self.VOICE_CALIBRATION_NOISE_SECS: float = float(
+            os.getenv("VOICE_CALIBRATION_NOISE_SECS", "1.0")
+        )
+        self.VOICE_CALIBRATION_VOICE_SECS: float = float(
+            os.getenv("VOICE_CALIBRATION_VOICE_SECS", "3.5")
+        )
+        self.VOICE_CALIBRATION_MIN_VOICE_SNR_DB: float = float(
+            os.getenv("VOICE_CALIBRATION_MIN_VOICE_SNR_DB", "3.0")
+        )
+        self.VOICE_AUDIO_GUARD_MIN_SNR_DB: float = float(
+            os.getenv("VOICE_AUDIO_GUARD_MIN_SNR_DB", "6.0")
+        )
+        self.VOICE_AUDIO_GUARD_REJECT_THRESHOLD: float = float(
+            os.getenv("VOICE_AUDIO_GUARD_REJECT_THRESHOLD", "0.35")
+        )
+        self.VOICE_AUDIO_GUARD_TARGET_THRESHOLD: float = float(
+            os.getenv("VOICE_AUDIO_GUARD_TARGET_THRESHOLD", "0.55")
+        )
         self.VOICE_CONTEXT_MAX_TURNS: int = int(os.getenv("VOICE_CONTEXT_MAX_TURNS", "4"))
         self.VOICE_TTS_FIRST_CHUNK_TOKENS: int = int(
             os.getenv("VOICE_TTS_FIRST_CHUNK_TOKENS", "8")
@@ -83,9 +101,14 @@ class Settings:
                     "VOICE_EAGER_EOT_THRESHOLD must be less than or equal to VOICE_EOT_THRESHOLD"
                 )
 
-        if not 1 <= self.VOICE_EOT_TIMEOUT_MS <= 2000:
+        if not 500 <= self.VOICE_EOT_TIMEOUT_MS <= 10000:
             raise ValueError(
-                "VOICE_EOT_TIMEOUT_MS must be between 1 and 2000 for Deepgram Flux"
+                "VOICE_EOT_TIMEOUT_MS must be between 500 and 10000 for Deepgram Flux"
+            )
+
+        if self.VOICE_AUDIO_GUARD_REJECT_THRESHOLD > self.VOICE_AUDIO_GUARD_TARGET_THRESHOLD:
+            raise ValueError(
+                "VOICE_AUDIO_GUARD_REJECT_THRESHOLD must be less than or equal to VOICE_AUDIO_GUARD_TARGET_THRESHOLD"
             )
 
 

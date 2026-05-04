@@ -7,18 +7,28 @@ const backMock = vi.fn();
 const disconnectMock = vi.fn().mockResolvedValue(undefined);
 const setMicrophoneEnabledMock = vi.fn().mockResolvedValue(undefined);
 const refreshPlanMock = vi.fn().mockResolvedValue(undefined);
+const setNoiseFilterEnabledMock = vi.fn().mockResolvedValue(undefined);
 
 let mockConnectionState = "connected";
+let mockLocalIsSpeaking = false;
+let mockNoiseFilterEnabled = true;
 let liveKitCallbacks: {
   onDisconnected?: () => void;
   onError?: (error: Error) => void;
 } = {};
+let liveKitRoomAudioProp: unknown = null;
 let sessionStatePayload = {
   sessionId: "session-1",
   phase: "active",
   autoEndRequested: false,
   endReason: null,
   requestedAt: null,
+  audioGuard: {
+    noiseFilter: "enabled",
+    calibration: "ready",
+    activity: "idle",
+    decisionReason: "ready",
+  },
 };
 let endSessionShouldFail = false;
 
@@ -83,6 +93,11 @@ vi.mock("@/contexts/auth-context", () => ({
   }),
 }));
 
+vi.mock("@livekit/krisp-noise-filter", () => ({
+  isKrispNoiseFilterSupported: () => true,
+  KrispNoiseFilter: vi.fn(),
+}));
+
 vi.mock("livekit-client", () => ({
   ConnectionState: {
     Connecting: "connecting",
@@ -92,22 +107,34 @@ vi.mock("livekit-client", () => ({
   },
 }));
 
+vi.mock("@livekit/components-react/krisp", () => ({
+  useKrispNoiseFilter: () => ({
+    setNoiseFilterEnabled: setNoiseFilterEnabledMock,
+    isNoiseFilterEnabled: mockNoiseFilterEnabled,
+    isNoiseFilterPending: false,
+    processor: undefined,
+  }),
+}));
+
 vi.mock("@livekit/components-react", () => ({
   LiveKitRoom: ({
     children,
     onDisconnected,
     onError,
+    audio,
   }: {
     children: ReactNode;
     onDisconnected?: () => void;
     onError?: (error: Error) => void;
+    audio?: unknown;
   }) => {
     liveKitCallbacks = { onDisconnected, onError };
+    liveKitRoomAudioProp = audio;
     return <div data-testid="livekit-room">{children}</div>;
   },
   useLocalParticipant: () => ({
     localParticipant: {
-      isSpeaking: false,
+      isSpeaking: mockLocalIsSpeaking,
       setMicrophoneEnabled: setMicrophoneEnabledMock,
     },
   }),
@@ -146,7 +173,16 @@ describe("CallRoomPage auto-end behavior", () => {
       autoEndRequested: false,
       endReason: null,
       requestedAt: null,
+      audioGuard: {
+        noiseFilter: "enabled",
+        calibration: "ready",
+        activity: "idle",
+        decisionReason: "ready",
+      },
     };
+    liveKitRoomAudioProp = null;
+    mockLocalIsSpeaking = false;
+    mockNoiseFilterEnabled = true;
 
     vi.stubGlobal(
       "fetch",
@@ -264,6 +300,132 @@ describe("CallRoomPage auto-end behavior", () => {
       ([input]) => String(input) === "/api/voice/session-connected"
     );
     expect(sessionConnectedCalls).toHaveLength(1);
+  });
+
+  it("shows calibration before the connected call UI becomes active", async () => {
+    sessionStatePayload = {
+      ...sessionStatePayload,
+      phase: "calibrating",
+      audioGuard: {
+        noiseFilter: "enabled",
+        calibration: "collecting_voice",
+        activity: "calibrating",
+        decisionReason: "collecting_voice",
+      },
+    };
+
+    render(<CallRoomPage />);
+
+    await settleCallPage();
+
+    expect(screen.getByText("Calibrating your voice")).toBeInTheDocument();
+    expect(screen.getByText(`"${"My voice is the only voice for this practice call."}"`)).toBeInTheDocument();
+    expect(screen.queryByText("AI Prospect")).not.toBeInTheDocument();
+  });
+
+  it("marks the session connected only after calibration completes", async () => {
+    const fetchMock = vi.mocked(fetch);
+    sessionStatePayload = {
+      ...sessionStatePayload,
+      phase: "calibrating",
+      audioGuard: {
+        noiseFilter: "enabled",
+        calibration: "collecting_noise",
+        activity: "calibrating",
+        decisionReason: "collecting_noise",
+      },
+    };
+
+    render(<CallRoomPage />);
+
+    await settleCallPage();
+
+    expect(screen.getByText("Calibrating your voice")).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.filter(([input]) => String(input) === "/api/voice/session-connected")
+    ).toHaveLength(0);
+
+    sessionStatePayload = {
+      ...sessionStatePayload,
+      phase: "active",
+      audioGuard: {
+        noiseFilter: "enabled",
+        calibration: "ready",
+        activity: "idle",
+        decisionReason: "ready",
+      },
+    };
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    await settleCallPage();
+
+    expect(
+      fetchMock.mock.calls.filter(([input]) => String(input) === "/api/voice/session-connected")
+    ).toHaveLength(1);
+  });
+
+  it("publishes explicit guarded LiveKit audio capture options", async () => {
+    render(<CallRoomPage />);
+
+    await settleCallPage();
+
+    expect(liveKitRoomAudioProp).toEqual({
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: 1,
+    });
+  });
+
+  it("continues in guarded WebRTC mode when Krisp is not enabled", async () => {
+    mockNoiseFilterEnabled = false;
+    setNoiseFilterEnabledMock.mockRejectedValueOnce(new Error("unsupported"));
+    sessionStatePayload = {
+      ...sessionStatePayload,
+      phase: "calibrating",
+      audioGuard: {
+        noiseFilter: "client",
+        calibration: "collecting_noise",
+        activity: "calibrating",
+        decisionReason: "collecting_noise",
+      },
+    };
+
+    render(<CallRoomPage />);
+
+    await settleCallPage();
+
+    expect(screen.getByText("Calibrating your voice")).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
+    });
+    await settleCallPage();
+
+    expect(screen.getByText("Guarded WebRTC audio")).toBeInTheDocument();
+  });
+
+  it("does not enter thinking mode from local mic activity alone", async () => {
+    mockLocalIsSpeaking = true;
+    sessionStatePayload = {
+      ...sessionStatePayload,
+      audioGuard: {
+        noiseFilter: "enabled",
+        calibration: "ready",
+        activity: "background_noise",
+        decisionReason: "low_snr",
+      },
+    };
+
+    render(<CallRoomPage />);
+
+    await settleCallPage();
+
+    expect(screen.getByText("Ready")).toBeInTheDocument();
+    expect(screen.queryByText("Listening to you...")).not.toBeInTheDocument();
+    expect(screen.queryByText("Thinking...")).not.toBeInTheDocument();
   });
 
   it("shows elapsed call duration without rendering remaining-credit minutes", async () => {

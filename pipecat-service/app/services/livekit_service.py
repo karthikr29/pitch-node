@@ -101,11 +101,21 @@ class LiveKitService:
         phase: str,
         auto_end_requested: bool,
         end_reason: Any = None,
+        audio_guard: dict[str, Any] | None = None,
     ):
         current = self._session_states.get(session_id, {})
         requested_at = current.get("requestedAt")
         if phase == "ending":
             requested_at = _utcnow_iso()
+
+        resolved_audio_guard = audio_guard if audio_guard is not None else current.get(
+            "audioGuard",
+            {
+                "noiseFilter": "client",
+                "calibration": "pending",
+                "activity": "calibrating",
+            },
+        )
 
         self._session_states[session_id] = {
             "sessionId": session_id,
@@ -113,7 +123,37 @@ class LiveKitService:
             "autoEndRequested": auto_end_requested,
             "endReason": end_reason,
             "requestedAt": requested_at,
+            "audioGuard": resolved_audio_guard,
         }
+
+    def _set_audio_guard_state(self, session_id: str, update: dict[str, Any]):
+        current = self._session_states.get(session_id, {})
+        current_audio_guard = dict(
+            current.get(
+                "audioGuard",
+                {
+                    "noiseFilter": "client",
+                    "calibration": "pending",
+                    "activity": "calibrating",
+                },
+            )
+        )
+        current_audio_guard.update(update)
+
+        phase = current.get("phase", "unknown")
+        if (
+            phase == "calibrating"
+            and current_audio_guard.get("calibration") in {"ready", "fallback"}
+        ):
+            phase = "active"
+
+        self._set_session_state(
+            session_id,
+            phase=phase,
+            auto_end_requested=bool(current.get("autoEndRequested", False)),
+            end_reason=current.get("endReason"),
+            audio_guard=current_audio_guard,
+        )
 
     def get_session_state(self, session_id: str) -> dict[str, Any]:
         state = self._session_states.get(session_id)
@@ -125,6 +165,11 @@ class LiveKitService:
             "autoEndRequested": False,
             "endReason": None,
             "requestedAt": None,
+            "audioGuard": {
+                "noiseFilter": "none",
+                "calibration": "pending",
+                "activity": "idle",
+            },
         }
 
     def _schedule_auto_end_fallback(self, session_id: str, reason: Any):
@@ -292,9 +337,14 @@ class LiveKitService:
         self._finalized_auto_end_sessions.discard(session_id)
         self._set_session_state(
             session_id,
-            phase="active",
+            phase="calibrating",
             auto_end_requested=False,
             end_reason=None,
+            audio_guard={
+                "noiseFilter": "client",
+                "calibration": "pending",
+                "activity": "calibrating",
+            },
         )
 
         # Generate a token for the bot to join the room.
@@ -313,6 +363,9 @@ class LiveKitService:
                 inferred_role=inferred_role,
                 on_auto_end_requested=lambda reason: self._schedule_auto_end_fallback(
                     session_id, reason
+                ),
+                on_audio_guard_update=lambda update: self._set_audio_guard_state(
+                    session_id, update
                 ),
             )
         )
