@@ -21,9 +21,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Voice service misconfigured" }, { status: 500 });
   }
 
-  const { scenarioId, personaId, pitchContext, pitchBriefing, inferredRole } = await request.json();
+  const {
+    scenarioId,
+    personaId,
+    pitchContext,
+    pitchBriefing,
+    inferredRole,
+    voiceprint,
+  } = await request.json();
   if (!scenarioId || !personaId) {
     return NextResponse.json({ error: "scenarioId and personaId are required" }, { status: 400 });
+  }
+
+  let resolvedVoiceprint: string | undefined;
+  if (typeof voiceprint === "string" && voiceprint.length > 0) {
+    if (voiceprint.length > 10_000) {
+      return NextResponse.json({ error: "voiceprint too large" }, { status: 413 });
+    }
+    resolvedVoiceprint = voiceprint;
   }
 
   // Enforce max 1 active session per user at any time
@@ -173,6 +188,7 @@ export async function POST(request: NextRequest) {
         pitch_context: resolvedPitchContext || "",
         pitch_briefing: resolvedPitchBriefing || undefined,
         inferred_role: typeof inferredRole === "string" && inferredRole.trim() ? inferredRole.trim().slice(0, 150) : undefined,
+        voiceprint: resolvedVoiceprint,
       }),
     });
 

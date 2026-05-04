@@ -12,3 +12,8 @@ num2words==0.5.14
 sentry-sdk[fastapi,loguru]==2.25.1
 pytest==8.3.3
 pytest-asyncio==0.24.0
+# Speaker verification (Resemblyzer). torch is installed via the CPU wheel
+# index in the Dockerfile to avoid pulling the >1 GB CUDA build.
+numpy==1.26.4
+torch==2.5.1
+resemblyzer==0.1.4

@@ -1,14 +1,22 @@
-from fastapi import APIRouter, HTTPException, Depends, Header
+import base64
+import os
+import json as _json
+
+import httpx
+from fastapi import APIRouter, Depends, Header, HTTPException
+from loguru import logger
 from pydantic import BaseModel, Field
 from typing import Optional
-import os
-import httpx
-import json as _json
-from loguru import logger
 
 from app.config import settings
 from app.services.livekit_service import LiveKitService
 from app.services.supabase_service import SupabaseService
+from app.services.voiceprint_service import (
+    VoiceprintService,
+    VoiceprintQualityError,
+    assess_audio_quality,
+    pcm16_bytes_to_float,
+)
 
 router = APIRouter()
 livekit_service = LiveKitService()
@@ -34,6 +42,20 @@ class StartSessionRequest(BaseModel):
     pitch_context: str = Field(default="", max_length=3000)
     pitch_briefing: Optional[dict] = None
     inferred_role: Optional[str] = Field(default=None, max_length=150)
+    voiceprint: Optional[str] = Field(default=None, max_length=10_000)
+
+
+class VoiceprintEnrollRequest(BaseModel):
+    audio_b64: str = Field(min_length=1, max_length=1_000_000)
+    sample_rate: int = Field(default=16000, ge=8000, le=48000)
+    duration_ms: Optional[int] = Field(default=None, ge=500, le=20000)
+
+
+class VoiceprintEnrollResponse(BaseModel):
+    voiceprint_b64: str
+    embedding_dim: int
+    duration_ms: int
+    snr_db: float
 
 class StartSessionResponse(BaseModel):
     token: str
@@ -144,6 +166,7 @@ async def start_session(req: StartSessionRequest, _=Depends(verify_api_key)):
         pitch_context=req.pitch_context,
         pitch_briefing=req.pitch_briefing,
         inferred_role=req.inferred_role,
+        voiceprint_b64=req.voiceprint,
     )
 
     logger.info("sessions/start: pipeline started", extra={"session_id": req.session_id, "room_name": req.room_name})
@@ -177,6 +200,68 @@ async def session_state(session_id: str, _=Depends(verify_api_key)):
     state = livekit_service.get_session_state(session_id)
     logger.debug("sessions/state: queried", extra={"session_id": session_id, "phase": state.get("phase", "unknown")})
     return state
+
+@router.post("/voiceprint/enroll", response_model=VoiceprintEnrollResponse)
+async def voiceprint_enroll(req: VoiceprintEnrollRequest, _=Depends(verify_api_key)):
+    """Compute a per-call voiceprint from a short PCM16 sample.
+
+    The audio is base64-encoded little-endian PCM16. Server-side gates mirror
+    the client-side gates and add an SNR-based ``TOO_NOISY`` check.
+    """
+    try:
+        raw = base64.b64decode(req.audio_b64, validate=True)
+    except Exception:
+        raise HTTPException(status_code=422, detail={"code": "INVALID_BASE64"})
+
+    if len(raw) > settings.VOICEPRINT_ENROLL_MAX_AUDIO_BYTES:
+        raise HTTPException(status_code=413, detail={"code": "PAYLOAD_TOO_LARGE"})
+    if len(raw) < 2:
+        raise HTTPException(status_code=422, detail={"code": "TOO_SHORT"})
+
+    pcm = pcm16_bytes_to_float(raw)
+    sample_rate = req.sample_rate
+    duration_ms = int(round(pcm.size * 1000 / sample_rate))
+    if duration_ms < settings.VOICEPRINT_ENROLL_MIN_DURATION_MS:
+        raise HTTPException(status_code=422, detail={"code": "TOO_SHORT"})
+    if duration_ms > settings.VOICEPRINT_ENROLL_MAX_DURATION_MS:
+        raise HTTPException(status_code=422, detail={"code": "TOO_LONG"})
+
+    report = assess_audio_quality(pcm, sample_rate)
+    try:
+        from app.services.voiceprint_service import enforce_enrollment_quality
+
+        enforce_enrollment_quality(report)
+    except VoiceprintQualityError as q:
+        logger.info(
+            "voiceprint_enroll: rejected code={} rms_p95={:.4f} peak={:.4f} voiced={:.2f} snr={:.1f}",
+            q.code,
+            report.rms_p95,
+            report.peak_max,
+            report.voiced_ratio,
+            report.snr_db,
+        )
+        raise HTTPException(status_code=422, detail={"code": q.code})
+
+    try:
+        emb = VoiceprintService.compute_embedding(pcm, sample_rate)
+    except Exception as e:
+        logger.error("voiceprint_enroll: embedding failed err={}", e)
+        raise HTTPException(status_code=422, detail={"code": "EMBEDDING_FAILED"})
+
+    voiceprint_b64 = VoiceprintService.encode(emb)
+    logger.info(
+        "voiceprint_enroll: ok dim={} duration_ms={} snr={:.1f}",
+        emb.shape[0],
+        duration_ms,
+        report.snr_db,
+    )
+    return VoiceprintEnrollResponse(
+        voiceprint_b64=voiceprint_b64,
+        embedding_dim=int(emb.shape[0]),
+        duration_ms=duration_ms,
+        snr_db=round(report.snr_db, 2),
+    )
+
 
 @router.get("/health")
 async def health():

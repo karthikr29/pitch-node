@@ -5,6 +5,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -r
 WORKDIR /app
 
 COPY requirements.txt .
+# Install CPU-only torch first from the dedicated wheel index so the pinned
+# version in requirements.txt is satisfied without pulling the CUDA build.
+RUN pip install --no-cache-dir torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Download NLTK data required by pipecat-ai's RTVI text processor.

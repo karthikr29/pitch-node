@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.services.supabase_service import SupabaseService
+from app.services.voiceprint_service import VoiceprintService
 from loguru import logger
 
 _sentry_dsn = os.getenv("SENTRY_DSN")
@@ -55,6 +56,16 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api/v1")
+
+@app.on_event("startup")
+async def warm_load_voiceprint_encoder():
+    """Load the Resemblyzer encoder eagerly so the first /voiceprint/enroll
+    call doesn't pay the model-load tax (~50–150 ms)."""
+    try:
+        VoiceprintService._ensure_loaded()
+    except Exception as e:  # don't crash the app if model load fails
+        logger.error(f"Voiceprint encoder warm-load failed: {e}")
+
 
 @app.on_event("startup")
 async def reconcile_orphaned_sessions():

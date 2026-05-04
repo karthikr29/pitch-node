@@ -30,10 +30,21 @@ import {
   useConnectionState,
   useParticipants,
 } from "@livekit/components-react";
+import { useKrispNoiseFilter } from "@livekit/components-react/krisp";
 import { ConnectionState } from "livekit-client";
 import * as Sentry from "@sentry/nextjs";
 
-type CallState = "requesting-mic" | "initializing" | "connecting" | "connected" | "disconnected" | "error";
+import { VOICE_AUDIO_CONSTRAINTS } from "@/lib/voice/audio-constraints";
+import { VoiceCalibrationCard } from "@/components/voice/voice-calibration-card";
+
+type CallState =
+  | "requesting-mic"
+  | "calibrating"
+  | "initializing"
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "error";
 type SpeakingState = "ai" | "user" | "idle" | "thinking";
 type CallCompletionSource = "manual" | "remote-disconnect" | "auto-end-timeout";
 type SessionPhase = "active" | "ending" | "ended" | "unknown";
@@ -148,6 +159,20 @@ function CallInterface({
   const isConnected = connectionState === ConnectionState.Connected;
   const aiParticipant = participants.find((p) => p.identity.startsWith("ai-"));
   const isEnding = ending || autoEnding;
+
+  // Attach Krisp client-side noise filter once we're connected. Best-effort —
+  // browser-native noiseSuppression from VOICE_AUDIO_CONSTRAINTS is the floor
+  // if Krisp can't load (CSP, WASM blocked, network).
+  const { setNoiseFilterEnabled } = useKrispNoiseFilter();
+  useEffect(() => {
+    if (!isConnected) return;
+    setNoiseFilterEnabled(true).catch((err: unknown) => {
+      Sentry.logger.warn("call: krisp filter failed to attach", {
+        err: String(err),
+        sessionId,
+      });
+    });
+  }, [isConnected, setNoiseFilterEnabled, sessionId]);
 
   // Credit countdown is enforced/logged internally; only near-exhaustion warnings are shown.
   const maxSeconds = maxDurationSeconds ?? userPlan?.creditsRemaining ?? null;
@@ -573,6 +598,10 @@ export default function CallRoomPage() {
   const [error, setError] = useState<string | null>(null);
   const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
   const [callReady, setCallReady] = useState(false);
+  // Voiceprint captured during the pre-call calibration card. `undefined` =
+  // calibration not yet attempted; `null` = user opted out / skipped; string =
+  // base64 voiceprint to forward to /api/voice/create-room.
+  const voiceprintRef = useRef<string | null | undefined>(undefined);
   const hasInitializedRef = useRef(false); // Prevent double initialization from React StrictMode
   const sessionEndHandledRef = useRef(false);
   const intentionalDisconnectRef = useRef(false);
@@ -594,7 +623,7 @@ export default function CallRoomPage() {
       .then((result) => {
         if (result.state === "granted") {
           setHasMicPermission(true);
-          setCallState("initializing");
+          setCallState("calibrating");
         } else if (result.state === "denied") {
           setHasMicPermission(false);
           setError("Microphone access is required for calls. Please allow microphone access in your browser settings and try again.");
@@ -619,7 +648,7 @@ export default function CallRoomPage() {
       stream.getTracks().forEach(track => track.stop());
       if (isDev) console.log("[CallPage] Microphone permission granted");
       setHasMicPermission(true);
-      setCallState("initializing");
+      setCallState("calibrating");
     } catch (err) {
       console.error("[CallPage] Microphone permission denied:", err);
       setHasMicPermission(false);
@@ -653,6 +682,10 @@ export default function CallRoomPage() {
             pitchContext: finalPitchContext,
             pitchBriefing: pitchBriefing || undefined,
             inferredRole: personaRoleParam || undefined,
+            voiceprint:
+              typeof voiceprintRef.current === "string"
+                ? voiceprintRef.current
+                : undefined,
           }),
         });
 
@@ -867,6 +900,27 @@ export default function CallRoomPage() {
     );
   }
 
+  // Calibrating state — capture a per-call voiceprint before LiveKit room creation.
+  if (callState === "calibrating") {
+    return (
+      <div className="fixed inset-0 bg-slate-950 z-50">
+        <div className="absolute inset-0 z-0 opacity-60">
+          <StarryBackground />
+        </div>
+        <VoiceCalibrationCard
+          onCalibrated={(voiceprintB64) => {
+            voiceprintRef.current = voiceprintB64;
+            setCallState("initializing");
+          }}
+          onCancel={() => {
+            voiceprintRef.current = undefined;
+            router.back();
+          }}
+        />
+      </div>
+    );
+  }
+
   // Error state
   if (callState === "error") {
     return (
@@ -896,7 +950,7 @@ export default function CallRoomPage() {
         serverUrl={credentials.livekitUrl}
         token={credentials.token}
         connect={true}
-        audio={true}
+        audio={VOICE_AUDIO_CONSTRAINTS}
         video={false}
         onDisconnected={() => {
           if (isDev) console.log("[CallPage] Disconnected from LiveKit");

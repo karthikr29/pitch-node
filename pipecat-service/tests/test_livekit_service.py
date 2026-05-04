@@ -1,9 +1,11 @@
 import asyncio
 from unittest.mock import AsyncMock
 
+import numpy as np
 import pytest
 
 from app.services.livekit_service import LiveKitService
+from app.services.voiceprint_service import VoiceprintService
 
 
 @pytest.mark.asyncio
@@ -102,6 +104,70 @@ def test_get_session_state_returns_unknown_when_untracked():
         "endReason": None,
         "requestedAt": None,
     }
+
+
+def test_set_voiceprint_decodes_and_stores():
+    service = LiveKitService()
+    emb = np.random.randn(256).astype(np.float32)
+    emb /= np.linalg.norm(emb)
+    b64 = VoiceprintService.encode(emb)
+    decoded = service.set_voiceprint("sess", b64)
+    assert decoded is not None
+    assert np.allclose(service.get_voiceprint("sess"), emb)
+
+
+def test_set_voiceprint_none_returns_none():
+    service = LiveKitService()
+    assert service.set_voiceprint("sess", None) is None
+    assert service.get_voiceprint("sess") is None
+
+
+def test_set_voiceprint_invalid_base64_returns_none():
+    service = LiveKitService()
+    assert service.set_voiceprint("sess", "!!!notb64!!!") is None
+    assert service.get_voiceprint("sess") is None
+
+
+@pytest.mark.asyncio
+async def test_drop_voiceprint_runs_in_finalize_path():
+    service = LiveKitService()
+    emb = np.random.randn(256).astype(np.float32)
+    emb /= np.linalg.norm(emb)
+    service.set_voiceprint("vp1", VoiceprintService.encode(emb))
+    assert service.get_voiceprint("vp1") is not None
+
+    service._delete_room_for_session = AsyncMock()
+    service._supabase_service.complete_session = AsyncMock()
+    await service._finalize_auto_completed_session("vp1", {"type": "auto_end"})
+    assert service.get_voiceprint("vp1") is None
+
+
+@pytest.mark.asyncio
+async def test_drop_voiceprint_runs_in_stop_pipeline():
+    service = LiveKitService()
+    emb = np.random.randn(256).astype(np.float32)
+    emb /= np.linalg.norm(emb)
+    service.set_voiceprint("vp2", VoiceprintService.encode(emb))
+    service._delete_room_for_session = AsyncMock()
+    await service.stop_pipeline("vp2")
+    assert service.get_voiceprint("vp2") is None
+
+
+@pytest.mark.asyncio
+async def test_drop_voiceprint_runs_in_pipeline_task_failure():
+    service = LiveKitService()
+    emb = np.random.randn(256).astype(np.float32)
+    emb /= np.linalg.norm(emb)
+    service.set_voiceprint("vp3", VoiceprintService.encode(emb))
+
+    fut = asyncio.get_running_loop().create_future()
+    fut.set_exception(RuntimeError("boom"))
+    service._active_pipelines["vp3"] = fut
+    service._cancel_auto_end_fallback = AsyncMock()
+    service._cancel_time_limit = AsyncMock()
+    service._delete_room_for_session = AsyncMock()
+    await service._handle_pipeline_task_done("vp3", fut)
+    assert service.get_voiceprint("vp3") is None
 
 
 @pytest.mark.asyncio

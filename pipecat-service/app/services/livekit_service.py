@@ -7,9 +7,12 @@ from livekit.api import AccessToken, LiveKitAPI, VideoGrants
 from livekit.protocol.room import CreateRoomRequest, DeleteRoomRequest
 from loguru import logger
 
+import numpy as np
+
 from app.config import settings
 from app.pipelines.sales_pipeline import create_sales_pipeline
 from app.services.supabase_service import SupabaseService
+from app.services.voiceprint_service import VoiceprintService
 
 PIPELINE_STOP_TIMEOUT_SECS = 1.5
 AUTO_END_FALLBACK_SECS = 2.0
@@ -27,7 +30,36 @@ class LiveKitService:
         self._auto_end_fallbacks: dict[str, asyncio.Task] = {}
         self._time_limit_tasks: dict[str, asyncio.Task] = {}
         self._finalized_auto_end_sessions: set[str] = set()
+        self._session_voiceprints: dict[str, np.ndarray] = {}
         self._supabase_service = SupabaseService()
+
+    def set_voiceprint(self, session_id: str, voiceprint_b64: str | None) -> np.ndarray | None:
+        """Decode and store a base64 voiceprint for the session.
+
+        Returns the decoded ndarray (or None if the input was None / invalid).
+        Voiceprints live only in process RAM and are dropped on session end.
+        """
+        if not voiceprint_b64:
+            return None
+        try:
+            emb = VoiceprintService.decode(voiceprint_b64)
+        except Exception as e:
+            logger.warning(
+                "set_voiceprint: decode failed session={} err={}", session_id, e
+            )
+            return None
+        self._session_voiceprints[session_id] = emb
+        logger.info(
+            "set_voiceprint: stored session={} dim={}", session_id, emb.shape[0]
+        )
+        return emb
+
+    def get_voiceprint(self, session_id: str) -> np.ndarray | None:
+        return self._session_voiceprints.get(session_id)
+
+    def _drop_voiceprint(self, session_id: str) -> None:
+        if self._session_voiceprints.pop(session_id, None) is not None:
+            logger.info("drop_voiceprint: cleared session={}", session_id)
 
     async def create_room_and_token(self, room_name: str, participant_name: str) -> str:
         """Create a LiveKit room and return a participant token for the user."""
@@ -221,6 +253,7 @@ class LiveKitService:
         )
         await self._delete_room_for_session(session_id)
         await self._supabase_service.complete_session(session_id)
+        self._drop_voiceprint(session_id)
         self._set_session_state(
             session_id,
             phase="ended",
@@ -239,6 +272,7 @@ class LiveKitService:
         if pipeline_task.cancelled():
             await self._cancel_auto_end_fallback(session_id)
             await self._cancel_time_limit(session_id)
+            self._drop_voiceprint(session_id)
             logger.info(f"Pipeline task cancelled for session {session_id}")
             return
 
@@ -247,6 +281,7 @@ class LiveKitService:
         except Exception as e:
             await self._cancel_auto_end_fallback(session_id)
             await self._cancel_time_limit(session_id)
+            self._drop_voiceprint(session_id)
             logger.error(f"Pipeline task failed for session {session_id}: {e}")
             await self._delete_room_for_session(session_id)
             self._set_session_state(
@@ -285,6 +320,7 @@ class LiveKitService:
         pitch_context: str = "",
         pitch_briefing: dict | None = None,
         inferred_role: str | None = None,
+        voiceprint_b64: str | None = None,
     ):
         """Start the voice AI pipeline for a session."""
         # Store the room name for this session so we can delete it later.
@@ -296,6 +332,9 @@ class LiveKitService:
             auto_end_requested=False,
             end_reason=None,
         )
+
+        # Decode + cache the voiceprint (if any) for this session.
+        voiceprint = self.set_voiceprint(session_id, voiceprint_b64)
 
         # Generate a token for the bot to join the room.
         bot_token = self._generate_bot_token(room_name, f"ai-{session_id[:8]}")
@@ -314,6 +353,7 @@ class LiveKitService:
                 on_auto_end_requested=lambda reason: self._schedule_auto_end_fallback(
                     session_id, reason
                 ),
+                voiceprint=voiceprint,
             )
         )
         self._active_pipelines[session_id] = pipeline_task
@@ -325,6 +365,7 @@ class LiveKitService:
         """Stop the pipeline for a session and delete the LiveKit room."""
         await self._cancel_auto_end_fallback(session_id)
         await self._cancel_time_limit(session_id)
+        self._drop_voiceprint(session_id)
         task = self._active_pipelines.pop(session_id, None)
         if task and not task.done():
             task.cancel()

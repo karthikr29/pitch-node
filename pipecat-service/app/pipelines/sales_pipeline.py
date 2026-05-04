@@ -45,7 +45,13 @@ from pipecat.services.tts_service import TextAggregationMode
 from pipecat.transcriptions.language import Language
 from pipecat.transports.livekit.transport import LiveKitParams, LiveKitTransport
 
+import numpy as np
+
 from app.config import settings
+from app.pipelines.processors.adaptive_vad import AdaptiveSileroVAD
+from app.pipelines.processors.ambient_noise_estimator import AmbientNoiseEstimator
+from app.pipelines.processors.rejection_tracker import RejectionTracker
+from app.pipelines.processors.speaker_verification import SpeakerVerificationProcessor
 from app.prompts.system_prompts import build_system_prompt
 from app.services.analysis_service import AnalysisService
 from app.services.supabase_service import SupabaseService
@@ -940,6 +946,9 @@ class UserTurnGateProcessor(FrameProcessor):
         pipeline_task: PipelineTask | None = None,
         commit_silence_ms: int = USER_TURN_COMMIT_SILENCE_MS,
         fallback_commit_ms: int = USER_TURN_FALLBACK_COMMIT_MS,
+        min_avg_word_confidence: float = 0.0,
+        on_rejection: Callable[[], None] | None = None,
+        on_acceptance: Callable[[], None] | None = None,
     ):
         super().__init__()
         self._session_id = session_id
@@ -947,12 +956,16 @@ class UserTurnGateProcessor(FrameProcessor):
         self._task = pipeline_task
         self._commit_silence_ms = commit_silence_ms
         self._fallback_commit_ms = fallback_commit_ms
+        self._min_avg_word_confidence = float(min_avg_word_confidence)
+        self._on_rejection = on_rejection
+        self._on_acceptance = on_acceptance
         self._pending_segments: list[TranscriptionFrame] = []
         self._pending_direction = FrameDirection.DOWNSTREAM
         self._commit_task: asyncio.Task | None = None
         self._user_is_speaking = False
         self._refusal_streak = 0
         self._auto_end_triggered = False
+        self.confidence_drop_count = 0
 
     def set_pipeline_task(self, pipeline_task: PipelineTask):
         self._task = pipeline_task
@@ -987,6 +1000,82 @@ class UserTurnGateProcessor(FrameProcessor):
     @staticmethod
     def _normalize_text(text: str) -> str:
         return normalize_detection_text(text)
+
+    @staticmethod
+    def _extract_confidence(frame: TranscriptionFrame) -> float | None:
+        """Pull average word confidence from a TranscriptionFrame.
+
+        Supports two payload shapes:
+          - Deepgram Flux: ``frame.result["turn"]["confidence"]`` (top-level
+            turn confidence) or per-word ``["turn"]["words"][i]["confidence"]``.
+          - Non-Flux Deepgram: ``frame.result.channel.alternatives[0].
+            confidence`` or per-word.
+        Returns ``None`` if no confidence field is found, in which case the
+        gate passes the frame through.
+        """
+        result = getattr(frame, "result", None)
+        if result is None:
+            return None
+
+        # Flux: dict with "turn"
+        if isinstance(result, dict):
+            turn = result.get("turn")
+            if isinstance(turn, dict):
+                conf = turn.get("confidence")
+                if isinstance(conf, (int, float)):
+                    return float(conf)
+                words = turn.get("words")
+                if isinstance(words, list) and words:
+                    confs = [
+                        float(w["confidence"])
+                        for w in words
+                        if isinstance(w, dict) and isinstance(w.get("confidence"), (int, float))
+                    ]
+                    if confs:
+                        return sum(confs) / len(confs)
+            # Top-level alternatives shape (some SDK encodings).
+            channel = result.get("channel")
+            if isinstance(channel, dict):
+                alts = channel.get("alternatives") or []
+                if alts and isinstance(alts[0], dict):
+                    conf = alts[0].get("confidence")
+                    if isinstance(conf, (int, float)):
+                        return float(conf)
+                    words = alts[0].get("words") or []
+                    confs = [
+                        float(w["confidence"])
+                        for w in words
+                        if isinstance(w, dict) and isinstance(w.get("confidence"), (int, float))
+                    ]
+                    if confs:
+                        return sum(confs) / len(confs)
+            return None
+
+        # Non-Flux SDK object form: result.channel.alternatives[0].confidence
+        try:
+            alt = result.channel.alternatives[0]
+        except Exception:
+            return None
+        conf = getattr(alt, "confidence", None)
+        if isinstance(conf, (int, float)):
+            return float(conf)
+        words = getattr(alt, "words", None) or []
+        confs = []
+        for w in words:
+            wc = getattr(w, "confidence", None)
+            if isinstance(wc, (int, float)):
+                confs.append(float(wc))
+        if confs:
+            return sum(confs) / len(confs)
+        return None
+
+    def _passes_confidence_gate(self, frame: TranscriptionFrame) -> bool:
+        if self._min_avg_word_confidence <= 0.0:
+            return True
+        conf = self._extract_confidence(frame)
+        if conf is None:
+            return True  # missing confidence = pass through
+        return conf >= self._min_avg_word_confidence
 
     def _should_auto_end(self, text: str) -> tuple[bool, str]:
         detection = detect_closing_intent(text, "user")
@@ -1056,6 +1145,8 @@ class UserTurnGateProcessor(FrameProcessor):
             finalized=True,
         )
         await self.push_frame(merged_frame, self._pending_direction)
+        if self._on_acceptance is not None:
+            self._on_acceptance()
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
@@ -1080,9 +1171,22 @@ class UserTurnGateProcessor(FrameProcessor):
         if isinstance(frame, TranscriptionFrame):
             self._user_is_speaking = False
             self._pending_direction = direction
-            if frame.text.strip():
-                self._pending_segments.append(frame)
-                self._schedule_commit(self._commit_silence_ms, "transcription_frame")
+            if not frame.text.strip():
+                return
+            if not self._passes_confidence_gate(frame):
+                conf = self._extract_confidence(frame)
+                self.confidence_drop_count += 1
+                logger.info(
+                    "stt_gate: dropping low-confidence transcript session={} confidence={} text={!r}",
+                    self._session_id,
+                    f"{conf:.4f}" if conf is not None else "None",
+                    frame.text[:80],
+                )
+                if self._on_rejection is not None:
+                    self._on_rejection()
+                return
+            self._pending_segments.append(frame)
+            self._schedule_commit(self._commit_silence_ms, "transcription_frame")
             return
 
         if isinstance(frame, InterimTranscriptionFrame):
@@ -1163,6 +1267,7 @@ def _build_transport(
     livekit_url: str,
     bot_token: str,
     room_name: str,
+    get_stop_secs: Callable[[], float],
 ) -> LiveKitTransport:
     params = LiveKitParams(
         audio_in_enabled=True,
@@ -1171,13 +1276,14 @@ def _build_transport(
         audio_out_sample_rate=24000,
         audio_in_passthrough=True,
     )
-    params.vad_analyzer = SileroVADAnalyzer(
+    params.vad_analyzer = AdaptiveSileroVAD(
+        get_stop_secs=get_stop_secs,
         sample_rate=16000,
         params=VADParams(
-            confidence=0.7,
-            start_secs=0.2,
-            stop_secs=0.2,
-            min_volume=0.6,
+            confidence=settings.VAD_CONFIDENCE,
+            start_secs=settings.VAD_START_SECS,
+            stop_secs=settings.VAD_STOP_SECS_QUIET,
+            min_volume=settings.VAD_MIN_VOLUME,
         ),
     )
 
@@ -1213,6 +1319,7 @@ async def create_sales_pipeline(
     pitch_briefing: dict | None = None,
     inferred_role: str | None = None,
     on_auto_end_requested: Callable[[dict[str, Any]], None] | None = None,
+    voiceprint: "np.ndarray | None" = None,
 ):
     """Create and run the voice AI pipeline for a sales training session."""
 
@@ -1235,10 +1342,22 @@ async def create_sales_pipeline(
     conversation_model = await resolve_conversation_model()
     transcript_buffer: list[dict] = []
 
+    ambient_noise = AmbientNoiseEstimator(
+        threshold_rms=settings.VAD_NOISE_DETECT_RMS,
+    )
+
+    def _get_stop_secs() -> float:
+        return (
+            settings.VAD_STOP_SECS_NOISY
+            if ambient_noise.is_noisy()
+            else settings.VAD_STOP_SECS_QUIET
+        )
+
     transport = _build_transport(
         livekit_url=livekit_url,
         bot_token=bot_token,
         room_name=room_name,
+        get_stop_secs=_get_stop_secs,
     )
 
     cartesia_voice_id = persona.get("cartesia_voice_id") or DEFAULT_CARTESIA_VOICE
@@ -1277,15 +1396,44 @@ async def create_sales_pipeline(
     clause_chunker = ClauseChunkingProcessor()
     number_normalizer = NumberNormalizerProcessor()
     context_manager = ConversationContextManager(context=context)
+
+    # Sustained-rejection guard: AI cue at 12s, auto-end at 32s. Disabled when
+    # the user opted out of voice ID — otherwise the cue would fire on any
+    # bystander speech.
+    rejection_tracker = RejectionTracker(
+        session_id=session_id,
+        on_auto_end=handle_auto_end,
+        cue_threshold_secs=settings.REJECTION_CUE_THRESHOLD_SECS,
+        auto_end_threshold_secs=settings.REJECTION_AUTO_END_THRESHOLD_SECS,
+        enabled=voiceprint is not None,
+    )
+
+    speaker_verifier = SpeakerVerificationProcessor(
+        session_id=session_id,
+        voiceprint=voiceprint,
+        similarity_threshold=settings.VERIFICATION_SIMILARITY_THRESHOLD,
+        verification_window_ms=settings.VERIFICATION_WINDOW_MS,
+        min_audio_secs=settings.VERIFICATION_MIN_AUDIO_SECS,
+        lenient_short_segments=settings.VERIFICATION_LENIENT_SHORT_SEGMENTS,
+        decision_deadline_ms=settings.VERIFICATION_DECISION_DEADLINE_MS,
+        on_rejection=rejection_tracker.mark_rejected,
+        on_acceptance=rejection_tracker.mark_accepted,
+    )
+
     turn_gate = UserTurnGateProcessor(
         session_id=session_id,
         on_auto_end=handle_auto_end,
+        min_avg_word_confidence=settings.STT_MIN_AVG_WORD_CONFIDENCE,
+        on_rejection=rejection_tracker.mark_rejected,
+        on_acceptance=rejection_tracker.mark_accepted,
     )
 
     pipeline = Pipeline(
         [
             transport.input(),
+            ambient_noise,
             stt,
+            speaker_verifier,
             turn_gate,
             user_transcript_collector,
             context_aggregator.user(),
@@ -1310,6 +1458,7 @@ async def create_sales_pipeline(
     )
     turn_gate.set_pipeline_task(task)
     ai_response_collector.set_pipeline_task(task)
+    rejection_tracker.set_pipeline_task(task)
 
     @transport.event_handler("on_first_participant_joined")
     async def on_first_participant_joined(transport_ref, participant: Any):
@@ -1384,6 +1533,18 @@ async def create_sales_pipeline(
             await flush_task
 
         await _flush_buffers(session_id, transcript_buffer)
+
+        try:
+            logger.info(
+                "voice_hardening_stats session={} accept={} reject={} stt_drops={} noisy_secs={:.2f}",
+                session_id,
+                speaker_verifier.accept_count,
+                speaker_verifier.reject_count,
+                turn_gate.confidence_drop_count,
+                ambient_noise.noisy_mode_active_secs,
+            )
+        except Exception:  # pragma: no cover - telemetry, never crash teardown
+            pass
 
         analysis_task = asyncio.create_task(run_post_call_analysis(session_id, scenario, persona))
         analysis_task.add_done_callback(

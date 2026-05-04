@@ -61,6 +61,30 @@ vi.mock("@/components/ui/sentient-prism-visualizer", () => ({
   SentientPrismVisualizer: () => <div data-testid="visualizer" />,
 }));
 
+// Voice calibration card auto-completes with a null voiceprint so the test
+// doesn't have to drive 4s of audio capture. The actual calibration flow is
+// covered by src/components/voice/__tests__/voice-calibration-card.test.tsx.
+vi.mock("@/components/voice/voice-calibration-card", () => ({
+  VoiceCalibrationCard: ({
+    onCalibrated,
+  }: {
+    onCalibrated: (vp: string | null) => void;
+  }) => {
+    queueMicrotask(() => onCalibrated(null));
+    return <div data-testid="voice-calibration-card" />;
+  },
+}));
+
+// Krisp filter is a no-op in the test environment.
+vi.mock("@livekit/components-react/krisp", () => ({
+  useKrispNoiseFilter: () => ({
+    setNoiseFilterEnabled: vi.fn().mockResolvedValue(undefined),
+    isNoiseFilterEnabled: false,
+    isNoiseFilterPending: false,
+    processor: undefined,
+  }),
+}));
+
 vi.mock("@/components/ui/starry-background", () => ({
   StarryBackground: () => <div data-testid="background" />,
 }));

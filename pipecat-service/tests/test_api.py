@@ -395,7 +395,32 @@ class TestSessionStart:
                 pitch_context="AI outbound assistant for SaaS teams",
                 pitch_briefing=payload["pitch_briefing"],
                 inferred_role=None,
+                voiceprint_b64=None,
             )
+
+    def test_start_session_forwards_voiceprint(self, client):
+        with patch("app.api.routes.supabase_service") as mock_svc, \
+             patch("app.api.routes.livekit_service") as mock_lk_svc:
+            mock_svc.get_scenario = AsyncMock(return_value=MOCK_SCENARIO)
+            mock_svc.get_persona = AsyncMock(return_value=MOCK_PERSONA)
+            mock_lk_svc.create_room_and_token = AsyncMock(return_value="token")
+            mock_lk_svc.start_pipeline = AsyncMock()
+
+            response = client.post(
+                "/api/v1/sessions/start",
+                headers={"Authorization": VALID_AUTH},
+                json={
+                    "session_id": "sess-vp",
+                    "room_name": "room-vp",
+                    "scenario_id": "scenario-1",
+                    "persona_id": "persona-1",
+                    "user_id": "user-1",
+                    "voiceprint": "ABCDEF==",
+                },
+            )
+            assert response.status_code == 200
+            kwargs = mock_lk_svc.start_pipeline.call_args.kwargs
+            assert kwargs["voiceprint_b64"] == "ABCDEF=="
 
 
 # ──────────────────────────────────────────────────────────
