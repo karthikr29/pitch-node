@@ -13,7 +13,13 @@ let liveKitCallbacks: {
   onDisconnected?: () => void;
   onError?: (error: Error) => void;
 } = {};
-let sessionStatePayload = {
+let sessionStatePayload: {
+  sessionId: string;
+  phase: string;
+  autoEndRequested: boolean;
+  endReason: { speaker: string; reasonCode: string; trigger: string } | null;
+  requestedAt: null;
+} = {
   sessionId: "session-1",
   phase: "active",
   autoEndRequested: false,

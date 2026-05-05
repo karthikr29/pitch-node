@@ -17,8 +17,8 @@ vi.mock("@/components/ui/command", () => ({
     children,
     onSelect,
     ...props
-  }: HTMLAttributes<HTMLDivElement> & { onSelect?: () => void }) => (
-    <button type="button" onClick={onSelect} {...props}>
+  }: HTMLAttributes<HTMLButtonElement> & { onSelect?: () => void }) => (
+    <button type="button" onClick={() => onSelect?.()} {...props}>
       {children}
     </button>
   ),
