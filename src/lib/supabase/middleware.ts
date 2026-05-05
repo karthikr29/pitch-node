@@ -2,6 +2,27 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
+  const nonce = btoa(
+    String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16)))
+  );
+
+  const livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL || "";
+  const livekitHost = livekitUrl.replace(/^(wss?:\/\/|https?:\/\/)/, "").split("/")[0];
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+
+  const csp = [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}'`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https:",
+    `connect-src 'self' ${supabaseUrl} ${livekitHost ? `wss://${livekitHost} https://${livekitHost}` : ""} https://o4511115106516992.ingest.de.sentry.io`.trim(),
+    "media-src 'self' blob:",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join("; ");
+
   let supabaseResponse = NextResponse.next({ request });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,5 +60,7 @@ export async function updateSession(request: NextRequest) {
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
+  supabaseResponse.headers.set("x-nonce", nonce);
+  supabaseResponse.headers.set("Content-Security-Policy", csp);
   return supabaseResponse;
 }

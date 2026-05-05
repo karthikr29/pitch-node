@@ -9,6 +9,7 @@ import {
   getOrCreatePerformerMonthlyCredits,
 } from "@/lib/credits";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getPipecatServiceUrl } from "@/lib/pipecat";
 import * as Sentry from "@sentry/nextjs";
 
 export async function POST(request: NextRequest) {
@@ -157,7 +158,7 @@ export async function POST(request: NextRequest) {
 
   // Call Pipecat backend to create room and start pipeline
   try {
-    const pipecatUrl = process.env.PIPECAT_SERVICE_URL || "http://localhost:8000";
+    const pipecatUrl = getPipecatServiceUrl();
     const response = await fetch(`${pipecatUrl}/api/v1/sessions/start`, {
       method: "POST",
       headers: {

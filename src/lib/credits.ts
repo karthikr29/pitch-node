@@ -1,11 +1,11 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/database.types";
+
 export const FREE_LIFETIME_CREDITS = 600;
 export const PERFORMER_MONTHLY_CREDITS = 30000;
 export const LIFETIME_PERIOD_END = "9999-12-31T00:00:00.000Z";
 
-type CreditClient = {
-  from: (table: string) => any;
-  rpc?: any;
-};
+type CreditClient = SupabaseClient<Database>;
 
 export type CreditBalance = {
   creditsLimit: number;
@@ -189,14 +189,10 @@ export async function completeSessionWithCredits(
   sessionId: string,
   endedAt?: string | null
 ): Promise<CompletedSessionCredits> {
-  if (!supabase.rpc) {
-    throw new Error("Supabase RPC client is required to complete sessions with credits");
-  }
-
   const { data, error } = await supabase
     .rpc("complete_session_with_credits", {
       p_session_id: sessionId,
-      p_ended_at: endedAt ?? null,
+      p_ended_at: endedAt ?? undefined,
     })
     .single();
 

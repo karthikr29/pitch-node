@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getPipecatServiceUrl } from "@/lib/pipecat";
 import * as Sentry from "@sentry/nextjs";
 
 export async function POST(request: NextRequest) {
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
 
-  const pipecatUrl = process.env.PIPECAT_SERVICE_URL || "http://localhost:8000";
+  const pipecatUrl = getPipecatServiceUrl();
 
   try {
     const response = await fetch(`${pipecatUrl}/api/v1/infer-role`, {

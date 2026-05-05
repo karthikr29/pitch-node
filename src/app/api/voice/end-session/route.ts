@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { completeSessionWithCredits } from "@/lib/credits";
+import { getPipecatServiceUrl } from "@/lib/pipecat";
 import * as Sentry from "@sentry/nextjs";
 
 const PIPECAT_SHUTDOWN_TIMEOUT_MS = 5000;
@@ -15,7 +16,7 @@ async function requestPipecatShutdown(
   pipecatApiKey: string,
   userId: string
 ) {
-  const pipecatUrl = process.env.PIPECAT_SERVICE_URL || "http://localhost:8000";
+  const pipecatUrl = getPipecatServiceUrl();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), PIPECAT_SHUTDOWN_TIMEOUT_MS);
 

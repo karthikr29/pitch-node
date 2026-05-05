@@ -288,8 +288,7 @@ function CallInterface({
   useEffect(() => {
     if (isConnected && localParticipant) {
       localParticipant.setMicrophoneEnabled(true).catch((err) => {
-        console.error("[CallPage] Failed to enable microphone:", err);
-        Sentry.logger.warn("call: failed to enable microphone after connect", { sessionId });
+        Sentry.logger.warn("call: failed to enable microphone after connect", { sessionId, errorMessage: err instanceof Error ? err.message : String(err) });
       });
     }
   }, [isConnected, localParticipant, sessionId]);
@@ -313,7 +312,7 @@ function CallInterface({
     if (timerRef.current) clearInterval(timerRef.current);
     onBeforeDisconnect();
     room.disconnect().catch((error) => {
-      console.error("[CallPage] Error disconnecting LiveKit room:", error);
+      Sentry.logger.warn("call: error disconnecting LiveKit room", { errorMessage: error instanceof Error ? error.message : String(error) });
     });
     onEndCall();
   }
@@ -621,7 +620,6 @@ export default function CallRoomPage() {
       setHasMicPermission(true);
       setCallState("initializing");
     } catch (err) {
-      console.error("[CallPage] Microphone permission denied:", err);
       setHasMicPermission(false);
       setError("Microphone access is required for calls. Please allow microphone access and try again.");
       Sentry.logger.warn("call: microphone permission denied by user", { scenarioId, personaId });
@@ -658,7 +656,6 @@ export default function CallRoomPage() {
 
         if (!response.ok) {
           const errorData = await response.json();
-          console.error("[CallPage] Create room failed:", errorData);
           if (response.status === 402) {
             throw new Error(errorData.error || "No credits remaining. Your credits reset at the start of next month.");
           }
@@ -685,7 +682,6 @@ export default function CallRoomPage() {
         });
         setCallState("connecting");
       } catch (err) {
-        console.error("[CallPage] Failed to initialize call:", err);
         setError(err instanceof Error ? err.message : "Failed to start call");
         Sentry.logger.warn("call: room creation failed", {
           scenarioId,
@@ -745,7 +741,6 @@ export default function CallRoomPage() {
 
       sessionConnectedSyncedRef.current = true;
     } catch (err) {
-      console.warn("[CallPage] Failed to sync connected session start:", err);
       Sentry.logger.warn("call: session-connected sync failed, will retry", {
         sessionId: credentials?.sessionId,
       });
@@ -784,8 +779,6 @@ export default function CallRoomPage() {
       })
       .then(async (response) => {
         if (!response.ok) {
-          const body = await response.text();
-          console.warn("[CallPage] End session response not ok:", response.status, body);
           Sentry.logger.warn("call: end-session failed before credit refresh", {
             sessionId,
             status: response.status,
@@ -796,7 +789,6 @@ export default function CallRoomPage() {
         await refreshPlan();
       })
       .catch((err) => {
-        console.error("[CallPage] End session error:", err);
         Sentry.logger.warn("call: end-session or credit refresh failed", {
           sessionId,
           errorMessage: err instanceof Error ? err.message : String(err),
@@ -911,7 +903,6 @@ export default function CallRoomPage() {
             console.debug("[CallPage] Ignoring expected disconnect error:", error.message);
             return;
           }
-          console.error("[CallPage] LiveKit error:", error);
           Sentry.logger.warn("call: LiveKit room error", {
             sessionId: credentials?.sessionId,
             errorMessage: error.message,

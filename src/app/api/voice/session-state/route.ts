@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getPipecatServiceUrl } from "@/lib/pipecat";
 import * as Sentry from "@sentry/nextjs";
 
 function buildUnknownState(sessionId: string) {
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const pipecatUrl = process.env.PIPECAT_SERVICE_URL || "http://localhost:8000";
+    const pipecatUrl = getPipecatServiceUrl();
     const response = await fetch(`${pipecatUrl}/api/v1/sessions/${sessionId}/state`, {
       headers: {
         "Authorization": `Bearer ${pipecatApiKey}`,

@@ -17,7 +17,7 @@ describe("completeSessionWithCredits", () => {
     const rpc = vi.fn().mockReturnValue({ single });
 
     const result = await completeSessionWithCredits(
-      { from: vi.fn(), rpc },
+      { from: vi.fn(), rpc } as unknown as Parameters<typeof completeSessionWithCredits>[0],
       "session-1",
       "2026-05-01T00:00:10.200Z"
     );

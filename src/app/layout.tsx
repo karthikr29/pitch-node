@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans } from "next/font/google";
 import localFont from "next/font/local";
+import { headers } from "next/headers";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -97,11 +98,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const nonce = (await headers()).get("x-nonce") ?? "";
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -142,6 +144,8 @@ export default function RootLayout({
         {/* Prevent flash of wrong theme */}
         {/* SECURITY: Static hardcoded content only. Never interpolate user data here. */}
         <script
+          nonce={nonce}
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: `
               (function() {

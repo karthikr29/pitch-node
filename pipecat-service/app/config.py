@@ -24,8 +24,6 @@ class Settings:
             os.getenv("CARTESIA_MAX_BUFFER_DELAY_MS", "0")
         )
         self.OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
-        self.XAI_API_KEY: str = os.getenv("XAI_API_KEY", "")
-        self.XAI_API_BASE_URL: str = os.getenv("XAI_API_BASE_URL", "https://api.x.ai/v1")
         self.SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
         self.SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
         self.CONVERSATION_MODEL: str = os.getenv(
