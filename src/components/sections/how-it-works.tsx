@@ -29,7 +29,7 @@ const steps = [
   },
   {
     title: "Level Up",
-    description: "Instant feedback on what worked, what flopped, and how to crush it next time. Track your progress and unlock new difficulty tiers.",
+    description: "Instant feedback on what worked, what flopped, and how to crush it next time. Track your progress and dial up the difficulty when you're ready.",
     Scene: LevelUpScene,
     icon: TrendingUp,
     align: "left" as const,

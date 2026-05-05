@@ -26,6 +26,7 @@ class LiveKitService:
         self._session_states: dict[str, dict[str, Any]] = {}
         self._auto_end_fallbacks: dict[str, asyncio.Task] = {}
         self._time_limit_tasks: dict[str, asyncio.Task] = {}
+        self._shutdown_tasks: dict[str, asyncio.Task] = {}
         self._finalized_auto_end_sessions: set[str] = set()
         self._supabase_service = SupabaseService()
 
@@ -126,6 +127,46 @@ class LiveKitService:
             "endReason": None,
             "requestedAt": None,
         }
+
+    def request_session_shutdown(self, session_id: str) -> str:
+        """Start session shutdown in the background and return the current phase."""
+        state = self._session_states.get(session_id, {})
+        if state.get("phase") == "ended":
+            return "ended"
+
+        existing = self._shutdown_tasks.get(session_id)
+        if existing and not existing.done():
+            return "ending"
+
+        self._set_session_state(
+            session_id,
+            phase="ending",
+            auto_end_requested=bool(state.get("autoEndRequested")),
+            end_reason=state.get("endReason"),
+        )
+
+        task = asyncio.create_task(self._run_session_shutdown(session_id))
+        self._shutdown_tasks[session_id] = task
+        return "ending"
+
+    async def _run_session_shutdown(self, session_id: str):
+        try:
+            await self.stop_pipeline(session_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error(f"Session shutdown failed for {session_id}: {e}")
+            current = self._session_states.get(session_id, {})
+            self._set_session_state(
+                session_id,
+                phase="ended",
+                auto_end_requested=bool(current.get("autoEndRequested")),
+                end_reason=current.get("endReason"),
+            )
+        finally:
+            tracked = self._shutdown_tasks.get(session_id)
+            if tracked is asyncio.current_task():
+                self._shutdown_tasks.pop(session_id, None)
 
     def _schedule_auto_end_fallback(self, session_id: str, reason: Any):
         self._set_session_state(

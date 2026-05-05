@@ -18,7 +18,7 @@ const FREE_FEATURES = [
 
 const PRO_FEATURES = [
   "30,000 credits / month",
-  "All current call types",
+  "Pitch now + every call type as it launches",
   "Real-time AI feedback on every call",
   "Detailed analytics & scoring",
   "Progress tracking over time",
@@ -39,11 +39,11 @@ const CHAMPION_FEATURES = [
 const FAQ_ITEMS = [
   {
     q: "What is a credit?",
-    a: "Think of a credit as one second of live practice time. Free accounts get 600 credits each call. With Performer, you get 30,000 credits every month — plenty to run as many scenarios as you want.",
+    a: "Think of a credit as one second of live practice time. Free accounts get 600 credits to start. With Performer, you get 30,000 credits every month — plenty to run as many scenarios as you want.",
   },
   {
     q: "How many credits do I get on the free plan?",
-    a: "Each call starts with 600 credits. There's no monthly cap — start a new call whenever you want and you'll get a fresh 600 every time.",
+    a: "You get 600 credits when you sign up — that's about 10 minutes of live practice. They never expire, so use them whenever you're ready.",
   },
   {
     q: "What is the difference between Warm Up and Performer?",

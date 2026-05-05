@@ -104,6 +104,68 @@ def test_get_session_state_returns_unknown_when_untracked():
     }
 
 
+def test_request_session_shutdown_returns_ended_without_scheduling_when_already_ended():
+    service = LiveKitService()
+    service._set_session_state(
+        "session-ended",
+        phase="ended",
+        auto_end_requested=False,
+        end_reason=None,
+    )
+
+    assert service.request_session_shutdown("session-ended") == "ended"
+    assert service._shutdown_tasks == {}
+
+
+@pytest.mark.asyncio
+async def test_request_session_shutdown_is_idempotent_while_shutdown_running():
+    service = LiveKitService()
+    release_shutdown = asyncio.Event()
+
+    async def stop_pipeline(session_id: str):
+        await release_shutdown.wait()
+        service._set_session_state(
+            session_id,
+            phase="ended",
+            auto_end_requested=False,
+            end_reason=None,
+        )
+
+    service.stop_pipeline = AsyncMock(side_effect=stop_pipeline)
+
+    assert service.request_session_shutdown("session-shutdown") == "ending"
+    first_task = service._shutdown_tasks["session-shutdown"]
+    assert service.request_session_shutdown("session-shutdown") == "ending"
+    assert service._shutdown_tasks["session-shutdown"] is first_task
+
+    release_shutdown.set()
+    await first_task
+
+    service.stop_pipeline.assert_awaited_once_with("session-shutdown")
+    assert service.get_session_state("session-shutdown")["phase"] == "ended"
+
+
+@pytest.mark.asyncio
+async def test_request_session_shutdown_finishes_with_ended_state():
+    service = LiveKitService()
+    service._set_session_state(
+        "session-bg",
+        phase="active",
+        auto_end_requested=False,
+        end_reason=None,
+    )
+    service._delete_room_for_session = AsyncMock()
+
+    assert service.request_session_shutdown("session-bg") == "ending"
+    task = service._shutdown_tasks["session-bg"]
+    await task
+
+    state = service.get_session_state("session-bg")
+    assert state["phase"] == "ended"
+    assert state["autoEndRequested"] is False
+    service._delete_room_for_session.assert_awaited_once_with("session-bg")
+
+
 @pytest.mark.asyncio
 async def test_connected_time_limit_starts_after_connected_signal(monkeypatch):
     service = LiveKitService()

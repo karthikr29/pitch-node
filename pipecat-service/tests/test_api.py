@@ -119,6 +119,7 @@ def client(mock_supabase, mock_livekit):
         mock_lk_svc.create_room_and_token = AsyncMock(return_value="mock-jwt-token")
         mock_lk_svc.start_pipeline = AsyncMock()
         mock_lk_svc.stop_pipeline = AsyncMock()
+        mock_lk_svc.request_session_shutdown = MagicMock(return_value="ending")
 
         from app.main import app
         with TestClient(app) as test_client:
@@ -403,26 +404,39 @@ class TestSessionStart:
 # ──────────────────────────────────────────────────────────
 
 class TestSessionEnd:
-    def test_end_session_returns_success(self, client):
+    def test_end_session_returns_accepted_shutdown(self, client):
         response = client.post(
             "/api/v1/sessions/test-session-1/end",
             headers={"Authorization": VALID_AUTH},
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "ended"
+        assert data["status"] == "ending"
         assert data["session_id"] == "test-session-1"
 
-    def test_end_session_calls_stop_pipeline(self, client):
+    def test_end_session_requests_background_shutdown(self, client):
         with patch("app.api.routes.livekit_service") as mock_lk_svc:
-            mock_lk_svc.stop_pipeline = AsyncMock()
+            mock_lk_svc.request_session_shutdown = MagicMock(return_value="ending")
 
             response = client.post(
                 "/api/v1/sessions/sess-end-1/end",
                 headers={"Authorization": VALID_AUTH},
             )
             assert response.status_code == 200
-            mock_lk_svc.stop_pipeline.assert_called_once_with("sess-end-1")
+            assert response.json()["status"] == "ending"
+            mock_lk_svc.request_session_shutdown.assert_called_once_with("sess-end-1")
+
+    def test_end_session_returns_ended_when_service_already_ended(self, client):
+        with patch("app.api.routes.livekit_service") as mock_lk_svc:
+            mock_lk_svc.request_session_shutdown = MagicMock(return_value="ended")
+
+            response = client.post(
+                "/api/v1/sessions/sess-ended-1/end",
+                headers={"Authorization": VALID_AUTH},
+            )
+            assert response.status_code == 200
+            assert response.json() == {"status": "ended", "session_id": "sess-ended-1"}
+            mock_lk_svc.request_session_shutdown.assert_called_once_with("sess-ended-1")
 
     def test_end_session_requires_auth(self, client):
         response = client.post(

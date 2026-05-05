@@ -48,7 +48,10 @@ export async function GET(request: NextRequest) {
     if (scenarioIds !== null) query = query.in("scenario_id", scenarioIds);
 
     const { data, error, count } = await query;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      Sentry.captureException(error, { tags: { route: "sessions/query" } });
+      return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    }
 
     const sessions = (data || []).map((row: Record<string, unknown>) => {
       const scenario = row.scenarios as Record<string, unknown> | null;

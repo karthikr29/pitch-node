@@ -31,7 +31,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { Eye, Filter, Loader2, Mic, Zap, ArrowRight, Trash2, Megaphone, RotateCcw } from "lucide-react";
+import { Eye, Filter, Loader2, Mic, Zap, ArrowRight, Trash2, Megaphone, RotateCcw, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import {
@@ -124,6 +124,7 @@ export default function HistoryPage() {
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [callTypeFilter, setCallTypeFilter] = useState("pitch");
@@ -132,7 +133,10 @@ export default function HistoryPage() {
   const [practicingAgainId, setPracticingAgainId] = useState<string | null>(null);
 
   const fetchSessions = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
+    if (!silent) {
+      setLoading(true);
+      setLoadError(false);
+    }
     try {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -147,13 +151,15 @@ export default function HistoryPage() {
         setTotalPages(data.totalPages || 1);
       } else {
         Sentry.logger.warn("history: sessions API non-OK", { status: res.status, page });
-        setSessions([]);
+        if (!silent) setLoadError(true);
+        // silent (poll) failures: keep existing sessions, retry on next tick
       }
     } catch {
       Sentry.logger.warn("history: session list fetch failed", { page, callTypeFilter });
-      setSessions([]);
+      if (!silent) setLoadError(true);
+      // silent (poll) failures: keep existing sessions, retry on next tick
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [page, callTypeFilter]);
 
@@ -267,6 +273,15 @@ export default function HistoryPage() {
             </Card>
           ))}
         </div>
+      ) : loadError ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-3" />
+            <p className="font-medium text-foreground">Couldn&apos;t load sessions</p>
+            <p className="text-sm text-muted-foreground mt-1">Check your connection and try again</p>
+            <Button size="sm" className="mt-4" onClick={() => fetchSessions()}>Try Again</Button>
+          </CardContent>
+        </Card>
       ) : sessions.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">

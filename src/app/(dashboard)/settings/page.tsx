@@ -85,6 +85,7 @@ export default function SettingsPage() {
   const [profileError, setProfileError] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -216,12 +217,17 @@ export default function SettingsPage() {
 
   async function handleDeleteAccount() {
     setDeleteLoading(true);
+    setDeleteError(null);
     try {
       const res = await fetch("/api/user/delete", { method: "DELETE" });
       if (res.ok) {
         window.location.href = "/";
         return;
       }
+      const data = await res.json().catch(() => null);
+      setDeleteError(data?.error ?? "Failed to delete account. Please try again.");
+    } catch {
+      setDeleteError("Something went wrong. Please try again.");
     } finally {
       setDeleteLoading(false);
     }
@@ -475,6 +481,11 @@ export default function SettingsPage() {
                           This will permanently delete your profile and account access.
                         </DialogDescription>
                       </DialogHeader>
+                      {deleteError && (
+                        <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-2.5">
+                          {deleteError}
+                        </p>
+                      )}
                       <DialogFooter>
                         <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
                           Cancel
@@ -609,7 +620,7 @@ export default function SettingsPage() {
                       </p>
                     </div>
                     <Button asChild>
-                      <a href="mailto:hello@convosparr.io?subject=Upgrade Plan">
+                      <a href="mailto:hello@convosparr.com?subject=Upgrade Plan">
                         <Zap className="w-4 h-4" />
                         Contact to Upgrade
                       </a>

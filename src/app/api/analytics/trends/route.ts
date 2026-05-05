@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
         .from("sessions")
         .select("id, created_at, scenarios(title, call_type), session_analytics(overall_score, scores, letter_grade)")
         .eq("user_id", user.id)
+        .eq("status", "completed")
         .gte("created_at", since.toISOString())
         .order("created_at", { ascending: true })
         .range(offset, offset + BATCH_SIZE - 1);
@@ -72,10 +73,12 @@ export async function GET(request: NextRequest) {
         const createdAt = row.created_at as string;
         const date = new Date(createdAt);
 
-        trends.push({
-          date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-          score: (analyticsObj?.overall_score as number) ?? 0,
-        });
+        if (analyticsObj) {
+          trends.push({
+            date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+            score: (analyticsObj.overall_score as number) ?? 0,
+          });
+        }
 
         const dateStr = date.toISOString().split("T")[0];
         activityMap[dateStr] = (activityMap[dateStr] || 0) + 1;

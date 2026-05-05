@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
-import { ArrowRight, Mic, TrendingUp } from "lucide-react";
+import { ArrowRight, Mic, TrendingUp, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 
@@ -120,6 +120,8 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [recentSessions, setRecentSessions] = useState<RecentSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statsError, setStatsError] = useState(false);
+  const [sessionsError, setSessionsError] = useState(false);
 
   const firstName =
     userProfile?.fullName?.split(" ")[0] ||
@@ -127,30 +129,40 @@ export default function DashboardPage() {
     user?.email?.split("@")[0] ||
     "there";
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const [statsRes, sessionsRes] = await Promise.all([
-          fetch("/api/analytics/overview"),
-          fetch("/api/sessions?limit=5"),
-        ]);
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setStatsError(false);
+    setSessionsError(false);
+    try {
+      const [statsRes, sessionsRes] = await Promise.all([
+        fetch("/api/analytics/overview"),
+        fetch("/api/sessions?limit=5"),
+      ]);
 
-        if (statsRes.ok) {
-          const data = await statsRes.json();
-          setStats(data);
-        }
-        if (sessionsRes.ok) {
-          const data = await sessionsRes.json();
-          setRecentSessions(data.sessions || []);
-        }
-      } catch {
-        // API not available yet, use empty state
-      } finally {
-        setLoading(false);
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setStats(data);
+      } else {
+        setStatsError(true);
       }
+
+      if (sessionsRes.ok) {
+        const data = await sessionsRes.json();
+        setRecentSessions(data.sessions || []);
+      } else {
+        setSessionsError(true);
+      }
+    } catch {
+      setStatsError(true);
+      setSessionsError(true);
+    } finally {
+      setLoading(false);
     }
-    fetchData();
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const avgScore = stats?.avgScore ?? 0;
   const bestScore = stats?.bestScore ?? 0;
@@ -200,6 +212,16 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* Stats: Bento-style grid */}
+      {!loading && statsError ? (
+        <Card>
+          <CardContent className="py-8 flex flex-col items-center gap-3 text-center">
+            <AlertCircle className="w-6 h-6 text-destructive" />
+            <p className="text-sm font-medium text-foreground">Couldn&apos;t load your stats</p>
+            <p className="text-xs text-muted-foreground">Check your connection and try again</p>
+            <Button size="sm" variant="outline" onClick={fetchData}>Try Again</Button>
+          </CardContent>
+        </Card>
+      ) : (
       <motion.div
         className="grid grid-cols-2 lg:grid-cols-4 gap-3"
         variants={containerVariants}
@@ -299,6 +321,7 @@ export default function DashboardPage() {
           </Card>
         </motion.div>
       </motion.div>
+      )}
 
       {/* Bottom: Sessions + Quick Start */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:items-start">
@@ -341,6 +364,13 @@ export default function DashboardPage() {
                       <Skeleton className="h-7 w-14 rounded-md" />
                     </div>
                   ))}
+                </div>
+              ) : sessionsError ? (
+                <div className="flex flex-col items-center justify-center py-14 text-center">
+                  <AlertCircle className="w-8 h-8 text-destructive mb-3" />
+                  <p className="font-semibold text-foreground text-sm">Couldn&apos;t load recent sessions</p>
+                  <p className="text-xs text-muted-foreground mt-1">Check your connection and try again</p>
+                  <Button size="sm" variant="outline" className="mt-4" onClick={fetchData}>Try Again</Button>
                 </div>
               ) : recentSessions.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-14 text-center">

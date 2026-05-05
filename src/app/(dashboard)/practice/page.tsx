@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -237,11 +237,6 @@ const difficultyOptions = [
   { value: "expert", label: "Expert" },
 ];
 
-const fallbackPersonas: Persona[] = [
-  { id: "persona-1", name: "The Skeptic", emoji: "🧐", title: "VP of Engineering", description: "Challenges every claim and demands proof.", persona_type: "skeptical", accent: "" },
-  { id: "persona-2", name: "The Busy Exec", emoji: "⏰", title: "CEO", description: "Has limited time and low patience. Wants bottom-line value fast.", persona_type: "aggressive", accent: "" },
-  { id: "persona-3", name: "The Friendly Guide", emoji: "😊", title: "Head of Operations", description: "Warm and open but needs to be led.", persona_type: "friendly", accent: "" },
-];
 
 export default function PracticeLibraryPage() {
   const router = useRouter();
@@ -276,6 +271,8 @@ export default function PracticeLibraryPage() {
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const [comboboxOpen, setComboboxOpen] = useState(false);
   const [commandValue, setCommandValue] = useState("");
+
+  const [personaLoadError, setPersonaLoadError] = useState(false);
 
   const [activeSession, setActiveSession] = useState<{ sessionId: string; sessionStatus: string } | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
@@ -315,41 +312,49 @@ export default function PracticeLibraryPage() {
     }
   }, [comboboxOpen, selectedPersona]);
 
+  const fetchPersonas = useCallback(async () => {
+    setPersonaLoadError(false);
+    try {
+      const res = await fetch("/api/personas");
+      if (!res.ok) {
+        Sentry.logger.warn("practice: personas API non-OK", { status: res.status });
+        setPersonaLoadError(true);
+        return;
+      }
+      const data = await res.json();
+      const raw = data.personas || data;
+      setPersonas(raw.map((p: Record<string, unknown>) => mapPersona(p)));
+      setPersonaCatalogNotice(getCatalogNotice(res.headers, "personas"));
+    } catch {
+      Sentry.logger.warn("practice: personas fetch failed");
+      setPersonaLoadError(true);
+    }
+  }, []);
+
   useEffect(() => {
-    async function fetchData() {
+    async function fetchInitialData() {
       try {
-        const [personasRes, activeSessionRes] = await Promise.all([
-          fetch("/api/personas"),
-          fetch("/api/voice/active-session"),
+        await Promise.all([
+          fetchPersonas(),
+          fetch("/api/voice/active-session").then(async (res) => {
+            if (res.ok) {
+              const asd = await res.json();
+              if (asd.hasActiveSession) {
+                setActiveSession({ sessionId: asd.sessionId, sessionStatus: asd.status });
+              }
+            } else {
+              Sentry.logger.warn("practice: active-session API non-OK", { status: res.status });
+            }
+          }),
         ]);
-
-        if (personasRes.ok) {
-          const data = await personasRes.json();
-          const raw = data.personas || data;
-          setPersonas(raw.map((p: Record<string, unknown>) => mapPersona(p)));
-          setPersonaCatalogNotice(getCatalogNotice(personasRes.headers, "personas"));
-        } else {
-          Sentry.logger.warn("practice: personas API non-OK", { status: personasRes.status });
-          setPersonas(fallbackPersonas);
-          setPersonaCatalogNotice(null);
-        }
-
-        if (activeSessionRes.ok) {
-          const asd = await activeSessionRes.json();
-          if (asd.hasActiveSession) {
-            setActiveSession({ sessionId: asd.sessionId, sessionStatus: asd.status });
-          }
-        }
       } catch {
-        Sentry.logger.warn("practice: data fetch failed, using fallback data");
-        setPersonas(fallbackPersonas);
-        setPersonaCatalogNotice(null);
+        // active-session fetch errors are non-fatal
       } finally {
         setLoading(false);
       }
     }
-    fetchData();
-  }, []);
+    fetchInitialData();
+  }, [fetchPersonas]);
 
   // Read practice-prefill from sessionStorage once data has loaded, then jump to confirm step
   useEffect(() => {
@@ -1293,7 +1298,18 @@ export default function PracticeLibraryPage() {
           </div>
 
           {/* Card body */}
-          <div className="p-5 space-y-4">
+          <div className="p-5">
+            {personaLoadError ? (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 flex flex-col items-center gap-3 text-center">
+                <AlertCircle className="w-6 h-6 text-destructive" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">Couldn&apos;t load personas</p>
+                  <p className="text-xs text-muted-foreground mt-1">Check your connection and try again</p>
+                </div>
+                <Button size="sm" variant="outline" onClick={fetchPersonas}>Try Again</Button>
+              </div>
+            ) : (
+            <div className="space-y-4">
             <div className="flex flex-col sm:flex-row gap-3">
               <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
                 <PopoverTrigger asChild>
@@ -1398,6 +1414,8 @@ export default function PracticeLibraryPage() {
                 {personaCatalogNotice}
               </p>
             )}
+            </div>
+            )}
           </div>
         </div>
 
@@ -1412,13 +1430,15 @@ export default function PracticeLibraryPage() {
         {/* Next button + helper text */}
         <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-border">
           <span className="text-sm text-muted-foreground">
-            {!selectedDifficulty
-              ? "Select a difficulty to continue"
-              : !selectedPersonaId
-                ? "Select an opponent to continue"
-                : isPitchCall && !isPitchBriefingValid
-                  ? "Fill all required fields to continue"
-                  : null}
+            {personaLoadError
+              ? "Personas failed to load — use Try Again above"
+              : !selectedDifficulty
+                ? "Select a difficulty to continue"
+                : !selectedPersonaId
+                  ? "Select an opponent to continue"
+                  : isPitchCall && !isPitchBriefingValid
+                    ? "Fill all required fields to continue"
+                    : null}
           </span>
           <Button
             size="lg"

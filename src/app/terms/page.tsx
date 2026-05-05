@@ -216,8 +216,8 @@ export default function TermsOfService() {
                         </p>
                         <p className="mt-3">
                             <strong>Email:</strong>{" "}
-                            <a href="mailto:hello@convosparr.io" className="text-primary hover:underline">
-                                hello@convosparr.io
+                            <a href="mailto:hello@convosparr.com" className="text-primary hover:underline">
+                                hello@convosparr.com
                             </a>
                         </p>
                     </section>

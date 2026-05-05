@@ -168,9 +168,9 @@ async def session_connected(
 @router.post("/sessions/{session_id}/end")
 async def end_session(session_id: str, _=Depends(verify_api_key)):
     logger.info("sessions/end: received", extra={"session_id": session_id})
-    await livekit_service.stop_pipeline(session_id)
-    logger.info("sessions/end: pipeline stopped", extra={"session_id": session_id})
-    return {"status": "ended", "session_id": session_id}
+    status = livekit_service.request_session_shutdown(session_id)
+    logger.info("sessions/end: shutdown requested", extra={"session_id": session_id, "status": status})
+    return {"status": status, "session_id": session_id}
 
 @router.get("/sessions/{session_id}/state")
 async def session_state(session_id: str, _=Depends(verify_api_key)):

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -15,7 +15,8 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { TrendingUp, Calendar, Award, Target } from "lucide-react";
+import { TrendingUp, Calendar, Award, Target, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface TrendPoint {
@@ -38,16 +39,6 @@ interface ActivityDay {
   count: number;
 }
 
-const fallbackTrends: TrendPoint[] = [
-  { date: "Jan", score: 55 },
-  { date: "Feb", score: 60 },
-  { date: "Mar", score: 58 },
-  { date: "Apr", score: 67 },
-  { date: "May", score: 72 },
-  { date: "Jun", score: 70 },
-  { date: "Jul", score: 78 },
-  { date: "Aug", score: 82 },
-];
 
 const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DOW_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -363,34 +354,40 @@ export default function AnalyticsPage() {
   const [gradeDistribution, setGradeDistribution] = useState<GradeDistribution[]>([]);
   const [activityData, setActivityData] = useState<ActivityDay[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch("/api/analytics/trends");
-        if (res.ok) {
-          const data = await res.json();
-          setTrends(data.trends?.length ? data.trends : fallbackTrends);
-          setMetrics(data.metrics || []);
-          setGradeDistribution(data.gradeDistribution || []);
-          setActivityData(data.activity || []);
-        } else {
-          setTrends(fallbackTrends);
-          setMetrics([]);
-          setGradeDistribution([]);
-          setActivityData([]);
-        }
-      } catch {
-        setTrends(fallbackTrends);
+  const fetchAnalytics = useCallback(async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const res = await fetch("/api/analytics/trends");
+      if (res.ok) {
+        const data = await res.json();
+        setTrends(data.trends || []);
+        setMetrics(data.metrics || []);
+        setGradeDistribution(data.gradeDistribution || []);
+        setActivityData(data.activity || []);
+      } else {
+        setError(true);
+        setTrends([]);
         setMetrics([]);
         setGradeDistribution([]);
         setActivityData([]);
-      } finally {
-        setLoading(false);
       }
+    } catch {
+      setError(true);
+      setTrends([]);
+      setMetrics([]);
+      setGradeDistribution([]);
+      setActivityData([]);
+    } finally {
+      setLoading(false);
     }
-    fetchData();
   }, []);
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, [fetchAnalytics]);
 
   if (loading) {
     return (
@@ -420,6 +417,14 @@ export default function AnalyticsPage() {
         </p>
       </div>
 
+      {error && (
+        <div className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+          <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+          <p className="text-sm text-foreground flex-1">Couldn&apos;t load analytics data</p>
+          <Button size="sm" variant="outline" onClick={fetchAnalytics}>Try Again</Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Score Trend */}
         <Card className="lg:col-span-2">
@@ -437,6 +442,13 @@ export default function AnalyticsPage() {
             </div>
           </CardHeader>
           <CardContent>
+            {trends.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center h-72">
+                <TrendingUp className="w-9 h-9 text-muted-foreground/25 mb-3" />
+                <p className="text-sm font-medium text-muted-foreground">No trend data yet</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Complete sessions to see your score over time</p>
+              </div>
+            ) : (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={trends}>
@@ -483,6 +495,7 @@ export default function AnalyticsPage() {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
+            )}
           </CardContent>
         </Card>
 

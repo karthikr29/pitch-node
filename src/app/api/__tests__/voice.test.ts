@@ -34,6 +34,15 @@ vi.mock("@/lib/credits", () => ({
   completeSessionWithCredits: (...args: unknown[]) => mockCompleteSessionWithCredits(...args),
 }));
 
+vi.mock("@sentry/nextjs", () => ({
+  captureException: vi.fn(),
+  logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
 describe("Voice API - create-room", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -303,6 +312,24 @@ describe("Voice API - create-room", () => {
 });
 
 describe("Voice API - end-session", () => {
+  function mockOwnedSession(status = "active") {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: "s1",
+        user_id: "user-1",
+        started_at: new Date(Date.now() - 300000).toISOString(),
+        status,
+        livekit_room_name: "room-1",
+        duration_seconds: status === "completed" ? 300 : null,
+        credits_charged_seconds: status === "completed" ? 300 : null,
+      },
+    });
+    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle });
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 });
+    const mockSel = vi.fn().mockReturnValue({ eq: mockEq1 });
+    mockFrom.mockReturnValue({ select: mockSel });
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
@@ -444,6 +471,95 @@ describe("Voice API - end-session", () => {
     expect(response.status).toBe(200);
     expect(body.duration).toBe(0);
     expect(body.creditsCharged).toBe(0);
+  });
+
+  it("still completes credits when Pipecat shutdown times out", async () => {
+    vi.useFakeTimers();
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+    mockOwnedSession();
+    mockFetch.mockImplementation((_, init) => {
+      const signal = (init as { signal?: AbortSignal }).signal;
+      return new Promise((_, reject) => {
+        signal?.addEventListener("abort", () => {
+          reject(new DOMException("This operation was aborted", "AbortError"));
+        });
+      });
+    });
+
+    try {
+      const { POST } = await import("@/app/api/voice/end-session/route");
+      const request = new NextRequest("http://localhost:3000/api/voice/end-session", {
+        method: "POST",
+        body: JSON.stringify({ sessionId: "s1" }),
+      });
+      const responsePromise = POST(request);
+
+      await vi.advanceTimersByTimeAsync(5000);
+      const response = await responsePromise;
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.sessionId).toBe("s1");
+      expect(mockCompleteSessionWithCredits).toHaveBeenCalledWith(
+        expect.anything(),
+        "s1",
+        expect.any(String)
+      );
+      expect(mockFetch).toHaveBeenCalledWith(
+        "http://localhost:8000/api/v1/sessions/s1/end",
+        expect.objectContaining({
+          signal: expect.any(AbortSignal),
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still completes credits when Pipecat shutdown returns non-ok", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+    mockOwnedSession();
+    mockFetch.mockResolvedValue({ ok: false, status: 503 });
+
+    const { POST } = await import("@/app/api/voice/end-session/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/end-session", {
+      method: "POST",
+      body: JSON.stringify({ sessionId: "s1" }),
+    });
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.sessionId).toBe("s1");
+    expect(mockCompleteSessionWithCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      "s1",
+      expect.any(String)
+    );
+  });
+
+  it("skips Pipecat shutdown when session was already completed and charged", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+    mockOwnedSession("completed");
+
+    const { POST } = await import("@/app/api/voice/end-session/route");
+    const request = new NextRequest("http://localhost:3000/api/voice/end-session", {
+      method: "POST",
+      body: JSON.stringify({ sessionId: "s1" }),
+    });
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.alreadyCharged).toBe(true);
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockCompleteSessionWithCredits).not.toHaveBeenCalled();
   });
 });
 

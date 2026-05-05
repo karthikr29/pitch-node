@@ -35,17 +35,19 @@ export function Footer() {
                   className="object-contain"
                 />
               </div>
-              <span className="font-display text-2xl font-bold text-primary tracking-[0.07em]">
+              <span className="font-display text-xl font-bold text-primary tracking-[0.07em]">
                 ConvoSparr
               </span>
             </Link>
 
             <p className="text-primary font-semibold text-sm tracking-wide">
-              The Science of Sales Performance
+              Master Every Sales Conversation
             </p>
 
             <p className="text-text-secondary text-sm leading-relaxed max-w-sm">
-              Practice real sales conversations against AI opponents before they happen. Train for every pitch, call, demo, and close.
+              Practice real sales conversations against AI opponents before
+              the real meeting happens. Master objections, refine your pitch,
+              close with confidence.
             </p>
 
             {/* Social proof or mission */}
@@ -77,19 +79,24 @@ export function Footer() {
             </h4>
             <ul className="space-y-2.5">
               {[
-                { label: "How it Works", href: "#how-it-works" },
-                { label: "Features", href: "#features" },
-                { label: "Pricing", href: "#pricing" },
-                { label: "For Teams", href: "#personas" },
+                { label: "Why It Works", href: "/#problem-solution" },
+                { label: "How it Works", href: "/#how-it-works" },
+                { label: "Features", href: "/#features" },
+                { label: "Who It's For", href: "/#personas" },
+                { label: "Pricing", href: "/#pricing" },
               ].map((link) => (
                 <li key={link.label}>
-                  <a
+                  <Link
                     href={link.href}
-                    className="text-text-secondary hover:text-primary text-sm transition-colors inline-flex items-center gap-1 group"
+                    className="text-text-secondary hover:text-primary text-sm inline-flex items-center group transition-colors"
                   >
-                    <span className="w-0 h-px bg-primary transition-all group-hover:w-3" />
-                    {link.label}
-                  </a>
+                    <span className="opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all duration-300 mr-2 text-primary">
+                      →
+                    </span>
+                    <span className="transition-transform duration-300">
+                      {link.label}
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -106,13 +113,17 @@ export function Footer() {
                 { label: "Terms of Service", href: "/terms" },
               ].map((link) => (
                 <li key={link.label}>
-                  <a
+                  <Link
                     href={link.href}
-                    className="text-text-secondary hover:text-primary text-sm transition-colors inline-flex items-center gap-1 group"
+                    className="text-text-secondary hover:text-primary text-sm inline-flex items-center group transition-colors"
                   >
-                    <span className="w-0 h-px bg-primary transition-all group-hover:w-3" />
-                    {link.label}
-                  </a>
+                    <span className="opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all duration-300 mr-2 text-primary">
+                      →
+                    </span>
+                    <span className="transition-transform duration-300">
+                      {link.label}
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -125,10 +136,10 @@ export function Footer() {
             </h4>
             <div className="space-y-3">
               <a
-                href="mailto:hello@convosparr.io"
+                href="mailto:hello@convosparr.com"
                 className="text-text-secondary hover:text-primary text-sm transition-colors block"
               >
-                hello@convosparr.io
+                hello@convosparr.com
               </a>
             </div>
           </div>
